@@ -50,7 +50,10 @@ pub async fn authenticate(
         Ok(account) => account,
         Err(_) => return response(StatusCode::INTERNAL_SERVER_ERROR),
     };
-    let is_platform_admin = match state.bootstrap_platform_admin(account.user_id, &identity.uid).await {
+    let is_platform_admin = match state
+        .bootstrap_platform_admin(account.user_id, &identity.uid)
+        .await
+    {
         Ok(value) => value,
         Err(_) => return response(StatusCode::INTERNAL_SERVER_ERROR),
     };
