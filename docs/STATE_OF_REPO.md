@@ -6,12 +6,11 @@
 
 ## Repository
 
-- Repository: `capiyo/Qapten-`
-- Default branch: `main`
-- Active foundation branch: `foundation/axum-web-skeleton`
-- Active Phase A branch: `production/phase-a-firebase-auth`
-- Foundation review: [Draft PR #1](https://github.com/capiyo/Qapten-/pull/1)
-- Phase A review: [Draft PR #4](https://github.com/capiyo/Qapten-/pull/4)
+- Repository: `capiyo/axon` (mirrored from `capiyo/Qapten-`; source repository remains untouched).
+- Default branch: `main` (historical architecture-only foundation; it does not contain the current application implementation).
+- Current application baseline: `production/phase-b-chats-memory`.
+- Current implementation branch: `feature/supervisor-engine-bridge`.
+- Phase A and Phase B source branches were mirrored with their commit histories. Pull requests and Actions history from the source repository were not migrated; new reviews and CI must run in `capiyo/axon`.
 - License: MIT (see [LICENSE](../LICENSE))
 
 ## Implemented
@@ -57,23 +56,28 @@
 - [x] Shared frontend API contract types.
 - [x] Axon-owned `frontend/packages/theme` package with named TypeScript tokens and CSS custom properties.
 - [x] Web and mobile consume the Qoin-derived dark navy, slate and lime palette.
+- [x] Web Firebase email/password sign-in and account creation, auth-state restoration, sign-out, and Firebase ID-token bearer injection on API requests.
+- [x] Expo mobile Firebase email/password sign-in and account creation, AsyncStorage-backed auth persistence, auth-state restoration, sign-out, and Firebase ID-token bearer injection on API requests.
 
 ### Robotics and connector foundation
 - [x] AXP robotics device-registration, telemetry, non-executable command-proposal, and safety-state schemas.
 - [x] Pure Rust proposal validation for identity matching, requester authorization, emergency stop, interlocks, operating mode, expiry, sequence, idempotency-key shape, and velocity bounds.
 - [x] Robotics safety boundary documented; no hardware dispatch or actuator endpoint.
 - [x] Python Claude-export to DeepSeek API connector with AXP normalization, explicit approval gating, CLI preview, and unit tests.
+- [x] Authenticated Python-to-Axon artifact API bridge for explicitly selected source conversations and explicitly approved provider responses; server derives the actor from the Firebase ID token.
+- [x] Deterministic supervisor core: order-independent two-writer checklist merge, two evidence-bearing supervisor reviews, deterministic-check gating, and a hard two-repair limit.
 - [x] Python connector Ruff/pytest CI job.
 
 ## Not implemented / production gates
 
-- Web and Expo mobile Firebase email/password sign-in and account creation, session restoration, sign-out, and Firebase ID-token injection on authenticated API requests. Client configuration is supplied through app-specific public Firebase environment variables; no Firebase credentials are committed. Google, email-link and phone-first sign-in providers remain outside the current email/password implementation.
+- Google, email-link and phone-first sign-in providers remain outside the current email/password implementation. Client configuration is supplied through app-specific public Firebase environment variables; no Firebase credentials are committed.
 - Provider-side sign-in abuse controls and any client-specific phone/SMS quota configuration. Axon currently exposes no password/SMS sign-in endpoint; credentials should go directly through Firebase Auth, not through Axon's API.
 - Invitations, workspace membership management UI, role/capability grant persistence and management APIs.
 - A news consumer and provider/model-driven assistant response generation. Chat messages are persisted, but Axon does not invent assistant replies.
 - Durable simulator telemetry, device cryptographic enrollment, persistent replay/idempotency enforcement, device gateway and hardware-in-the-loop tests.
-- Artifact content hashing, classification enforcement, context bundle read API and retention controls.
+- Artifact content hashing, classification enforcement, context bundle read API and retention controls. The current API bridge writes artifacts through the existing workspace-scoped endpoint; it does not yet implement a dedicated AXP context-bundle read/write protocol.
 - Account/data deletion execution, legal retention policy and deletion worker; see [ACCOUNT_AND_DATA_DELETION_DESIGN.md](ACCOUNT_AND_DATA_DELETION_DESIGN.md).
+- End-to-end supervisor orchestration: durable supervisor-run persistence, independent provider calls for both checklist writers/workers/supervisors, bounded context dispatch, repair-task creation, and web/mobile run dashboard. The deterministic policy core exists, but provider execution and lifecycle APIs are not yet wired.
 - Additional agent provider APIs, webhooks and autonomous agent execution.
 - C++/Drogon service and Zig utilities (intentionally deferred until justified).
 - Production deployment, secrets management, persistent-volume configuration, backups, monitoring and operational runbooks.
@@ -92,7 +96,7 @@
 
 ## Verification
 
-GitHub Actions run [44988959132](https://github.com/capiyo/Qapten-/actions/runs/44988959132) passed all four jobs on Phase A source commit `09be25463e3f787d186105d59e65de8cd242718d`:
+Historical source-repository GitHub Actions run [44988959132](https://github.com/capiyo/Qapten-/actions/runs/44988959132) passed all four jobs on Phase A source commit `09be25463e3f787d186105d59e65de8cd242718d`. That run is evidence for the source branch, not a new verification of this Axon mirror. The current Axon implementation branch requires its own CI run. The historical run covered:
 - Rust formatting, Clippy with warnings denied, and Rust tests.
 - React web production build.
 - React Native TypeScript validation.
@@ -107,3 +111,4 @@ The Rust suite includes offline locally signed Firebase tokens, wrong-key reject
 - `contracts/` is the language-neutral, versioned protocol boundary.
 - SQLite is the current durable adapter for Axon workspace/agent/artifact/task entities and audit events; production persistence/backup topology must be explicitly configured.
 - Axum remains the orchestration authority. Drogon and Zig remain evidence-driven extension points, not duplicated orchestration services.
+- Supervisor policy, checklist merge, deterministic check evaluation and repair limits remain in Rust/Axum; provider adapters only gather proposals and evidence.
