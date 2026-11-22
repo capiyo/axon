@@ -693,7 +693,7 @@ pub async fn clear_flag(
         .collect();
     let model = models
         .iter_mut()
-        .find(|item| item.id == flag.model_id)
+        .find(|item| item.id == model_id)
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Flagged model not found."))?;
     match updated_flag.change_kind.as_str() {
         "price_changed" => {
