@@ -1,5 +1,6 @@
 use crate::{
     audit::AuditEvent,
+    model_registry::{AssignmentDecision, ModelEvaluation, ModelProvider, ModelRecord, ModelStat},
     chat_memory::ChatMemoryStore,
     model::{Agent, Artifact, Task, Workspace},
     supervisor::SupervisorRun,
@@ -44,6 +45,11 @@ pub enum EntityKind {
     Artifact,
     Task,
     SupervisorRun,
+    Provider,
+    Model,
+    ModelEvaluation,
+    ModelStat,
+    AssignmentDecision,
 }
 
 impl EntityKind {
@@ -54,6 +60,11 @@ impl EntityKind {
             Self::Artifact => "artifact",
             Self::Task => "task",
             Self::SupervisorRun => "supervisor_run",
+            Self::Provider => "provider",
+            Self::Model => "model",
+            Self::ModelEvaluation => "model_evaluation",
+            Self::ModelStat => "model_stat",
+            Self::AssignmentDecision => "assignment_decision",
         }
     }
 }
@@ -66,6 +77,11 @@ pub enum StoredEntity {
     Artifact(Artifact),
     Task(Task),
     SupervisorRun(SupervisorRun),
+    Provider(ModelProvider),
+    Model(ModelRecord),
+    ModelEvaluation(ModelEvaluation),
+    ModelStat(ModelStat),
+    AssignmentDecision(AssignmentDecision),
 }
 
 impl StoredEntity {
@@ -76,6 +92,11 @@ impl StoredEntity {
             Self::Artifact(_) => EntityKind::Artifact,
             Self::Task(_) => EntityKind::Task,
             Self::SupervisorRun(_) => EntityKind::SupervisorRun,
+            Self::Provider(_) => EntityKind::Provider,
+            Self::Model(_) => EntityKind::Model,
+            Self::ModelEvaluation(_) => EntityKind::ModelEvaluation,
+            Self::ModelStat(_) => EntityKind::ModelStat,
+            Self::AssignmentDecision(_) => EntityKind::AssignmentDecision,
         }
     }
 
@@ -86,6 +107,11 @@ impl StoredEntity {
             Self::Artifact(record) => record.id,
             Self::Task(record) => record.id,
             Self::SupervisorRun(record) => record.id,
+            Self::Provider(record) => record.id,
+            Self::Model(record) => record.id,
+            Self::ModelEvaluation(record) => record.id,
+            Self::ModelStat(record) => record.id,
+            Self::AssignmentDecision(record) => record.id,
         }
     }
 
@@ -96,6 +122,7 @@ impl StoredEntity {
             Self::Artifact(record) => Some(record.workspace_id),
             Self::Task(record) => Some(record.workspace_id),
             Self::SupervisorRun(record) => Some(record.workspace_id),
+            Self::Provider(_) | Self::Model(_) | Self::ModelEvaluation(_) | Self::ModelStat(_) | Self::AssignmentDecision(_) => None,
         }
     }
 
@@ -106,6 +133,11 @@ impl StoredEntity {
             Self::Artifact(record) => record.captured_at,
             Self::Task(record) => record.created_at,
             Self::SupervisorRun(record) => record.created_at,
+            Self::Provider(record) => record.created_at,
+            Self::Model(record) => record.created_at,
+            Self::ModelEvaluation(record) => record.run_at,
+            Self::ModelStat(record) => record.last_updated,
+            Self::AssignmentDecision(record) => record.created_at,
         }
     }
 }
