@@ -94,7 +94,10 @@ pub enum SupervisorError {
     #[error("supervisor {supervisor_id} supplied no evidence")]
     MissingEvidence { supervisor_id: String },
     #[error("supervisor {supervisor_id} referenced unknown check {check_id}")]
-    UnknownEvidenceCheck { supervisor_id: String, check_id: String },
+    UnknownEvidenceCheck {
+        supervisor_id: String,
+        check_id: String,
+    },
     #[error("deterministic check identifiers must be non-empty and unique")]
     InvalidCheckSet,
     #[error("repair rounds used cannot exceed the configured maximum of two")]
@@ -121,7 +124,10 @@ fn index_proposal(
         let key = normalized_key(&item.key)?;
         if item.summary.trim().is_empty()
             || item.acceptance_criteria.is_empty()
-            || item.acceptance_criteria.iter().any(|criterion| criterion.trim().is_empty())
+            || item
+                .acceptance_criteria
+                .iter()
+                .any(|criterion| criterion.trim().is_empty())
         {
             return Err(SupervisorError::InvalidChecklistItem);
         }
@@ -147,7 +153,11 @@ pub fn merge_checklists(
 
     let first_items = index_proposal(first)?;
     let second_items = index_proposal(second)?;
-    let keys: BTreeSet<_> = first_items.keys().chain(second_items.keys()).cloned().collect();
+    let keys: BTreeSet<_> = first_items
+        .keys()
+        .chain(second_items.keys())
+        .cloned()
+        .collect();
 
     let mut merged = Vec::with_capacity(keys.len());
     for key in keys {
@@ -159,7 +169,11 @@ pub fn merge_checklists(
 
         if let Some(item) = left {
             summaries.push(item.summary.trim().to_owned());
-            criteria.extend(item.acceptance_criteria.iter().map(|value| value.trim().to_owned()));
+            criteria.extend(
+                item.acceptance_criteria
+                    .iter()
+                    .map(|value| value.trim().to_owned()),
+            );
             proposed_by.push(first.writer_id.clone());
         }
         if let Some(item) = right {
@@ -203,7 +217,10 @@ pub fn evaluate_supervision(
     }
 
     let mut check_ids = BTreeSet::new();
-    if checks.iter().any(|check| check.id.trim().is_empty() || !check_ids.insert(&check.id)) {
+    if checks
+        .iter()
+        .any(|check| check.id.trim().is_empty() || !check_ids.insert(&check.id))
+    {
         return Err(SupervisorError::InvalidCheckSet);
     }
     if reviews.len() != REQUIRED_SUPERVISOR_COUNT {
