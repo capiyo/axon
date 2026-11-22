@@ -179,12 +179,13 @@ pub async fn refresh_provider_catalog(
                 updated.healthy = false;
                 updated.updated_at = Utc::now();
                 let related = flags.iter().cloned().map(StoredEntity::ModelChangeFlag).collect();
-                for flag in &flags {
-                    apply(storage, StoredEntity::Model(updated.clone()), related.clone(),
-                        discovery_audit("model.change_flagged", "model", current.id,
-                            serde_json::json!({"change_kind": flag.change_kind, "flag_id": flag.id}))).await?;
-                    report.changes_flagged += 1;
-                }
+                let flag_metadata: Vec<_> = flags.iter().map(|flag| {
+                    serde_json::json!({"change_kind": flag.change_kind, "flag_id": flag.id})
+                }).collect();
+                apply(storage, StoredEntity::Model(updated.clone()), related,
+                    discovery_audit("model.change_flagged", "model", current.id,
+                        serde_json::json!({"flags": flag_metadata}))).await?;
+                report.changes_flagged += flags.len();
             } else {
                 updated.last_seen_at = Utc::now();
                 updated.healthy = updated.status == RegistryStatus::Approved && !updated.flagged_for_review;
