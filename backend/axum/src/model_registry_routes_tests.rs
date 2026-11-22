@@ -37,6 +37,8 @@ mod tests {
             ("POST", ("/api/v1/admin/models/".to_owned() + &model_id.to_string() + "/review"), r#"{"action":"reject","note":"Test rejection"}"#),
             ("GET", "/api/v1/admin/evaluations".into(), "{}"),
             ("GET", "/api/v1/admin/stats".into(), "{}"),
+            ("GET", "/api/v1/admin/flags".into(), "{}"),
+            ("POST", ("/api/v1/admin/flags/".to_owned() + &model_id.to_string() + "/clear"), r#"{"note":"Reviewed and resolved"}"#),
             ("GET", "/api/v1/admin/assignments".into(), "{}"),
         ]
     }
