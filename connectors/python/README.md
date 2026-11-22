@@ -2,17 +2,17 @@
 
 The Python connector is the provider-adapter boundary for explicit, inspectable AI context handoffs.
 
-## Claude export → Axon → DeepSeek
+## Claude / ChatGPT export → Axon → DeepSeek
 
-1. Export a conversation from Claude using the provider's supported export controls.
-2. Select one conversation JSON file from that export.
+1. Export your data from Claude or ChatGPT using the provider's supported export controls.
+2. Select one conversation JSON file. For ChatGPT's `conversations.json` containing multiple conversations, specify the conversation ID.
 3. Run the connector in preview mode. It reports source, message count and context size without sending content.
 4. Use `--print-context` to inspect the exact normalized AXP envelope before transfer. Treat this output as private conversation data.
 5. Use `--import-to-axon` to explicitly save the selected source conversation as an Axon artifact.
 6. Add `--approve-transfer` to send that selected context to DeepSeek through its API.
 7. Add `--persist-response` to save the approved DeepSeek response as a second Axon artifact.
 
-Claude's consumer chat history is not exposed by the standard Anthropic Messages API. This implementation therefore imports user-authorized export files; it does not scrape logged-in browser pages, inspect cookies, automate private endpoints, or bypass provider controls.
+Claude's consumer chat history is not exposed by the standard Anthropic Messages API. This implementation therefore imports user-authorized export files; it does not scrape logged-in browser pages, inspect cookies, automate private endpoints, or bypass provider controls. ChatGPT imports parse the exported conversation mapping and preserve ordered text messages; multimodal attachments and tool payloads are not yet transferred.
 
 ## Setup
 
@@ -85,7 +85,7 @@ axon-bridge ./conversation.json \
 
 ## Current boundaries
 
-- Claude export import only; no browser scraping or direct Claude chat-history API.
+- Claude and ChatGPT user-authorized export imports; no browser scraping or direct Claude consumer-chat-history API.
 - DeepSeek API call is implemented.
 - Axon artifact persistence is implemented through the authenticated API bridge.
 - AXP context payload includes a SHA-256 digest for integrity checking; this digest detects payload changes but is not a signature or proof of origin.
