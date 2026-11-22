@@ -171,7 +171,8 @@ pub async fn submit_worker_result(
     Path((workspace_id, run_id)): Path<(Uuid, Uuid)>,
     Json(result): Json<WorkerResult>,
 ) -> ApiResult<Json<SupervisorRun>> {
-    let mut run = find_run(&state, workspace_id, run_id)?;
+    let _guard = state.supervisor_run_lock.lock().await;
+    let mut run = find_run(&state, workspace_id, run_id).await?;
     run.submit_worker_result(result).map_err(supervisor_error)?;
     let event = if run.status == SupervisorRunStatus::AwaitingChecks {
         "supervisor_run.workers_completed"
@@ -187,7 +188,8 @@ pub async fn record_checks(
     Path((workspace_id, run_id)): Path<(Uuid, Uuid)>,
     Json(input): Json<RecordChecks>,
 ) -> ApiResult<Json<SupervisorRun>> {
-    let mut run = find_run(&state, workspace_id, run_id)?;
+    let _guard = state.supervisor_run_lock.lock().await;
+    let mut run = find_run(&state, workspace_id, run_id).await?;
     run.record_checks(input.checks).map_err(supervisor_error)?;
     Ok(Json(persist_run(&state, &user, run, "supervisor_run.checks_recorded").await?))
 }
@@ -198,7 +200,8 @@ pub async fn submit_review(
     Path((workspace_id, run_id)): Path<(Uuid, Uuid)>,
     Json(review): Json<SupervisorReview>,
 ) -> ApiResult<Json<SupervisorRun>> {
-    let mut run = find_run(&state, workspace_id, run_id)?;
+    let _guard = state.supervisor_run_lock.lock().await;
+    let mut run = find_run(&state, workspace_id, run_id).await?;
     let decision = run.submit_review(review).map_err(supervisor_error)?;
     let event = match decision.map(|item| item.outcome) {
         Some(crate::supervisor::SupervisionOutcome::Accepted) => "supervisor_run.accepted",
@@ -214,7 +217,8 @@ pub async fn start_repair(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, run_id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<Json<SupervisorRun>> {
-    let mut run = find_run(&state, workspace_id, run_id)?;
+    let _guard = state.supervisor_run_lock.lock().await;
+    let mut run = find_run(&state, workspace_id, run_id).await?;
     run.start_repair().map_err(supervisor_error)?;
     Ok(Json(persist_run(&state, &user, run, "supervisor_run.repair_started").await?))
 }
