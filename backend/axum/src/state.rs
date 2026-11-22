@@ -4,6 +4,7 @@ use crate::{
     firebase_auth::FirebaseVerifier,
     model::{Agent, Artifact, Task, Workspace},
     robotics::TelemetryEvent,
+    supervisor::SupervisorRun,
     storage::{EntityKind, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
 };
 use std::{
@@ -26,6 +27,7 @@ pub struct AppState {
     pub agents: Arc<RwLock<HashMap<Uuid, Agent>>>,
     pub artifacts: Arc<RwLock<HashMap<Uuid, Artifact>>>,
     pub tasks: Arc<RwLock<HashMap<Uuid, Task>>>,
+    pub supervisor_runs: Arc<RwLock<HashMap<Uuid, SupervisorRun>>>,
     /// Bounded in-memory simulator stream; never treated as durable device telemetry.
     pub telemetry: Arc<RwLock<TelemetryStore>>,
     /// Runtime cache backed by the append-only audit table when SQLite is configured.
@@ -75,6 +77,15 @@ impl AppState {
             match entity {
                 StoredEntity::Task(item) => {
                     state.tasks.write().await.insert(item.id, item);
+                }
+                _ => return Err(StorageError::InvalidStoredEntityKind),
+            }
+        }
+
+        for entity in storage.list_entities(EntityKind::SupervisorRun, None).await? {
+            match entity {
+                StoredEntity::SupervisorRun(item) => {
+                    state.supervisor_runs.write().await.insert(item.id, item);
                 }
                 _ => return Err(StorageError::InvalidStoredEntityKind),
             }
