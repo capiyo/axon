@@ -17,6 +17,7 @@ pub enum AiRole {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiRequest {
     pub role: AiRole,
+    pub model_name: String,
     pub system_prompt: String,
     pub input: String,
     pub max_output_tokens: u32,
