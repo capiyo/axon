@@ -14,6 +14,7 @@ pub struct AuthenticatedUser {
     pub firebase_uid: String,
     pub project_id: String,
     pub personal_workspace_id: Uuid,
+    pub is_platform_admin: bool,
 }
 
 pub async fn authenticate(
@@ -49,11 +50,16 @@ pub async fn authenticate(
         Ok(account) => account,
         Err(_) => return response(StatusCode::INTERNAL_SERVER_ERROR),
     };
+    let is_platform_admin = match state.bootstrap_platform_admin(account.user_id, &identity.uid).await {
+        Ok(value) => value,
+        Err(_) => return response(StatusCode::INTERNAL_SERVER_ERROR),
+    };
     let user = Arc::new(AuthenticatedUser {
         user_id: account.user_id,
         firebase_uid: identity.uid,
         project_id: identity.project_id,
         personal_workspace_id: account.workspace.id,
+        is_platform_admin,
     });
     state
         .workspaces
