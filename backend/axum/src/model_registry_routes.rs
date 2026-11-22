@@ -38,10 +38,18 @@ fn require_admin(user: &AuthenticatedUser) -> AdminResult<()> {
 pub struct CreateProvider {
     pub name: String,
     pub base_url: String,
+    pub model_discovery_url: Option<String>,
+    pub pricing_source_url: Option<String>,
+    pub api_key_env: Option<String>,
+    #[serde(default)]
+    pub discovery_enabled: bool,
+    #[serde(default = "default_rate_limit")]
+    pub rate_limit_per_minute: u16,
     #[serde(default = "active_status")]
     pub status: String,
 }
 fn active_status() -> String { "active".into() }
+fn default_rate_limit() -> u16 { 10 }
 
 #[derive(Debug, Deserialize)]
 pub struct ReviewProviderTerms {
@@ -114,7 +122,10 @@ pub async fn create_provider(
     let now = Utc::now();
     let provider = ModelProvider {
         id: Uuid::new_v4(), name: input.name.trim().into(), base_url: input.base_url.trim().into(),
-        status: input.status, data_terms: ProviderDataTerms {
+        model_discovery_url: input.model_discovery_url, pricing_source_url: input.pricing_source_url,
+        api_key_env: input.api_key_env, discovery_enabled: input.discovery_enabled,
+        rate_limit_per_minute: input.rate_limit_per_minute.max(1), status: input.status,
+        data_terms: ProviderDataTerms {
             processing_regions: Vec::new(), trains_on_api_inputs: None, retention_days: None,
             retention_description: "Not reviewed".into(),
         },
