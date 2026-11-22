@@ -54,3 +54,40 @@ def test_non_positive_context_limit_is_rejected(capsys):
 
     assert asyncio.run(cli._run(args)) == 2
     assert "--max-context-chars must be greater than zero" in capsys.readouterr().err
+
+
+def test_chatgpt_export_is_selected_explicitly(monkeypatch, capsys):
+    conversation = ImportedConversation(
+        provider="chatgpt",
+        conversation_id="chat-42",
+        title="Axon handoff",
+        messages=(ConversationMessage(role="user", content="Review this plan."),),
+    )
+    observed = {}
+    monkeypatch.setattr(
+        cli,
+        "load_chatgpt_export",
+        lambda path, conversation_id: observed.update(
+            {"path": path, "conversation_id": conversation_id}
+        ) or conversation,
+    )
+
+    args = cli.build_parser().parse_args(
+        [
+            "conversations.json",
+            "--provider",
+            "chatgpt",
+            "--conversation-id",
+            "chat-42",
+            "--workspace-id",
+            "workspace-1",
+            "--actor-id",
+            "actor-provenance",
+            "--instruction",
+            "Review the plan.",
+        ]
+    )
+
+    assert asyncio.run(cli._run(args)) == 0
+    assert observed == {"path": "conversations.json", "conversation_id": "chat-42"}
+    assert "Source: chatgpt export" in capsys.readouterr().out
