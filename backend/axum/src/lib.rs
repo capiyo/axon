@@ -13,10 +13,10 @@ mod routes;
 mod state;
 pub mod storage;
 pub mod supervisor;
+mod supervisor_routes;
 #[cfg(test)]
 mod supervisor_run_tests;
 mod task_routes;
-mod supervisor_routes;
 
 pub use state::AppState;
 
