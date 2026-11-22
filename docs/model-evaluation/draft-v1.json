@@ -1,0 +1,58 @@
+{
+  "version": "draft-v1",
+  "status": "draft_not_approved",
+  "review_required_before_execution": true,
+  "categories": {
+    "general": [
+      {
+        "id": "general-exact-format-01",
+        "input": "Return exactly the word READY and no other text.",
+        "deterministic_checks": [
+          { "type": "exact_match", "value": "READY" }
+        ]
+      },
+      {
+        "id": "general-structured-02",
+        "input": "Return a JSON object with keys name and count. Use name Axon and count 2.",
+        "deterministic_checks": [
+          { "type": "valid_json" },
+          { "type": "json_string_equals", "path": "name", "value": "Axon" },
+          { "type": "json_number_equals", "path": "count", "value": 2 }
+        ]
+      }
+    ],
+    "coding": [
+      {
+        "id": "coding-logic-01",
+        "input": "Write a language-agnostic description of a function that returns the larger of two integers. Include the equality case.",
+        "deterministic_checks": [
+          { "type": "contains_all", "values": ["larger", "equal"] }
+        ]
+      },
+      {
+        "id": "coding-json-02",
+        "input": "Return JSON with a function_name field set to add and an examples array containing [2, 3, 5].",
+        "deterministic_checks": [
+          { "type": "valid_json" },
+          { "type": "json_string_equals", "path": "function_name", "value": "add" },
+          { "type": "json_array_contains", "path": "examples", "value": [2, 3, 5] }
+        ]
+      }
+    ],
+    "long_documents": [
+      {
+        "id": "long-document-coverage-01",
+        "input": "Summarize this short policy in three bullet points: access requires authentication; workspace data is isolated by membership; audit events are append-only.",
+        "deterministic_checks": [
+          { "type": "contains_all", "values": ["authentication", "membership", "append-only"] },
+          { "type": "bullet_count", "value": 3 }
+        ]
+      }
+    ]
+  },
+  "notes": [
+    "These are starter examples, not a production benchmark.",
+    "Review wording, expected behavior, language coverage, prompt-injection resistance and scoring weights before approval.",
+    "Supervisor pass criteria and category-specific minimum scores remain to be defined."
+  ]
+}
