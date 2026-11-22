@@ -10,7 +10,7 @@ The first release is a modular monolith around the orchestration domain. Splitti
 
 - **Workspace:** security and collaboration boundary for a person, project, or team.
 - **Agent:** a named participant with provider, model/capability metadata, connection mode, and scoped permissions. An agent registration is not proof of a live provider connection.
-- **Artifact:** immutable captured input or output with content hash, media type, source, author, capture time, project scope, and visibility.
+- **Artifact:** captured input or output with source, workspace scope, capture time and content. Content hashing, classification enforcement and retention controls remain production gates.
 - **Context bundle:** a versioned, bounded selection of artifacts and decisions prepared for a specific task or recipient.
 - **Task:** a unit of work with requester, owner/recipient, objective, constraints, expected deliverable, status, and due/expiry policy.
 - **Handoff:** an explicit transfer of a task and context bundle to another agent or human. It requires acknowledgement and has a traceable lifecycle.
@@ -20,7 +20,7 @@ The first release is a modular monolith around the orchestration domain. Splitti
 
 ## 3. Identity and authorization boundary
 
-AXON distinguishes identity from authorization. A principal is a human, agent, service, or device; a capability grant binds that principal to an explicit set of capabilities within one workspace, with issue, expiry, and revocation timestamps. The Rust policy module is deny-by-default and evaluates these grants. It is not an authentication system: only a future trusted adapter may construct an authenticated principal from verified credentials. Request JSON, caller-supplied IDs, and unsigned headers must never be treated as proof of identity. Route handlers remain local-only until authentication and authorization middleware are implemented and tested.
+Axon distinguishes identity from authorization. Web and Expo clients authenticate directly with Firebase Email/Password and send Firebase ID tokens as bearer tokens. The Axum middleware verifies RS256 signatures against Firebase Secure Token JWKS, validates project issuer/audience and expiry, provisions an internal Axon user plus one personal workspace idempotently, and checks workspace membership at the HTTP boundary. Caller-supplied IDs, request JSON and unsigned headers are never identity proof. Capability grants and invitation-based membership management remain future work.
 
 ## 4. Initial logical topology
 
@@ -37,7 +37,7 @@ Identity Workspace  Orchestration
               |
        Repository layer
               |
-     MongoDB (initial store)
+     SQLite (current store; transactional migrations)
 
 Optional integration edge:
 Axum <-> C++ Drogon
@@ -64,11 +64,7 @@ Web and mobile clients are views over the same API and domain model. They must n
 
 ## 8. Data and consistency
 
-MongoDB is the initial persistence choice. Use immutable artifact payloads and append-only audit records; mutable aggregate documents hold current task/workspace state with explicit versions. Every state-changing command must be authorized, validated against the current version, and recorded with an audit event.
-
-Cross-document workflows must be idempotent. Use stable operation IDs and unique indexes to prevent duplicate handoff acknowledgements and repeated event application. Do not claim multi-document atomicity without using a transaction and verifying deployment topology supports it.
-
-Large artifact bodies may move to object storage later. The first implementation should define an ArtifactStore interface so metadata and payload storage can evolve independently.
+SQLite is the current persistence adapter. Versioned SQL migrations create the entity, identity, membership, chat/memory and audit tables. Entity mutations and audit writes use transactions; chat/memory events are append-only and current memory state is reconstructed by replay. SQLite is suitable for local development and a single-node deployment with a persistent volume, but production backup, restore, availability and multi-instance topology must be explicitly designed before launch. Large artifact bodies may move to object storage behind a future artifact-store abstraction.
 
 ## 9. Trust and provenance
 
@@ -83,10 +79,11 @@ Context bundles must be recipient-specific and purpose-limited. Secret-bearing a
 
 ## 10. Integration progression
 
-1. Manual import/export and structured handoffs.
-2. Local browser-assisted capture initiated by the user, with preview and confirmation.
-3. Official provider APIs and webhooks where available and authorized.
-4. Delegated execution only after scoped credentials, approval gates, audit, and revocation are implemented.
+1. User-selected export import and manual handoffs.
+2. Authenticated Python API bridge to persist selected context and approved provider responses as Axon artifacts.
+3. Browser-assisted capture initiated by the user, with preview and confirmation; no hidden clipboard polling or session scraping.
+4. Official provider APIs and webhooks where available and authorized.
+5. Delegated execution only after scoped credentials, approval gates, audit, and revocation are implemented.
 
 ## 11. Initial vertical slice
 
