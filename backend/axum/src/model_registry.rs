@@ -340,7 +340,7 @@ fn candidates<'a>(
             continue;
         }
         let rank = configured_rank.unwrap_or(0);
-        let score = score_candidate(stat, level, minimum_history_runs, rank);
+        let score = score_candidate(stat, level, profile.minimum_history_runs, rank);
         result.push(Candidate {
             model,
             provider,
@@ -1112,7 +1112,6 @@ mod tests {
     #[test]
     fn history_only_overrides_curated_cold_start_after_minimum_runs() {
         let (providers, models) = fixture();
-        let profile = profile(TaskLevel::Quick);
         let high = ModelStat {
             id: Uuid::new_v4(),
             model_id: models[0].id,
