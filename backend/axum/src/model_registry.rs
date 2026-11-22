@@ -5,13 +5,20 @@ use crate::{
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{collections::{BTreeMap, BTreeSet}, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 use thiserror::Error;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum RegistryStatus { Candidate, Approved, Disabled }
+pub enum RegistryStatus {
+    Candidate,
+    Approved,
+    Disabled,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProviderDataTerms {
@@ -104,12 +111,18 @@ pub struct ModelStat {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AssignmentRole {
-    ChecklistWriter, Worker, Supervisor,
+    ChecklistWriter,
+    Worker,
+    Supervisor,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum TaskLevel { Quick, Normal, Important }
+pub enum TaskLevel {
+    Quick,
+    Normal,
+    Important,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PrivacyRequirement {
@@ -218,7 +231,9 @@ fn level_counts(level: &TaskLevel) -> (usize, usize, usize) {
 fn estimate_cost(model: &ModelRecord, input: u64, output: u64) -> u64 {
     let input_cost = (u128::from(model.input_cost_per_million) * u128::from(input)) / 1_000_000;
     let output_cost = (u128::from(model.output_cost_per_million) * u128::from(output)) / 1_000_000;
-    input_cost.saturating_add(output_cost).min(u128::from(u64::MAX)) as u64
+    input_cost
+        .saturating_add(output_cost)
+        .min(u128::from(u64::MAX)) as u64
 }
 
 fn privacy_allows(provider: &ModelProvider, requirement: &PrivacyRequirement) -> bool {
@@ -229,7 +244,11 @@ fn privacy_allows(provider: &ModelProvider, requirement: &PrivacyRequirement) ->
         return false;
     }
     if !requirement.allowed_regions.is_empty()
-        && !provider.data_terms.processing_regions.iter().any(|region| requirement.allowed_regions.contains(region))
+        && !provider
+            .data_terms
+            .processing_regions
+            .iter()
+            .any(|region| requirement.allowed_regions.contains(region))
     {
         return false;
     }
@@ -251,11 +270,22 @@ fn score_candidate(
     let retries = stat.user_retry_rate.clamp(0.0, 1.0);
     let speed = 1.0 / (1.0 + (stat.latency_ms.max(1) as f64 / 1000.0));
     let economy = 1.0 / (1.0 + stat.cost_per_run_micros as f64 / 1000.0);
-    let historical_score = 1000.0 + match level {
-        TaskLevel::Quick => economy * 40.0 + speed * 35.0 + completion * 15.0 + pass * 10.0 - retries * 10.0,
-        TaskLevel::Normal => completion * 30.0 + pass * 30.0 + speed * 20.0 + economy * 20.0 - retries * 15.0,
-        TaskLevel::Important => completion * 40.0 + pass * 35.0 + (1.0 - retries) * 15.0 + speed * 5.0 + economy * 5.0,
-    };
+    let historical_score = 1000.0
+        + match level {
+            TaskLevel::Quick => {
+                economy * 40.0 + speed * 35.0 + completion * 15.0 + pass * 10.0 - retries * 10.0
+            }
+            TaskLevel::Normal => {
+                completion * 30.0 + pass * 30.0 + speed * 20.0 + economy * 20.0 - retries * 15.0
+            }
+            TaskLevel::Important => {
+                completion * 40.0
+                    + pass * 35.0
+                    + (1.0 - retries) * 15.0
+                    + speed * 5.0
+                    + economy * 5.0
+            }
+        };
     let history_weight = stat.runs as f64 / (stat.runs as f64 + minimum_history_runs as f64);
     prior_score * (1.0 - history_weight) + historical_score * history_weight
 }
@@ -268,37 +298,68 @@ fn candidates<'a>(
     level: &TaskLevel,
     role: &AssignmentRole,
 ) -> Vec<Candidate<'a>> {
-    let provider_map: BTreeMap<_, _> = providers.iter().map(|provider| (provider.id, provider)).collect();
-    let curated: BTreeMap<_, _> = profile.curated_model_ids.iter().enumerate()
-        .map(|(index, id)| (*id, index as u16)).collect();
+    let provider_map: BTreeMap<_, _> = providers
+        .iter()
+        .map(|provider| (provider.id, provider))
+        .collect();
+    let curated: BTreeMap<_, _> = profile
+        .curated_model_ids
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (*id, index as u16))
+        .collect();
     let mut result = Vec::new();
     for model in models {
         if model.status != RegistryStatus::Approved || !model.healthy || model.flagged_for_review {
             continue;
         }
         if !model.categories.contains(&profile.category)
-            || !profile.required_abilities.iter().all(|ability| model.abilities.contains(ability))
+            || !profile
+                .required_abilities
+                .iter()
+                .all(|ability| model.abilities.contains(ability))
             || model.context_length < profile.required_context_tokens
         {
             continue;
         }
-        let Some(provider) = provider_map.get(&model.provider_id).copied() else { continue; };
-        if provider.status != "active" || !privacy_allows(provider, &profile.privacy) { continue; }
-        let stat = stats.iter().find(|item| item.model_id == model.id && item.category == profile.category && item.role == *role);
-        let configured_rank = curated.get(&model.id).copied().or_else(|| model.curated_rank.get(&profile.category).copied());
+        let Some(provider) = provider_map.get(&model.provider_id).copied() else {
+            continue;
+        };
+        if provider.status != "active" || !privacy_allows(provider, &profile.privacy) {
+            continue;
+        }
+        let stat = stats.iter().find(|item| {
+            item.model_id == model.id && item.category == profile.category && item.role == *role
+        });
+        let configured_rank = curated
+            .get(&model.id)
+            .copied()
+            .or_else(|| model.curated_rank.get(&profile.category).copied());
         let history_qualified = stat.is_some_and(|item| item.runs >= profile.minimum_history_runs);
-        if configured_rank.is_none() && !history_qualified { continue; }
+        if configured_rank.is_none() && !history_qualified {
+            continue;
+        }
         let rank = configured_rank.unwrap_or(0);
         let score = score_candidate(stat, level, minimum_history_runs, rank);
         result.push(Candidate {
-            model, provider, stat,
-            estimated_cost: estimate_cost(model, profile.estimated_input_tokens, profile.estimated_output_tokens),
+            model,
+            provider,
+            stat,
+            estimated_cost: estimate_cost(
+                model,
+                profile.estimated_input_tokens,
+                profile.estimated_output_tokens,
+            ),
             score,
         });
     }
-    result.sort_by(|left, right| right.score.total_cmp(&left.score)
-        .then_with(|| left.estimated_cost.cmp(&right.estimated_cost))
-        .then_with(|| left.model.id.cmp(&right.model.id)));
+    result.sort_by(|left, right| {
+        right
+            .score
+            .total_cmp(&left.score)
+            .then_with(|| left.estimated_cost.cmp(&right.estimated_cost))
+            .then_with(|| left.model.id.cmp(&right.model.id))
+    });
     result
 }
 
@@ -312,8 +373,11 @@ fn exploration_candidate<'a>(
         return None;
     }
     let bucket = (profile.run_id.as_u128() % 100) as u8;
-    if bucket >= profile.exploration_percent.min(100) { return None; }
-    pool.iter().filter(|candidate| !chosen.contains(&candidate.model.id))
+    if bucket >= profile.exploration_percent.min(100) {
+        return None;
+    }
+    pool.iter()
+        .filter(|candidate| !chosen.contains(&candidate.model.id))
         .filter(|candidate| Utc::now() - candidate.model.last_seen_at < Duration::days(30))
         .max_by(|left, right| left.score.total_cmp(&right.score))
 }
@@ -324,8 +388,11 @@ pub fn assign_models(
     models: &[ModelRecord],
     stats: &[ModelStat],
 ) -> Result<AssignmentPlan, AssignmentError> {
-    if profile.exploration_percent > 100 || profile.minimum_history_runs == 0
-        || (!profile.curated_model_ids.is_empty() && !(4..=6).contains(&profile.curated_model_ids.len())) {
+    if profile.exploration_percent > 100
+        || profile.minimum_history_runs == 0
+        || (!profile.curated_model_ids.is_empty()
+            && !(4..=6).contains(&profile.curated_model_ids.len()))
+    {
         return Err(AssignmentError::InvalidConfiguration);
     }
     let mut level = profile.level.clone();
@@ -351,22 +418,38 @@ pub fn assign_models(
             (AssignmentRole::Supervisor, supervisors),
         ] {
             let pool = candidates(profile, providers, models, stats, &level, &role);
-            if pool.is_empty() { failure = Some(AssignmentError::NoEligibleModels); break; }
+            if pool.is_empty() {
+                failure = Some(AssignmentError::NoEligibleModels);
+                break;
+            }
             for slot in 0..count {
                 let chosen = if role == AssignmentRole::Worker {
-                    pool.iter().find(|candidate| !worker_models.contains(&candidate.model.id)
-                        && !worker_providers.contains(&candidate.provider.id))
+                    pool.iter().find(|candidate| {
+                        !worker_models.contains(&candidate.model.id)
+                            && !worker_providers.contains(&candidate.provider.id)
+                    })
                 } else if role == AssignmentRole::Supervisor {
-                    pool.iter().find(|candidate| !supervisor_models.contains(&candidate.model.id)
-                        && !worker_providers.contains(&candidate.provider.id)
-                        && !supervisor_providers.contains(&candidate.provider.id))
+                    pool.iter().find(|candidate| {
+                        !supervisor_models.contains(&candidate.model.id)
+                            && !worker_providers.contains(&candidate.provider.id)
+                            && !supervisor_providers.contains(&candidate.provider.id)
+                    })
                 } else {
-                    pool.iter().find(|candidate| !writer_models.contains(&candidate.model.id)
-                        && !writer_providers.contains(&candidate.provider.id))
-                        .or_else(|| pool.iter().find(|candidate| !writer_models.contains(&candidate.model.id)))
+                    pool.iter()
+                        .find(|candidate| {
+                            !writer_models.contains(&candidate.model.id)
+                                && !writer_providers.contains(&candidate.provider.id)
+                        })
+                        .or_else(|| {
+                            pool.iter()
+                                .find(|candidate| !writer_models.contains(&candidate.model.id))
+                        })
                 };
                 let Some(chosen) = chosen else {
-                    if role == AssignmentRole::ChecklistWriter { diversity_degraded = true; continue; }
+                    if role == AssignmentRole::ChecklistWriter {
+                        diversity_degraded = true;
+                        continue;
+                    }
                     failure = Some(AssignmentError::DiversityUnavailable);
                     break;
                 };
@@ -394,37 +477,67 @@ pub fn assign_models(
                 }
                 estimated_total = estimated_total.saturating_add(cost);
                 decisions.push(AssignmentDecision {
-                    id: Uuid::new_v4(), run_id: profile.run_id, role: role.clone(), slot: slot as u8,
+                    id: Uuid::new_v4(),
+                    run_id: profile.run_id,
+                    role: role.clone(),
+                    slot: slot as u8,
                     candidates_considered: considered,
                     filters_applied: vec![
-                        "approved_only".into(), "healthy_only".into(), "category".into(),
-                        "abilities".into(), "context_length".into(), "privacy_terms".into(),
+                        "approved_only".into(),
+                        "healthy_only".into(),
+                        "category".into(),
+                        "abilities".into(),
+                        "context_length".into(),
+                        "privacy_terms".into(),
                         "provider_active".into(),
                     ],
                     chosen_model_id: chosen.model.id,
-                    reason: if chosen.stat.is_some_and(|stat| stat.runs >= profile.minimum_history_runs) {
+                    reason: if chosen
+                        .stat
+                        .is_some_and(|stat| stat.runs >= profile.minimum_history_runs)
+                    {
                         "Selected by category performance, cost and latency history.".into()
-                    } else { "Selected by the configured curated cold-start ranking.".into() },
+                    } else {
+                        "Selected by the configured curated cold-start ranking.".into()
+                    },
                     estimated_cost_micros: cost,
                     created_at: Utc::now(),
                 });
             }
-            if failure.is_some() { break; }
+            if failure.is_some() {
+                break;
+            }
         }
 
         if failure.is_none() {
             let mut exploration_used = false;
             if level == TaskLevel::Quick && profile.low_risk {
-                let pool = candidates(profile, providers, models, stats, &level, &AssignmentRole::Worker);
-                if let Some(exploration) = exploration_candidate(&pool, &worker_models, profile, &level) {
-                    if let Some(decision) = decisions.iter_mut().find(|decision| decision.role == AssignmentRole::Worker) {
+                let pool = candidates(
+                    profile,
+                    providers,
+                    models,
+                    stats,
+                    &level,
+                    &AssignmentRole::Worker,
+                );
+                if let Some(exploration) =
+                    exploration_candidate(&pool, &worker_models, profile, &level)
+                {
+                    if let Some(decision) = decisions
+                        .iter_mut()
+                        .find(|decision| decision.role == AssignmentRole::Worker)
+                    {
                         let revised_total = estimated_total
                             .saturating_sub(decision.estimated_cost_micros)
                             .saturating_add(exploration.estimated_cost);
                         if revised_total <= profile.per_task_budget_micros
-                            && revised_total <= profile.daily_budget_remaining_micros {
-                            decision.candidates_considered = pool.iter().map(|candidate| candidate.model.id).collect();
-                            decision.filters_applied.push("low_risk_quick_exploration".into());
+                            && revised_total <= profile.daily_budget_remaining_micros
+                        {
+                            decision.candidates_considered =
+                                pool.iter().map(|candidate| candidate.model.id).collect();
+                            decision
+                                .filters_applied
+                                .push("low_risk_quick_exploration".into());
                             decision.chosen_model_id = exploration.model.id;
                             decision.reason = "Approved recently-seen model selected by configured low-risk exploration.".into();
                             decision.estimated_cost_micros = exploration.estimated_cost;
@@ -434,19 +547,38 @@ pub fn assign_models(
                     }
                 }
             }
-            if budget_downgraded { notices.push("The requested supervision level exceeded the configured budget; Axon selected a lower-cost level.".into()); }
-            if diversity_degraded { notices.push("Checklist writers could not be assigned distinct providers; writer diversity was reduced.".into()); }
-            return Ok(AssignmentPlan { level, decisions, estimated_cost_micros: estimated_total,
-                budget_downgraded, exploration_used, diversity_degraded, notices });
+            if budget_downgraded {
+                notices.push("The requested supervision level exceeded the configured budget; Axon selected a lower-cost level.".into());
+            }
+            if diversity_degraded {
+                notices.push("Checklist writers could not be assigned distinct providers; writer diversity was reduced.".into());
+            }
+            return Ok(AssignmentPlan {
+                level,
+                decisions,
+                estimated_cost_micros: estimated_total,
+                budget_downgraded,
+                exploration_used,
+                diversity_degraded,
+                notices,
+            });
         }
 
         match failure.expect("failure checked") {
             AssignmentError::BudgetExceeded if level != TaskLevel::Quick => {
-                level = match level { TaskLevel::Important => TaskLevel::Normal, TaskLevel::Normal => TaskLevel::Quick, TaskLevel::Quick => unreachable!() };
+                level = match level {
+                    TaskLevel::Important => TaskLevel::Normal,
+                    TaskLevel::Normal => TaskLevel::Quick,
+                    TaskLevel::Quick => unreachable!(),
+                };
                 budget_downgraded = true;
             }
             AssignmentError::DiversityUnavailable if level != TaskLevel::Quick => {
-                level = match level { TaskLevel::Important => TaskLevel::Normal, TaskLevel::Normal => TaskLevel::Quick, TaskLevel::Quick => unreachable!() };
+                level = match level {
+                    TaskLevel::Important => TaskLevel::Normal,
+                    TaskLevel::Normal => TaskLevel::Quick,
+                    TaskLevel::Quick => unreachable!(),
+                };
                 diversity_degraded = true;
                 notices.push("Provider diversity could not be satisfied; Axon reduced the supervision level.".into());
             }
@@ -469,8 +601,10 @@ pub fn fallback_model(
 ) -> Option<Uuid> {
     candidates(profile, providers, models, stats, &profile.level, role)
         .into_iter()
-        .find(|candidate| !excluded_model_ids.contains(&candidate.model.id)
-            && !forbidden_provider_ids.contains(&candidate.provider.id))
+        .find(|candidate| {
+            !excluded_model_ids.contains(&candidate.model.id)
+                && !forbidden_provider_ids.contains(&candidate.provider.id)
+        })
         .map(|candidate| candidate.model.id)
 }
 
@@ -484,14 +618,24 @@ pub fn recover_assignment(
     models: &[ModelRecord],
     stats: &[ModelStat],
 ) -> Result<Uuid, AssignmentError> {
-    let index = plan.decisions.iter().position(|decision| decision.chosen_model_id == failed_model_id)
+    let index = plan
+        .decisions
+        .iter()
+        .position(|decision| decision.chosen_model_id == failed_model_id)
         .ok_or(AssignmentError::InvalidConfiguration)?;
     let role = plan.decisions[index].role.clone();
-    let provider_for = |model_id: Uuid| models.iter().find(|model| model.id == model_id).map(|model| model.provider_id);
+    let provider_for = |model_id: Uuid| {
+        models
+            .iter()
+            .find(|model| model.id == model_id)
+            .map(|model| model.provider_id)
+    };
     let mut excluded = BTreeSet::new();
     let mut forbidden_providers = BTreeSet::new();
     for (slot, decision) in plan.decisions.iter().enumerate() {
-        if slot == index { continue; }
+        if slot == index {
+            continue;
+        }
         if decision.role == role {
             excluded.insert(decision.chosen_model_id);
             if let Some(provider_id) = provider_for(decision.chosen_model_id) {
@@ -517,8 +661,10 @@ pub fn recover_assignment(
         .find(|candidate| {
             !excluded.contains(&candidate.model.id)
                 && !forbidden_providers.contains(&candidate.provider.id)
-                && base_total.saturating_add(candidate.estimated_cost) <= profile.per_task_budget_micros
-                && base_total.saturating_add(candidate.estimated_cost) <= profile.daily_budget_remaining_micros
+                && base_total.saturating_add(candidate.estimated_cost)
+                    <= profile.per_task_budget_micros
+                && base_total.saturating_add(candidate.estimated_cost)
+                    <= profile.daily_budget_remaining_micros
         })
         .ok_or(AssignmentError::DiversityUnavailable)?;
     let next = next_candidate.model.id;
@@ -527,8 +673,11 @@ pub fn recover_assignment(
     plan.estimated_cost_micros = base_total.saturating_add(cost);
     decision.chosen_model_id = next;
     decision.estimated_cost_micros = cost;
-    decision.reason = "Fallback selected after provider failure; role diversity constraints preserved.".into();
-    decision.filters_applied.push("provider_failure_fallback".into());
+    decision.reason =
+        "Fallback selected after provider failure; role diversity constraints preserved.".into();
+    decision
+        .filters_applied
+        .push("provider_failure_fallback".into());
     Ok(next)
 }
 
@@ -556,16 +705,30 @@ pub fn update_model_stat(
         category: category.to_owned(),
         role,
         runs,
-        completion_rate: blend(previous.as_ref().map_or(0.0, |stat| stat.completion_rate), completed),
-        supervisor_pass_rate: blend(previous.as_ref().map_or(0.0, |stat| stat.supervisor_pass_rate), supervisor_passed),
-        user_retry_rate: blend(previous.as_ref().map_or(0.0, |stat| stat.user_retry_rate), user_retried),
+        completion_rate: blend(
+            previous.as_ref().map_or(0.0, |stat| stat.completion_rate),
+            completed,
+        ),
+        supervisor_pass_rate: blend(
+            previous
+                .as_ref()
+                .map_or(0.0, |stat| stat.supervisor_pass_rate),
+            supervisor_passed,
+        ),
+        user_retry_rate: blend(
+            previous.as_ref().map_or(0.0, |stat| stat.user_retry_rate),
+            user_retried,
+        ),
         cost_per_run_micros: previous.as_ref().map_or(cost_micros, |stat| {
-            ((u128::from(stat.cost_per_run_micros) * u128::from(previous_runs) + u128::from(cost_micros))
-                / u128::from(runs)).min(u128::from(u64::MAX)) as u64
+            ((u128::from(stat.cost_per_run_micros) * u128::from(previous_runs)
+                + u128::from(cost_micros))
+                / u128::from(runs))
+            .min(u128::from(u64::MAX)) as u64
         }),
         latency_ms: previous.as_ref().map_or(latency_ms, |stat| {
             ((u128::from(stat.latency_ms) * u128::from(previous_runs) + u128::from(latency_ms))
-                / u128::from(runs)).min(u128::from(u64::MAX)) as u64
+                / u128::from(runs))
+            .min(u128::from(u64::MAX)) as u64
         }),
         last_updated: now,
     }
@@ -581,32 +744,83 @@ pub async fn persist_registry_entity(
     entity_id: &str,
     metadata: serde_json::Value,
 ) -> Result<(), StorageError> {
-    storage.apply(StorageMutation {
-        entity,
-        related_entities: Vec::new(),
-        audit: AuditEvent::attributed(
-            format!("human:{actor_user_id}"), None, event_type, entity_type, entity_id, metadata,
-        ),
-    }).await
+    storage
+        .apply(StorageMutation {
+            entity,
+            related_entities: Vec::new(),
+            audit: AuditEvent::attributed(
+                format!("human:{actor_user_id}"),
+                None,
+                event_type,
+                entity_type,
+                entity_id,
+                metadata,
+            ),
+        })
+        .await
 }
 
 /// Load registry entities from the storage abstraction. Provider/model API
 /// credentials are intentionally not represented in registry records.
 pub async fn load_registry(
     storage: &Arc<dyn Storage>,
-) -> Result<(Vec<ModelProvider>, Vec<ModelRecord>, Vec<ModelEvaluation>, Vec<ModelStat>), StorageError> {
-    let providers = storage.list_entities(EntityKind::Provider, None).await?.into_iter().filter_map(|entity| {
-        if let StoredEntity::Provider(item) = entity { Some(item) } else { None }
-    }).collect();
-    let models = storage.list_entities(EntityKind::Model, None).await?.into_iter().filter_map(|entity| {
-        if let StoredEntity::Model(item) = entity { Some(item) } else { None }
-    }).collect();
-    let evaluations = storage.list_entities(EntityKind::ModelEvaluation, None).await?.into_iter().filter_map(|entity| {
-        if let StoredEntity::ModelEvaluation(item) = entity { Some(item) } else { None }
-    }).collect();
-    let stats = storage.list_entities(EntityKind::ModelStat, None).await?.into_iter().filter_map(|entity| {
-        if let StoredEntity::ModelStat(item) = entity { Some(item) } else { None }
-    }).collect();
+) -> Result<
+    (
+        Vec<ModelProvider>,
+        Vec<ModelRecord>,
+        Vec<ModelEvaluation>,
+        Vec<ModelStat>,
+    ),
+    StorageError,
+> {
+    let providers = storage
+        .list_entities(EntityKind::Provider, None)
+        .await?
+        .into_iter()
+        .filter_map(|entity| {
+            if let StoredEntity::Provider(item) = entity {
+                Some(item)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let models = storage
+        .list_entities(EntityKind::Model, None)
+        .await?
+        .into_iter()
+        .filter_map(|entity| {
+            if let StoredEntity::Model(item) = entity {
+                Some(item)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let evaluations = storage
+        .list_entities(EntityKind::ModelEvaluation, None)
+        .await?
+        .into_iter()
+        .filter_map(|entity| {
+            if let StoredEntity::ModelEvaluation(item) = entity {
+                Some(item)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let stats = storage
+        .list_entities(EntityKind::ModelStat, None)
+        .await?
+        .into_iter()
+        .filter_map(|entity| {
+            if let StoredEntity::ModelStat(item) = entity {
+                Some(item)
+            } else {
+                None
+            }
+        })
+        .collect();
     Ok((providers, models, evaluations, stats))
 }
 
@@ -617,46 +831,84 @@ pub async fn record_evaluation(
     evaluation: ModelEvaluation,
     score_drop_threshold: f64,
 ) -> Result<bool, StorageError> {
-    if !evaluation.score.is_finite() || !(0.0..=1.0).contains(&evaluation.score)
-        || evaluation.test_set_version.trim().is_empty() || !score_drop_threshold.is_finite()
-        || !(0.0..=1.0).contains(&score_drop_threshold) {
+    if !evaluation.score.is_finite()
+        || !(0.0..=1.0).contains(&evaluation.score)
+        || evaluation.test_set_version.trim().is_empty()
+        || !score_drop_threshold.is_finite()
+        || !(0.0..=1.0).contains(&score_drop_threshold)
+    {
         return Err(StorageError::InvalidModelEvaluation);
     }
-    let previous: Vec<ModelEvaluation> = storage.list_entities(EntityKind::ModelEvaluation, None).await?
-        .into_iter().filter_map(|entity| if let StoredEntity::ModelEvaluation(item) = entity { Some(item) } else { None })
+    let previous: Vec<ModelEvaluation> = storage
+        .list_entities(EntityKind::ModelEvaluation, None)
+        .await?
+        .into_iter()
+        .filter_map(|entity| {
+            if let StoredEntity::ModelEvaluation(item) = entity {
+                Some(item)
+            } else {
+                None
+            }
+        })
         .filter(|item| item.model_id == evaluation.model_id && item.category == evaluation.category)
         .collect();
     let latest = previous.iter().max_by_key(|item| item.run_at);
     let dropped = latest.is_some_and(|old| old.score - evaluation.score >= score_drop_threshold);
     let mut related = Vec::new();
     if dropped {
-        let mut models: Vec<ModelRecord> = storage.list_entities(EntityKind::Model, None).await?
-            .into_iter().filter_map(|entity| if let StoredEntity::Model(item) = entity { Some(item) } else { None }).collect();
-        if let Some(model) = models.iter_mut().find(|item| item.id == evaluation.model_id) {
+        let mut models: Vec<ModelRecord> = storage
+            .list_entities(EntityKind::Model, None)
+            .await?
+            .into_iter()
+            .filter_map(|entity| {
+                if let StoredEntity::Model(item) = entity {
+                    Some(item)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if let Some(model) = models
+            .iter_mut()
+            .find(|item| item.id == evaluation.model_id)
+        {
             model.flagged_for_review = true;
             model.healthy = false;
             model.updated_at = Utc::now();
             related.push(StoredEntity::Model(model.clone()));
             related.push(StoredEntity::ModelChangeFlag(ModelChangeFlag {
-                id: Uuid::new_v4(), model_id: evaluation.model_id, change_kind: "score_drop".into(),
+                id: Uuid::new_v4(),
+                model_id: evaluation.model_id,
+                change_kind: "score_drop".into(),
                 previous_value: latest.map(|item| item.score.to_string()),
-                observed_value: Some(evaluation.score.to_string()), detected_at: Utc::now(),
-                cleared_at: None, cleared_by: None, resolution_note: None,
+                observed_value: Some(evaluation.score.to_string()),
+                detected_at: Utc::now(),
+                cleared_at: None,
+                cleared_by: None,
+                resolution_note: None,
             }));
         }
     }
     let event = AuditEvent::attributed(
-        "system:model_evaluation", None,
-        if dropped { "model.evaluation_drop_flagged" } else { "model.evaluation_recorded" },
-        "model_evaluation", evaluation.id.to_string(),
+        "system:model_evaluation",
+        None,
+        if dropped {
+            "model.evaluation_drop_flagged"
+        } else {
+            "model.evaluation_recorded"
+        },
+        "model_evaluation",
+        evaluation.id.to_string(),
         json!({"model_id": evaluation.model_id, "category": evaluation.category,
             "score": evaluation.score, "test_set_version": evaluation.test_set_version, "score_drop": dropped}),
     );
-    storage.apply(StorageMutation {
-        entity: StoredEntity::ModelEvaluation(evaluation),
-        related_entities: related,
-        audit: event,
-    }).await?;
+    storage
+        .apply(StorageMutation {
+            entity: StoredEntity::ModelEvaluation(evaluation),
+            related_entities: related,
+            audit: event,
+        })
+        .await?;
     Ok(dropped)
 }
 
@@ -670,38 +922,116 @@ mod tests {
 
     fn fixture() -> (Vec<ModelProvider>, Vec<ModelRecord>) {
         let provider_a = ModelProvider {
-            id: Uuid::new_v4(), name: "Provider A".into(), base_url: "https://a.invalid".into(),
-            model_discovery_url: None, pricing_source_url: None, api_key_env: None,
-            discovery_enabled: false, rate_limit_per_minute: 10, status: "active".into(),
-            data_terms: ProviderDataTerms { processing_regions: vec!["eu".into()], trains_on_api_inputs: Some(false), retention_days: Some(0), retention_description: "No retention".into() },
-            terms_reviewed_at: Some(Utc::now()), reviewed_by: Some(Uuid::new_v4()), created_at: Utc::now(), updated_at: Utc::now(),
+            id: Uuid::new_v4(),
+            name: "Provider A".into(),
+            base_url: "https://a.invalid".into(),
+            model_discovery_url: None,
+            pricing_source_url: None,
+            api_key_env: None,
+            discovery_enabled: false,
+            rate_limit_per_minute: 10,
+            status: "active".into(),
+            data_terms: ProviderDataTerms {
+                processing_regions: vec!["eu".into()],
+                trains_on_api_inputs: Some(false),
+                retention_days: Some(0),
+                retention_description: "No retention".into(),
+            },
+            terms_reviewed_at: Some(Utc::now()),
+            reviewed_by: Some(Uuid::new_v4()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
         };
-        let provider_b = ModelProvider { id: Uuid::new_v4(), name: "Provider B".into(), ..provider_a.clone() };
-        let provider_c = ModelProvider { id: Uuid::new_v4(), name: "Provider C".into(), ..provider_a.clone() };
-        let provider_d = ModelProvider { id: Uuid::new_v4(), name: "Provider D".into(), ..provider_a.clone() };
-        let provider_e = ModelProvider { id: Uuid::new_v4(), name: "Provider E".into(), ..provider_a.clone() };
-        let provider_f = ModelProvider { id: Uuid::new_v4(), name: "Provider F".into(), ..provider_a.clone() };
-        let mut abilities = BTreeSet::new(); abilities.insert("text".into()); abilities.insert("code".into());
-        let mut categories = BTreeSet::new(); categories.insert("coding".into());
+        let provider_b = ModelProvider {
+            id: Uuid::new_v4(),
+            name: "Provider B".into(),
+            ..provider_a.clone()
+        };
+        let provider_c = ModelProvider {
+            id: Uuid::new_v4(),
+            name: "Provider C".into(),
+            ..provider_a.clone()
+        };
+        let provider_d = ModelProvider {
+            id: Uuid::new_v4(),
+            name: "Provider D".into(),
+            ..provider_a.clone()
+        };
+        let provider_e = ModelProvider {
+            id: Uuid::new_v4(),
+            name: "Provider E".into(),
+            ..provider_a.clone()
+        };
+        let provider_f = ModelProvider {
+            id: Uuid::new_v4(),
+            name: "Provider F".into(),
+            ..provider_a.clone()
+        };
+        let mut abilities = BTreeSet::new();
+        abilities.insert("text".into());
+        abilities.insert("code".into());
+        let mut categories = BTreeSet::new();
+        categories.insert("coding".into());
         let model = |provider_id, rank| ModelRecord {
-            id: Uuid::new_v4(), provider_id, model_name: "approved-model".into(), status: RegistryStatus::Approved,
-            abilities: abilities.clone(), categories: categories.clone(), context_length: 32_000,
-            input_cost_per_million: 1_000_000, output_cost_per_million: 1_000_000, typical_latency_ms: 500,
-            regions: ["eu".to_string()].into_iter().collect(), version: Some("v1".into()), last_seen_at: Utc::now(),
-            notes: String::new(), curated_rank: [("coding".to_string(), rank)].into_iter().collect(), healthy: true, flagged_for_review: false,
-            created_at: Utc::now(), updated_at: Utc::now(),
+            id: Uuid::new_v4(),
+            provider_id,
+            model_name: "approved-model".into(),
+            status: RegistryStatus::Approved,
+            abilities: abilities.clone(),
+            categories: categories.clone(),
+            context_length: 32_000,
+            input_cost_per_million: 1_000_000,
+            output_cost_per_million: 1_000_000,
+            typical_latency_ms: 500,
+            regions: ["eu".to_string()].into_iter().collect(),
+            version: Some("v1".into()),
+            last_seen_at: Utc::now(),
+            notes: String::new(),
+            curated_rank: [("coding".to_string(), rank)].into_iter().collect(),
+            healthy: true,
+            flagged_for_review: false,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
         };
-        (vec![provider_a.clone(), provider_b.clone(), provider_c.clone(), provider_d.clone(), provider_e.clone(), provider_f.clone()],
-         vec![model(provider_a.id, 0), model(provider_b.id, 1), model(provider_c.id, 2), model(provider_d.id, 3), model(provider_e.id, 4), model(provider_f.id, 5)])
+        (
+            vec![
+                provider_a.clone(),
+                provider_b.clone(),
+                provider_c.clone(),
+                provider_d.clone(),
+                provider_e.clone(),
+                provider_f.clone(),
+            ],
+            vec![
+                model(provider_a.id, 0),
+                model(provider_b.id, 1),
+                model(provider_c.id, 2),
+                model(provider_d.id, 3),
+                model(provider_e.id, 4),
+                model(provider_f.id, 5),
+            ],
+        )
     }
 
     fn profile(level: TaskLevel) -> AssignmentProfile {
         AssignmentProfile {
-            run_id: Uuid::from_u128(5), category: "coding".into(), level, low_risk: false,
-            required_abilities: ["text".to_string()].into_iter().collect(), required_context_tokens: 8_000,
-            privacy: PrivacyRequirement { forbid_training: true, forbid_retention: true, allowed_regions: ["eu".to_string()].into_iter().collect() },
-            estimated_input_tokens: 100, estimated_output_tokens: 100, per_task_budget_micros: 100_000,
-            daily_budget_remaining_micros: 100_000, exploration_percent: 5, minimum_history_runs: 5,
+            run_id: Uuid::from_u128(5),
+            category: "coding".into(),
+            level,
+            low_risk: false,
+            required_abilities: ["text".to_string()].into_iter().collect(),
+            required_context_tokens: 8_000,
+            privacy: PrivacyRequirement {
+                forbid_training: true,
+                forbid_retention: true,
+                allowed_regions: ["eu".to_string()].into_iter().collect(),
+            },
+            estimated_input_tokens: 100,
+            estimated_output_tokens: 100,
+            per_task_budget_micros: 100_000,
+            daily_budget_remaining_micros: 100_000,
+            exploration_percent: 5,
+            minimum_history_runs: 5,
             curated_model_ids: Vec::new(),
         }
     }
@@ -711,33 +1041,56 @@ mod tests {
         let (providers, mut models) = fixture();
         models[0].abilities.clear();
         models[1].context_length = 100;
-        assert_eq!(assign_models(&profile(TaskLevel::Quick), &providers, &models, &[]), Err(AssignmentError::NoEligibleModels));
+        assert_eq!(
+            assign_models(&profile(TaskLevel::Quick), &providers, &models, &[]),
+            Err(AssignmentError::NoEligibleModels)
+        );
     }
 
     #[test]
     fn filters_provider_privacy_terms() {
         let (mut providers, models) = fixture();
-        providers.iter_mut().for_each(|provider| provider.data_terms.trains_on_api_inputs = None);
-        assert_eq!(assign_models(&profile(TaskLevel::Quick), &providers, &models, &[]), Err(AssignmentError::NoEligibleModels));
+        providers
+            .iter_mut()
+            .for_each(|provider| provider.data_terms.trains_on_api_inputs = None);
+        assert_eq!(
+            assign_models(&profile(TaskLevel::Quick), &providers, &models, &[]),
+            Err(AssignmentError::NoEligibleModels)
+        );
     }
 
     #[test]
     fn important_requires_independent_worker_and_supervisor_providers() {
         let (providers, models) = fixture();
         let plan = assign_models(&profile(TaskLevel::Important), &providers, &models, &[]).unwrap();
-        let workers: Vec<_> = plan.decisions.iter().filter(|item| item.role == AssignmentRole::Worker).collect();
-        let supervisors: Vec<_> = plan.decisions.iter().filter(|item| item.role == AssignmentRole::Supervisor).collect();
+        let workers: Vec<_> = plan
+            .decisions
+            .iter()
+            .filter(|item| item.role == AssignmentRole::Worker)
+            .collect();
+        let supervisors: Vec<_> = plan
+            .decisions
+            .iter()
+            .filter(|item| item.role == AssignmentRole::Supervisor)
+            .collect();
         assert_eq!(workers.len(), 2);
         assert_eq!(supervisors.len(), 2);
         assert_ne!(workers[0].chosen_model_id, workers[1].chosen_model_id);
-        assert!(supervisors.iter().all(|supervisor| !workers.iter().any(|worker| worker.chosen_model_id == supervisor.chosen_model_id)));
+        assert!(supervisors.iter().all(|supervisor| !workers
+            .iter()
+            .any(|worker| worker.chosen_model_id == supervisor.chosen_model_id)));
     }
 
     #[test]
     fn cannot_send_unapproved_candidate_to_user_traffic() {
         let (providers, mut models) = fixture();
-        models.iter_mut().for_each(|model| model.status = RegistryStatus::Candidate);
-        assert_eq!(assign_models(&profile(TaskLevel::Quick), &providers, &models, &[]), Err(AssignmentError::NoEligibleModels));
+        models
+            .iter_mut()
+            .for_each(|model| model.status = RegistryStatus::Candidate);
+        assert_eq!(
+            assign_models(&profile(TaskLevel::Quick), &providers, &models, &[]),
+            Err(AssignmentError::NoEligibleModels)
+        );
     }
 
     #[test]
@@ -757,13 +1110,26 @@ mod tests {
         let (providers, models) = fixture();
         let profile = profile(TaskLevel::Quick);
         let high = ModelStat {
-            id: Uuid::new_v4(), model_id: models[0].id, category: "coding".into(),
-            role: AssignmentRole::Worker, runs: 5, completion_rate: 1.0,
-            supervisor_pass_rate: 1.0, user_retry_rate: 0.0,
-            cost_per_run_micros: 100, latency_ms: 100, last_updated: Utc::now(),
+            id: Uuid::new_v4(),
+            model_id: models[0].id,
+            category: "coding".into(),
+            role: AssignmentRole::Worker,
+            runs: 5,
+            completion_rate: 1.0,
+            supervisor_pass_rate: 1.0,
+            user_retry_rate: 0.0,
+            cost_per_run_micros: 100,
+            latency_ms: 100,
+            last_updated: Utc::now(),
         };
-        let low_sample = ModelStat { runs: 4, ..high.clone() };
-        assert_eq!(score_candidate(Some(&low_sample), &TaskLevel::Quick, 5, 2), 998.0);
+        let low_sample = ModelStat {
+            runs: 4,
+            ..high.clone()
+        };
+        assert_eq!(
+            score_candidate(Some(&low_sample), &TaskLevel::Quick, 5, 2),
+            998.0
+        );
         assert!(score_candidate(Some(&high), &TaskLevel::Quick, 5, 2) > 998.0);
         assert_eq!(providers.len(), 6);
     }
@@ -776,7 +1142,13 @@ mod tests {
         request.run_id = Uuid::from_u128(4);
         let plan = assign_models(&request, &providers, &models, &[]).unwrap();
         assert!(plan.exploration_used);
-        assert_eq!(plan.decisions.iter().filter(|decision| decision.role == AssignmentRole::Worker).count(), 1);
+        assert_eq!(
+            plan.decisions
+                .iter()
+                .filter(|decision| decision.role == AssignmentRole::Worker)
+                .count(),
+            1
+        );
 
         request.level = TaskLevel::Important;
         let important = assign_models(&request, &providers, &models, &[]).unwrap();
@@ -788,14 +1160,40 @@ mod tests {
         let (providers, models) = fixture();
         let request = profile(TaskLevel::Important);
         let mut plan = assign_models(&request, &providers, &models, &[]).unwrap();
-        let failed = plan.decisions.iter().find(|decision| decision.role == AssignmentRole::Worker).unwrap().chosen_model_id;
-        let next = recover_assignment(&mut plan, failed, &request, &providers, &models, &[]).unwrap();
+        let failed = plan
+            .decisions
+            .iter()
+            .find(|decision| decision.role == AssignmentRole::Worker)
+            .unwrap()
+            .chosen_model_id;
+        let next =
+            recover_assignment(&mut plan, failed, &request, &providers, &models, &[]).unwrap();
         assert_ne!(next, failed);
-        let worker_providers: Vec<_> = plan.decisions.iter().filter(|decision| decision.role == AssignmentRole::Worker)
-            .filter_map(|decision| models.iter().find(|model| model.id == decision.chosen_model_id).map(|model| model.provider_id)).collect();
-        let supervisor_providers: Vec<_> = plan.decisions.iter().filter(|decision| decision.role == AssignmentRole::Supervisor)
-            .filter_map(|decision| models.iter().find(|model| model.id == decision.chosen_model_id).map(|model| model.provider_id)).collect();
-        assert!(worker_providers.iter().all(|provider| !supervisor_providers.contains(provider)));
+        let worker_providers: Vec<_> = plan
+            .decisions
+            .iter()
+            .filter(|decision| decision.role == AssignmentRole::Worker)
+            .filter_map(|decision| {
+                models
+                    .iter()
+                    .find(|model| model.id == decision.chosen_model_id)
+                    .map(|model| model.provider_id)
+            })
+            .collect();
+        let supervisor_providers: Vec<_> = plan
+            .decisions
+            .iter()
+            .filter(|decision| decision.role == AssignmentRole::Supervisor)
+            .filter_map(|decision| {
+                models
+                    .iter()
+                    .find(|model| model.id == decision.chosen_model_id)
+                    .map(|model| model.provider_id)
+            })
+            .collect();
+        assert!(worker_providers
+            .iter()
+            .all(|provider| !supervisor_providers.contains(provider)));
     }
 
     #[test]
@@ -805,18 +1203,43 @@ mod tests {
         excluded.insert(models[0].id);
         let mut forbidden = BTreeSet::new();
         forbidden.insert(models[0].provider_id);
-        let next = fallback_model(&profile(TaskLevel::Quick), &providers, &models, &[],
-            &AssignmentRole::Worker, &excluded, &forbidden);
+        let next = fallback_model(
+            &profile(TaskLevel::Quick),
+            &providers,
+            &models,
+            &[],
+            &AssignmentRole::Worker,
+            &excluded,
+            &forbidden,
+        );
         assert!(next.is_some_and(|id| id != models[0].id));
     }
 
     #[test]
     fn model_statistics_update_after_each_run() {
         let model_id = Uuid::new_v4();
-        let first = update_model_stat(None, model_id, "coding", AssignmentRole::Worker,
-            true, true, false, 100, 200);
-        let second = update_model_stat(Some(first), model_id, "coding", AssignmentRole::Worker,
-            false, false, true, 300, 400);
+        let first = update_model_stat(
+            None,
+            model_id,
+            "coding",
+            AssignmentRole::Worker,
+            true,
+            true,
+            false,
+            100,
+            200,
+        );
+        let second = update_model_stat(
+            Some(first),
+            model_id,
+            "coding",
+            AssignmentRole::Worker,
+            false,
+            false,
+            true,
+            300,
+            400,
+        );
         assert_eq!(second.runs, 2);
         assert_eq!(second.completion_rate, 0.5);
         assert_eq!(second.supervisor_pass_rate, 0.5);
@@ -828,34 +1251,73 @@ mod tests {
     #[test]
     fn flagged_model_is_excluded_from_assignment() {
         let (providers, mut models) = fixture();
-        models.iter_mut().for_each(|model| model.flagged_for_review = true);
-        assert_eq!(assign_models(&profile(TaskLevel::Quick), &providers, &models, &[]), Err(AssignmentError::NoEligibleModels));
+        models
+            .iter_mut()
+            .for_each(|model| model.flagged_for_review = true);
+        assert_eq!(
+            assign_models(&profile(TaskLevel::Quick), &providers, &models, &[]),
+            Err(AssignmentError::NoEligibleModels)
+        );
     }
 
     #[tokio::test]
     async fn evaluation_score_drop_flags_and_excludes_approved_model() {
-        use crate::{audit::AuditEvent, storage::{SqliteStorage, StorageMutation}};
+        use crate::{
+            audit::AuditEvent,
+            storage::{SqliteStorage, StorageMutation},
+        };
         let storage: Arc<dyn Storage> = SqliteStorage::connect_in_memory().await.unwrap().shared();
         let (providers, models) = fixture();
-        for entity in [StoredEntity::Provider(providers[0].clone()), StoredEntity::Model(models[0].clone())] {
-            storage.apply(StorageMutation {
-                entity, related_entities: Vec::new(),
-                audit: AuditEvent::unattributed(None, "test.seeded", "test", "seed", serde_json::Value::Null),
-            }).await.unwrap();
+        for entity in [
+            StoredEntity::Provider(providers[0].clone()),
+            StoredEntity::Model(models[0].clone()),
+        ] {
+            storage
+                .apply(StorageMutation {
+                    entity,
+                    related_entities: Vec::new(),
+                    audit: AuditEvent::unattributed(
+                        None,
+                        "test.seeded",
+                        "test",
+                        "seed",
+                        serde_json::Value::Null,
+                    ),
+                })
+                .await
+                .unwrap();
         }
         let first = ModelEvaluation {
-            id: Uuid::new_v4(), model_id: models[0].id, category: "coding".into(),
-            test_set_version: "v1".into(), score: 0.95, run_at: Utc::now(), cost_micros: 10,
+            id: Uuid::new_v4(),
+            model_id: models[0].id,
+            category: "coding".into(),
+            test_set_version: "v1".into(),
+            score: 0.95,
+            run_at: Utc::now(),
+            cost_micros: 10,
         };
         assert!(!record_evaluation(&storage, first, 0.10).await.unwrap());
         let second = ModelEvaluation {
-            id: Uuid::new_v4(), model_id: models[0].id, category: "coding".into(),
-            test_set_version: "v1".into(), score: 0.70, run_at: Utc::now() + Duration::seconds(1), cost_micros: 12,
+            id: Uuid::new_v4(),
+            model_id: models[0].id,
+            category: "coding".into(),
+            test_set_version: "v1".into(),
+            score: 0.70,
+            run_at: Utc::now() + Duration::seconds(1),
+            cost_micros: 12,
         };
         assert!(record_evaluation(&storage, second, 0.10).await.unwrap());
-        let stored = storage.list_entities(EntityKind::Model, None).await.unwrap();
-        assert!(matches!(&stored[0], StoredEntity::Model(model) if model.flagged_for_review && !model.healthy));
-        let flags = storage.list_entities(EntityKind::ModelChangeFlag, None).await.unwrap();
+        let stored = storage
+            .list_entities(EntityKind::Model, None)
+            .await
+            .unwrap();
+        assert!(
+            matches!(&stored[0], StoredEntity::Model(model) if model.flagged_for_review && !model.healthy)
+        );
+        let flags = storage
+            .list_entities(EntityKind::ModelChangeFlag, None)
+            .await
+            .unwrap();
         assert!(flags.iter().any(|entity| matches!(entity, StoredEntity::ModelChangeFlag(flag) if flag.change_kind == "score_drop")));
     }
 
