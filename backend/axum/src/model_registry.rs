@@ -26,6 +26,11 @@ pub struct ModelProvider {
     pub id: Uuid,
     pub name: String,
     pub base_url: String,
+    pub model_discovery_url: Option<String>,
+    pub pricing_source_url: Option<String>,
+    pub api_key_env: Option<String>,
+    pub discovery_enabled: bool,
+    pub rate_limit_per_minute: u16,
     pub status: String,
     pub data_terms: ProviderDataTerms,
     pub terms_reviewed_at: Option<DateTime<Utc>>,
@@ -538,7 +543,8 @@ mod tests {
     fn fixture() -> (Vec<ModelProvider>, Vec<ModelRecord>) {
         let provider_a = ModelProvider {
             id: Uuid::new_v4(), name: "Provider A".into(), base_url: "https://a.invalid".into(),
-            status: "active".into(),
+            model_discovery_url: None, pricing_source_url: None, api_key_env: None,
+            discovery_enabled: false, rate_limit_per_minute: 10, status: "active".into(),
             data_terms: ProviderDataTerms { processing_regions: vec!["eu".into()], trains_on_api_inputs: Some(false), retention_days: Some(0), retention_description: "No retention".into() },
             terms_reviewed_at: Some(Utc::now()), reviewed_by: Some(Uuid::new_v4()), created_at: Utc::now(), updated_at: Utc::now(),
         };
