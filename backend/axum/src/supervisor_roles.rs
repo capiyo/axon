@@ -48,4 +48,3 @@ pub trait Worker: Send + Sync {
 pub trait Supervisor: Send + Sync {
     async fn review(&self, task: ReviewTaskContext) -> Result<SupervisorReview, AiProviderError>;
 }
-
