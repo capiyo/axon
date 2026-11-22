@@ -1,6 +1,11 @@
-use crate::supervisor::{
+use crate::{
+    audit::AuditEvent,
+    storage::{SqliteStorage, StoredEntity},
+    supervisor::{
     ChecklistItem, ChecklistProposal, DeterministicCheck, EvidenceReference, SupervisorReview,
     SupervisorRun, SupervisorRunStatus, SupervisorVerdict, SupervisionOutcome, WorkerResult,
+    },
+    AppState,
 };
 use uuid::Uuid;
 
@@ -114,4 +119,49 @@ fn repair_rounds_are_bounded_and_terminal_failure_cannot_restart() {
             assert!(run.start_repair().is_err());
         }
     }
+}
+
+
+#[tokio::test]
+async fn supervisor_run_is_restored_from_sqlite_after_restart() {
+    let storage = SqliteStorage::connect_in_memory().await.unwrap().shared();
+    let state = AppState::with_storage(storage.clone()).await.unwrap();
+    let workspace = state
+        .ensure_firebase_user("axon-supervisor-test", "supervisor-user")
+        .await
+        .unwrap()
+        .workspace;
+    state
+        .workspaces
+        .write()
+        .await
+        .insert(workspace.id, workspace.clone());
+
+    let run = SupervisorRun::new(
+        workspace.id,
+        "Persistent supervisor run".into(),
+        "Verify supervisor state survives process reconstruction.".into(),
+    )
+    .unwrap();
+    state
+        .persist_entity(
+            StoredEntity::SupervisorRun(run.clone()),
+            Vec::new(),
+            AuditEvent::attributed(
+                "human:test",
+                Some(workspace.id),
+                "supervisor_run.created",
+                "supervisor_run",
+                run.id.to_string(),
+                serde_json::json!({"status": "collecting_checklists"}),
+            ),
+        )
+        .await
+        .unwrap();
+
+    let restored = AppState::with_storage(storage).await.unwrap();
+    assert_eq!(
+        restored.supervisor_runs.read().await.get(&run.id),
+        Some(&run)
+    );
 }
