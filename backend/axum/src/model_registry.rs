@@ -406,6 +406,64 @@ pub fn assign_models(
     }
 }
 
+/// Return the next eligible model after a provider timeout/failure. The caller
+/// supplies provider IDs already used by other roles so fallback cannot break
+/// the worker/supervisor separation rules.
+pub fn fallback_model(
+    profile: &AssignmentProfile,
+    providers: &[ModelProvider],
+    models: &[ModelRecord],
+    stats: &[ModelStat],
+    role: &AssignmentRole,
+    excluded_model_ids: &BTreeSet<Uuid>,
+    forbidden_provider_ids: &BTreeSet<Uuid>,
+) -> Option<Uuid> {
+    candidates(profile, providers, models, stats, &profile.level, role)
+        .into_iter()
+        .find(|candidate| !excluded_model_ids.contains(&candidate.model.id)
+            && !forbidden_provider_ids.contains(&candidate.provider.id))
+        .map(|candidate| candidate.model.id)
+}
+
+/// Update rolling success/retry/cost/latency metrics with a single completed run.
+pub fn update_model_stat(
+    previous: Option<ModelStat>,
+    model_id: Uuid,
+    category: &str,
+    role: AssignmentRole,
+    completed: bool,
+    supervisor_passed: bool,
+    user_retried: bool,
+    cost_micros: u64,
+    latency_ms: u64,
+) -> ModelStat {
+    let now = Utc::now();
+    let previous_runs = previous.as_ref().map_or(0, |stat| stat.runs);
+    let runs = previous_runs.saturating_add(1);
+    let blend = |old: f64, sample: bool| {
+        ((old * previous_runs as f64) + if sample { 1.0 } else { 0.0 }) / runs as f64
+    };
+    ModelStat {
+        id: previous.as_ref().map_or_else(Uuid::new_v4, |stat| stat.id),
+        model_id,
+        category: category.to_owned(),
+        role,
+        runs,
+        completion_rate: blend(previous.as_ref().map_or(0.0, |stat| stat.completion_rate), completed),
+        supervisor_pass_rate: blend(previous.as_ref().map_or(0.0, |stat| stat.supervisor_pass_rate), supervisor_passed),
+        user_retry_rate: blend(previous.as_ref().map_or(0.0, |stat| stat.user_retry_rate), user_retried),
+        cost_per_run_micros: previous.as_ref().map_or(cost_micros, |stat| {
+            ((u128::from(stat.cost_per_run_micros) * u128::from(previous_runs) + u128::from(cost_micros))
+                / u128::from(runs)).min(u128::from(u64::MAX)) as u64
+        }),
+        latency_ms: previous.as_ref().map_or(latency_ms, |stat| {
+            ((u128::from(stat.latency_ms) * u128::from(previous_runs) + u128::from(latency_ms))
+                / u128::from(runs)).min(u128::from(u64::MAX)) as u64
+        }),
+        last_updated: now,
+    }
+}
+
 /// Persist one global registry mutation and its audit event atomically.
 pub async fn persist_registry_entity(
     storage: &Arc<dyn Storage>,
@@ -563,6 +621,33 @@ mod tests {
         request.level = TaskLevel::Important;
         let important = assign_models(&request, &providers, &models, &[]).unwrap();
         assert!(!important.exploration_used);
+    }
+
+    #[test]
+    fn fallback_chooses_next_approved_provider_after_timeout() {
+        let (providers, models) = fixture();
+        let mut excluded = BTreeSet::new();
+        excluded.insert(models[0].id);
+        let mut forbidden = BTreeSet::new();
+        forbidden.insert(models[0].provider_id);
+        let next = fallback_model(&profile(TaskLevel::Quick), &providers, &models, &[],
+            &AssignmentRole::Worker, &excluded, &forbidden);
+        assert!(next.is_some_and(|id| id != models[0].id));
+    }
+
+    #[test]
+    fn model_statistics_update_after_each_run() {
+        let model_id = Uuid::new_v4();
+        let first = update_model_stat(None, model_id, "coding", AssignmentRole::Worker,
+            true, true, false, 100, 200);
+        let second = update_model_stat(Some(first), model_id, "coding", AssignmentRole::Worker,
+            false, false, true, 300, 400);
+        assert_eq!(second.runs, 2);
+        assert_eq!(second.completion_rate, 0.5);
+        assert_eq!(second.supervisor_pass_rate, 0.5);
+        assert_eq!(second.user_retry_rate, 0.5);
+        assert_eq!(second.cost_per_run_micros, 200);
+        assert_eq!(second.latency_ms, 300);
     }
 
     #[test]
