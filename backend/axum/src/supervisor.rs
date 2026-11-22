@@ -221,13 +221,25 @@ impl SupervisorRun {
             return Err(SupervisorError::DuplicateSubmission);
         }
         index_proposal(&proposal)?;
+        let required_writers = required_role_counts(self.assignment_level.as_ref()).0;
+        if required_writers == 0 { return Err(SupervisorError::InvalidRunState); }
         let mut proposals = self.checklist_proposals.clone();
         proposals.push(proposal);
-        let merged = if proposals.len() == 2 {
-            Some(merge_checklists(&proposals[0], &proposals[1])?)
-        } else {
-            None
-        };
+        if proposals.len() > required_writers { return Err(SupervisorError::DuplicateSubmission); }
+        let merged = if proposals.len() == required_writers {
+            if required_writers == 1 {
+                let indexed = index_proposal(&proposals[0])?;
+                Some(indexed.into_iter().map(|(key, item)| MergedChecklistItem {
+                    key,
+                    summary: item.summary,
+                    acceptance_criteria: item.acceptance_criteria,
+                    priority: if item.required { ChecklistPriority::Required } else { ChecklistPriority::Optional },
+                    proposed_by: vec![proposals[0].writer_id.clone()],
+                }).collect())
+            } else {
+                Some(merge_checklists(&proposals[0], &proposals[1])?)
+            }
+        } else { None };
         self.checklist_proposals = proposals;
         if let Some(merged) = merged {
             self.merged_checklist = merged;
