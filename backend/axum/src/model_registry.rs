@@ -685,17 +685,22 @@ pub fn recover_assignment(
     Ok(next)
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ModelStatObservation {
+    pub completed: bool,
+    pub supervisor_passed: bool,
+    pub user_retried: bool,
+    pub cost_per_run_micros: u64,
+    pub latency_ms: u64,
+}
+
 /// Update rolling success/retry/cost/latency metrics with a single completed run.
 pub fn update_model_stat(
     previous: Option<ModelStat>,
     model_id: Uuid,
     category: &str,
     role: AssignmentRole,
-    completed: bool,
-    supervisor_passed: bool,
-    user_retried: bool,
-    cost_micros: u64,
-    latency_ms: u64,
+    observation: ModelStatObservation,
 ) -> ModelStat {
     let now = Utc::now();
     let previous_runs = previous.as_ref().map_or(0, |stat| stat.runs);
@@ -723,14 +728,14 @@ pub fn update_model_stat(
             previous.as_ref().map_or(0.0, |stat| stat.user_retry_rate),
             user_retried,
         ),
-        cost_per_run_micros: previous.as_ref().map_or(cost_micros, |stat| {
+        cost_per_run_micros: previous.as_ref().map_or(observation.cost_per_run_micros, |stat| {
             ((u128::from(stat.cost_per_run_micros) * u128::from(previous_runs)
-                + u128::from(cost_micros))
+                + u128::from(observation.cost_per_run_micros))
                 / u128::from(runs))
             .min(u128::from(u64::MAX)) as u64
         }),
-        latency_ms: previous.as_ref().map_or(latency_ms, |stat| {
-            ((u128::from(stat.latency_ms) * u128::from(previous_runs) + u128::from(latency_ms))
+        latency_ms: previous.as_ref().map_or(observation.latency_ms, |stat| {
+            ((u128::from(stat.latency_ms) * u128::from(previous_runs) + u128::from(observation.latency_ms))
                 / u128::from(runs))
             .min(u128::from(u64::MAX)) as u64
         }),
@@ -1222,26 +1227,12 @@ mod tests {
     fn model_statistics_update_after_each_run() {
         let model_id = Uuid::new_v4();
         let first = update_model_stat(
-            None,
-            model_id,
-            "coding",
-            AssignmentRole::Worker,
-            true,
-            true,
-            false,
-            100,
-            200,
+            None, model_id, "coding", AssignmentRole::Worker,
+            ModelStatObservation { completed: true, supervisor_passed: true, user_retried: false, cost_per_run_micros: 100, latency_ms: 200 },
         );
         let second = update_model_stat(
-            Some(first),
-            model_id,
-            "coding",
-            AssignmentRole::Worker,
-            false,
-            false,
-            true,
-            300,
-            400,
+            Some(first), model_id, "coding", AssignmentRole::Worker,
+            ModelStatObservation { completed: false, supervisor_passed: false, user_retried: true, cost_per_run_micros: 300, latency_ms: 400 },
         );
         assert_eq!(second.runs, 2);
         assert_eq!(second.completion_rate, 0.5);
