@@ -535,6 +535,44 @@ mod tests {
     }
 
     #[test]
+    fn history_only_overrides_curated_cold_start_after_minimum_runs() {
+        let (providers, models) = fixture();
+        let profile = profile(TaskLevel::Quick);
+        let high = ModelStat {
+            id: Uuid::new_v4(), model_id: models[0].id, category: "coding".into(),
+            role: AssignmentRole::Worker, runs: 5, completion_rate: 1.0,
+            supervisor_pass_rate: 1.0, user_retry_rate: 0.0,
+            cost_per_run_micros: 100, latency_ms: 100, last_updated: Utc::now(),
+        };
+        let low_sample = ModelStat { runs: 4, ..high.clone() };
+        assert_eq!(score_candidate(&models[0], Some(&low_sample), &TaskLevel::Quick, 5, 2), 998.0);
+        assert!(score_candidate(&models[0], Some(&high), &TaskLevel::Quick, 5, 2) > 998.0);
+        assert_eq!(providers.len(), 4);
+    }
+
+    #[test]
+    fn exploration_is_one_quick_low_risk_assignment_only() {
+        let (providers, models) = fixture();
+        let mut request = profile(TaskLevel::Quick);
+        request.low_risk = true;
+        request.run_id = Uuid::from_u128(4);
+        let plan = assign_models(&request, &providers, &models, &[]).unwrap();
+        assert!(plan.exploration_used);
+        assert_eq!(plan.decisions.iter().filter(|decision| decision.role == AssignmentRole::Worker).count(), 1);
+
+        request.level = TaskLevel::Important;
+        let important = assign_models(&request, &providers, &models, &[]).unwrap();
+        assert!(!important.exploration_used);
+    }
+
+    #[test]
+    fn flagged_model_is_excluded_from_assignment() {
+        let (providers, mut models) = fixture();
+        models.iter_mut().for_each(|model| model.flagged_for_review = true);
+        assert_eq!(assign_models(&profile(TaskLevel::Quick), &providers, &models, &[]), Err(AssignmentError::NoEligibleModels));
+    }
+
+    #[test]
     fn diversity_shortfall_degrades_and_is_reported() {
         let (mut providers, mut models) = fixture();
         providers.truncate(1);
