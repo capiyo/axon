@@ -268,7 +268,7 @@ impl Storage for SqliteStorage {
                         .execute(&mut *transaction).await?;
                 }
                 StoredEntity::Model(item) => {
-                    let status = match item.status { crate::model_registry::RegistryStatus::Candidate => "candidate", crate::model_registry::RegistryStatus::Approved => "approved", crate::model_registry::RegistryStatus::Disabled => "disabled" };
+                    let status = match &item.status { crate::model_registry::RegistryStatus::Candidate => "candidate", crate::model_registry::RegistryStatus::Approved => "approved", crate::model_registry::RegistryStatus::Disabled => "disabled" };
                     sqlx::query("INSERT INTO models (id, provider_id, model_name, status, categories_json, abilities_json, context_length, input_cost_per_million, output_cost_per_million, version, flagged_for_review, payload_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET provider_id=excluded.provider_id, model_name=excluded.model_name, status=excluded.status, categories_json=excluded.categories_json, abilities_json=excluded.abilities_json, context_length=excluded.context_length, input_cost_per_million=excluded.input_cost_per_million, output_cost_per_million=excluded.output_cost_per_million, version=excluded.version, flagged_for_review=excluded.flagged_for_review, payload_json=excluded.payload_json, updated_at=excluded.updated_at")
                         .bind(item.id.to_string()).bind(item.provider_id.to_string()).bind(&item.model_name).bind(status)
                         .bind(serde_json::to_string(&item.categories)?).bind(serde_json::to_string(&item.abilities)?)
@@ -283,7 +283,7 @@ impl Storage for SqliteStorage {
                         .execute(&mut *transaction).await?;
                 }
                 StoredEntity::ModelStat(item) => {
-                    let role = match item.role { crate::model_registry::AssignmentRole::ChecklistWriter => "checklist_writer", crate::model_registry::AssignmentRole::Worker => "worker", crate::model_registry::AssignmentRole::Supervisor => "supervisor" };
+                    let role = match &item.role { crate::model_registry::AssignmentRole::ChecklistWriter => "checklist_writer", crate::model_registry::AssignmentRole::Worker => "worker", crate::model_registry::AssignmentRole::Supervisor => "supervisor" };
                     sqlx::query("INSERT INTO model_stats (id, model_id, category, role, runs, completion_rate, supervisor_pass_rate, user_retry_rate, cost_per_run_micros, latency_ms, last_updated, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(model_id, category, role) DO UPDATE SET runs=excluded.runs, completion_rate=excluded.completion_rate, supervisor_pass_rate=excluded.supervisor_pass_rate, user_retry_rate=excluded.user_retry_rate, cost_per_run_micros=excluded.cost_per_run_micros, latency_ms=excluded.latency_ms, last_updated=excluded.last_updated, payload_json=excluded.payload_json")
                         .bind(item.id.to_string()).bind(item.model_id.to_string()).bind(&item.category).bind(role)
                         .bind(item.runs as i64).bind(item.completion_rate).bind(item.supervisor_pass_rate).bind(item.user_retry_rate)
