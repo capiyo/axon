@@ -30,7 +30,7 @@ The first proving ground is collaboration between assistants (for example, Claud
 - **Rust / Axum:** orchestration API, identity and authorization boundaries, workspace and task lifecycle, agent registry, context exchange, decision records, audit events.
 - **C++ / Drogon:** high-throughput edge and integration services where profiling demonstrates a need. It must not duplicate orchestration policy.
 - **Zig:** small, isolated performance-critical components only when a measured requirement justifies them.
-- **MongoDB:** initial document/event persistence; schema and consistency boundaries are documented before implementation.
+- **SQLite (current):** versioned transactional storage for workspace entities, identity, chats/memory and audit events. Production backup and multi-instance topology remain deployment gates.
 - **React (web) and React Native (mobile):** workspace, agent activity, handoffs, context review, permissions, and audit visibility.
 - **Shared TypeScript packages:** UI primitives and API contracts where sharing is practical. Backend protocol definitions remain language-neutral and versioned.
 
@@ -48,7 +48,7 @@ The first milestone is a reliable, inspectable collaboration loop—not a large 
 
 ## Python provider connector
 
-The initial Python bridge imports user-authorized Claude conversation exports, normalizes selected messages into an AXP context envelope, and sends the context to DeepSeek through its API only after explicit approval. It does not scrape logged-in browser sessions or use private endpoints. See [connectors/python/README.md](connectors/python/README.md).
+The Python bridge imports user-authorized Claude conversation exports, normalizes selected messages into an AXP context envelope, and sends context to DeepSeek only after explicit approval. It can also save selected source conversations and approved provider responses as Axon artifacts through the authenticated Firebase-token API. It does not scrape logged-in browser sessions, poll the clipboard, or use private endpoints. See [connectors/python/README.md](connectors/python/README.md).
 
 ## Getting started
 
@@ -91,8 +91,8 @@ Components are introduced in dependency order. A directory is not a promise that
 
 ## Current status
 
-The repository is at its architecture and foundation stage. See [STATE_OF_REPO.md](docs/STATE_OF_REPO.md) and [ROADMAP.md](docs/ROADMAP.md) for verified implementation status and sequencing.
+The repository contains a working Rust/Axum backend, Firebase-authenticated React web and Expo mobile clients, workspace-scoped chats and project memory, task/artifact workflows, a Python provider connector, and a deterministic supervisor policy core. End-to-end supervisor provider orchestration and production deployment remain in progress. See [STATE_OF_REPO.md](docs/STATE_OF_REPO.md), [SUPERVISOR_ENGINE.md](docs/SUPERVISOR_ENGINE.md), and [ROADMAP.md](docs/ROADMAP.md) for verified status.
 
 ## Development status
 
-No production deployment, provider integration, autonomous browser access, or external agent connection is implied by this initial repository foundation. Those capabilities require explicit implementation, testing, and user authorization.
+No production deployment or unrestricted autonomous browser access is implied. Provider exchange is limited to the implemented, user-approved Claude-export → DeepSeek API path and authenticated Axon artifact persistence. Browser-assisted capture, additional provider APIs, autonomous supervisor execution and external agent connections require explicit implementation, testing and user authorization.
