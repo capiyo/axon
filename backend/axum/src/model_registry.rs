@@ -503,13 +503,21 @@ pub fn recover_assignment(
         }
     }
     excluded.insert(failed_model_id);
-    let next = fallback_model(profile, providers, models, stats, &role, &excluded, &forbidden_providers)
+    let decision_cost = plan.decisions[index].estimated_cost_micros;
+    let base_total = plan.estimated_cost_micros.saturating_sub(decision_cost);
+    let next_candidate = candidates(profile, providers, models, stats, &plan.level, &role)
+        .into_iter()
+        .find(|candidate| {
+            !excluded.contains(&candidate.model.id)
+                && !forbidden_providers.contains(&candidate.provider.id)
+                && base_total.saturating_add(candidate.estimated_cost) <= profile.per_task_budget_micros
+                && base_total.saturating_add(candidate.estimated_cost) <= profile.daily_budget_remaining_micros
+        })
         .ok_or(AssignmentError::DiversityUnavailable)?;
-    let next_model = models.iter().find(|model| model.id == next).ok_or(AssignmentError::NoEligibleModels)?;
-    let cost = estimate_cost(next_model, profile.estimated_input_tokens, profile.estimated_output_tokens);
+    let next = next_candidate.model.id;
+    let cost = next_candidate.estimated_cost;
     let decision = &mut plan.decisions[index];
-    plan.estimated_cost_micros = plan.estimated_cost_micros
-        .saturating_sub(decision.estimated_cost_micros).saturating_add(cost);
+    plan.estimated_cost_micros = base_total.saturating_add(cost);
     decision.chosen_model_id = next;
     decision.estimated_cost_micros = cost;
     decision.reason = "Fallback selected after provider failure; role diversity constraints preserved.".into();
