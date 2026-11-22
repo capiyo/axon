@@ -159,7 +159,6 @@ pub enum SupervisorError {
     RepairNotAvailable,
 }
 
-
 impl SupervisorRun {
     pub fn new(
         workspace_id: Uuid,
@@ -191,10 +190,7 @@ impl SupervisorRun {
         })
     }
 
-    pub fn submit_checklist(
-        &mut self,
-        proposal: ChecklistProposal,
-    ) -> Result<(), SupervisorError> {
+    pub fn submit_checklist(&mut self, proposal: ChecklistProposal) -> Result<(), SupervisorError> {
         if self.status != SupervisorRunStatus::CollectingChecklists {
             return Err(SupervisorError::InvalidRunState);
         }
@@ -223,10 +219,7 @@ impl SupervisorRun {
         Ok(())
     }
 
-    pub fn submit_worker_result(
-        &mut self,
-        result: WorkerResult,
-    ) -> Result<(), SupervisorError> {
+    pub fn submit_worker_result(&mut self, result: WorkerResult) -> Result<(), SupervisorError> {
         if !matches!(
             self.status,
             SupervisorRunStatus::ReadyForWorkers | SupervisorRunStatus::WorkersRunning
@@ -459,7 +452,6 @@ pub fn merge_checklists(
     Ok(merged)
 }
 
-
 /// Validate the two independent worker outputs before deterministic checks begin.
 pub fn validate_worker_results(results: &[WorkerResult]) -> Result<(), SupervisorError> {
     if results.len() != REQUIRED_WORKER_COUNT {
@@ -641,24 +633,45 @@ mod tests {
         );
     }
 
-
     #[test]
     fn exactly_two_independent_workers_must_return_artifacts() {
         let results = vec![
-            WorkerResult { worker_id: "worker-a".into(), summary: "Backend change.".into(), artifact_ids: vec!["artifact-a".into()] },
-            WorkerResult { worker_id: "worker-b".into(), summary: "Frontend change.".into(), artifact_ids: vec!["artifact-b".into()] },
+            WorkerResult {
+                worker_id: "worker-a".into(),
+                summary: "Backend change.".into(),
+                artifact_ids: vec!["artifact-a".into()],
+            },
+            WorkerResult {
+                worker_id: "worker-b".into(),
+                summary: "Frontend change.".into(),
+                artifact_ids: vec!["artifact-b".into()],
+            },
         ];
         assert_eq!(validate_worker_results(&results), Ok(()));
-        assert_eq!(validate_worker_results(&results[..1]), Err(SupervisorError::InvalidWorkerCount));
+        assert_eq!(
+            validate_worker_results(&results[..1]),
+            Err(SupervisorError::InvalidWorkerCount)
+        );
     }
 
     #[test]
     fn duplicate_worker_identity_is_rejected() {
         let results = vec![
-            WorkerResult { worker_id: "worker-a".into(), summary: "First.".into(), artifact_ids: vec!["artifact-a".into()] },
-            WorkerResult { worker_id: "worker-a".into(), summary: "Second.".into(), artifact_ids: vec!["artifact-b".into()] },
+            WorkerResult {
+                worker_id: "worker-a".into(),
+                summary: "First.".into(),
+                artifact_ids: vec!["artifact-a".into()],
+            },
+            WorkerResult {
+                worker_id: "worker-a".into(),
+                summary: "Second.".into(),
+                artifact_ids: vec!["artifact-b".into()],
+            },
         ];
-        assert_eq!(validate_worker_results(&results), Err(SupervisorError::InvalidWorkerIdentity));
+        assert_eq!(
+            validate_worker_results(&results),
+            Err(SupervisorError::InvalidWorkerIdentity)
+        );
     }
 
     #[test]
