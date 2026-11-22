@@ -108,7 +108,10 @@ mod tests {
                         .uri(&path)
                         .header(
                             AUTHORIZATION,
-                            format!("Bearer {}", FirebaseVerifier::test_token("platform-admin", true)),
+                            format!(
+                                "Bearer {}",
+                                FirebaseVerifier::test_token("platform-admin", true)
+                            ),
                         )
                         .header(CONTENT_TYPE, "application/json")
                         .body(Body::from(body.to_owned()))
