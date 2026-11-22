@@ -146,6 +146,7 @@ pub async fn refresh_provider_catalog(
         let price = prices.get(&item.model_name);
         let current = existing.iter().find(|model| model.model_name == item.model_name);
         if let Some(current) = current {
+            if current.flagged_for_review { continue; }
             let mut updated = current.clone();
             let mut flags = Vec::new();
             if item.retired {
