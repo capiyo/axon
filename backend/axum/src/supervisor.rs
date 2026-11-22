@@ -655,6 +655,42 @@ mod tests {
     }
 
     #[test]
+    fn normal_level_uses_one_writer_one_worker_and_one_supervisor() {
+        let mut run = SupervisorRun::new(Uuid::new_v4(), "Normal".into(), "Complete task".into()).unwrap();
+        run.assignment_level = Some(TaskLevel::Normal);
+        run.submit_checklist(ChecklistProposal { writer_id: "writer-a".into(), items: vec![item("build", true)] }).unwrap();
+        assert_eq!(run.status, SupervisorRunStatus::ReadyForWorkers);
+        assert_eq!(run.merged_checklist.len(), 1);
+        run.submit_worker_result(WorkerResult { worker_id: "worker-a".into(), summary: "Done".into(), artifact_ids: vec!["artifact-1".into()] }).unwrap();
+        assert_eq!(run.status, SupervisorRunStatus::AwaitingChecks);
+        run.record_checks(vec![DeterministicCheck { id: "build".into(), passed: true, evidence_uri: Some("ci://build".into()) }]).unwrap();
+        assert_eq!(run.status, SupervisorRunStatus::AwaitingReviews);
+        let decision = run.submit_review(review("supervisor-a", SupervisorVerdict::Approve)).unwrap().unwrap();
+        assert_eq!(decision.outcome, SupervisionOutcome::Accepted);
+    }
+
+    #[test]
+    fn quick_level_skips_checklist_and_supervisor_but_requires_deterministic_checks() {
+        let mut run = SupervisorRun::new(Uuid::new_v4(), "Quick".into(), "Simple task".into()).unwrap();
+        run.assignment_level = Some(TaskLevel::Quick);
+        run.status = SupervisorRunStatus::ReadyForWorkers;
+        run.submit_worker_result(WorkerResult { worker_id: "worker-a".into(), summary: "Done".into(), artifact_ids: vec!["artifact-1".into()] }).unwrap();
+        run.record_checks(vec![DeterministicCheck { id: "format".into(), passed: true, evidence_uri: Some("check://format".into()) }]).unwrap();
+        assert_eq!(run.status, SupervisorRunStatus::Accepted);
+        assert_eq!(run.decision.unwrap().outcome, SupervisionOutcome::Accepted);
+    }
+
+    #[test]
+    fn quick_level_requests_repair_when_a_deterministic_check_fails() {
+        let mut run = SupervisorRun::new(Uuid::new_v4(), "Quick".into(), "Simple task".into()).unwrap();
+        run.assignment_level = Some(TaskLevel::Quick);
+        run.status = SupervisorRunStatus::ReadyForWorkers;
+        run.submit_worker_result(WorkerResult { worker_id: "worker-a".into(), summary: "Done".into(), artifact_ids: vec!["artifact-1".into()] }).unwrap();
+        run.record_checks(vec![DeterministicCheck { id: "format".into(), passed: false, evidence_uri: None }]).unwrap();
+        assert_eq!(run.status, SupervisorRunStatus::RepairRequired);
+    }
+
+    #[test]
     fn checklist_requires_independent_agreement() {
         let first = ChecklistProposal {
             writer_id: "writer-a".into(),
