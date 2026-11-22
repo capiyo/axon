@@ -41,6 +41,27 @@ export function ModelAdmin({ onClose }: { onClose: () => void }) {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [providerNameDraft, setProviderNameDraft] = useState("");
+  const [baseUrlDraft, setBaseUrlDraft] = useState("");
+  const [discoveryUrlDraft, setDiscoveryUrlDraft] = useState("");
+  const [pricingUrlDraft, setPricingUrlDraft] = useState("");
+  const [apiKeyEnvDraft, setApiKeyEnvDraft] = useState("");
+  const [termsProviderId, setTermsProviderId] = useState("");
+  const [termsRegions, setTermsRegions] = useState("us");
+  const [termsTraining, setTermsTraining] = useState("unknown");
+  const [termsRetention, setTermsRetention] = useState("unknown");
+  const [termsDescription, setTermsDescription] = useState("");
+  const [modelProviderId, setModelProviderId] = useState("");
+  const [modelNameDraft, setModelNameDraft] = useState("");
+  const [modelAbilities, setModelAbilities] = useState("text");
+  const [modelCategories, setModelCategories] = useState("general");
+  const [modelRegions, setModelRegions] = useState("us");
+  const [modelContext, setModelContext] = useState("32000");
+  const [modelInputCost, setModelInputCost] = useState("0");
+  const [modelOutputCost, setModelOutputCost] = useState("0");
+  const [modelLatency, setModelLatency] = useState("1000");
+  const [modelVersion, setModelVersion] = useState("");
+  const [modelNotes, setModelNotes] = useState("");
 
   async function refresh() {
     const [providerRows, modelRows, evaluationRows, statRows, decisionRows, flagRows] = await Promise.all([
@@ -62,6 +83,70 @@ export function ModelAdmin({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void refresh().catch(cause => setError(cause instanceof Error ? cause.message : "Could not load model registry."));
   }, []);
+
+  async function createProvider(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      await adminApi<Provider>("/api/v1/admin/providers", {
+        method: "POST",
+        body: JSON.stringify({
+          name: providerNameDraft.trim(), base_url: baseUrlDraft.trim(),
+          model_discovery_url: discoveryUrlDraft.trim() || null,
+          pricing_source_url: pricingUrlDraft.trim() || null,
+          api_key_env: apiKeyEnvDraft.trim() || null,
+          discovery_enabled: Boolean(discoveryUrlDraft.trim()), status: "active"
+        })
+      });
+      setProviderNameDraft(""); setBaseUrlDraft(""); setDiscoveryUrlDraft(""); setPricingUrlDraft(""); setApiKeyEnvDraft("");
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Provider registration failed."); }
+    finally { setBusy(false); }
+  }
+
+  async function saveProviderTerms(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !termsProviderId) return;
+    setBusy(true); setError("");
+    try {
+      await adminApi<Provider>(`/api/v1/admin/providers/${termsProviderId}/terms-review`, {
+        method: "POST",
+        body: JSON.stringify({
+          processing_regions: termsRegions.split(",").map(value => value.trim()).filter(Boolean),
+          trains_on_api_inputs: termsTraining === "unknown" ? null : termsTraining === "yes",
+          retention_days: termsRetention === "unknown" ? null : Number(termsRetention),
+          retention_description: termsDescription.trim()
+        })
+      });
+      setTermsProviderId(""); setTermsDescription("");
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Provider terms review failed."); }
+    finally { setBusy(false); }
+  }
+
+  async function createModel(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !modelProviderId) return;
+    setBusy(true); setError("");
+    try {
+      await adminApi<Model>("/api/v1/admin/models", {
+        method: "POST",
+        body: JSON.stringify({
+          provider_id: modelProviderId, model_name: modelNameDraft.trim(),
+          abilities: modelAbilities.split(",").map(value => value.trim()).filter(Boolean),
+          categories: modelCategories.split(",").map(value => value.trim()).filter(Boolean),
+          regions: modelRegions.split(",").map(value => value.trim()).filter(Boolean),
+          context_length: Number(modelContext), input_cost_per_million: Number(modelInputCost),
+          output_cost_per_million: Number(modelOutputCost), typical_latency_ms: Number(modelLatency),
+          version: modelVersion.trim() || null, notes: modelNotes.trim()
+        })
+      });
+      setModelNameDraft(""); setModelVersion(""); setModelNotes("");
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Model registration failed."); }
+    finally { setBusy(false); }
+  }
 
   async function review(model: Model, action: "approve" | "reject") {
     const note = notes[model.id]?.trim();
@@ -115,8 +200,31 @@ export function ModelAdmin({ onClose }: { onClose: () => void }) {
             <div><span className={provider.terms_reviewed_at ? "admin-status approved" : "admin-status candidate"}>{provider.terms_reviewed_at ? "Terms reviewed" : "Terms not reviewed"}</span><small>Regions: {provider.data_terms.processing_regions.join(", ") || "Not recorded"}</small></div>
             <div><small>Training on API inputs: {provider.data_terms.trains_on_api_inputs === null ? "Unknown" : provider.data_terms.trains_on_api_inputs ? "Yes" : "No"}</small><small>Retention: {provider.data_terms.retention_days === null ? "Unknown" : `${provider.data_terms.retention_days} days`}</small></div>
           </article>)}
-          {providers.length === 0 && <p className="muted">No providers configured. Provider registration and discovery sources must be configured by an administrator.</p>}
+          {providers.length === 0 && <p className="muted">No providers configured. Register an explicitly configured provider source below.</p>}
         </div>
+        <form className="admin-form" onSubmit={createProvider}>
+          <h4>Register provider and catalog sources</h4>
+          <div className="admin-form-grid">
+            <label>Provider name<input value={providerNameDraft} onChange={event => setProviderNameDraft(event.target.value)} required /></label>
+            <label>Base URL<input type="url" value={baseUrlDraft} onChange={event => setBaseUrlDraft(event.target.value)} placeholder="https://api.provider.com" required /></label>
+            <label>Model discovery JSON URL<input type="url" value={discoveryUrlDraft} onChange={event => setDiscoveryUrlDraft(event.target.value)} placeholder="https://catalog.example/models.json" /></label>
+            <label>Pricing JSON URL<input type="url" value={pricingUrlDraft} onChange={event => setPricingUrlDraft(event.target.value)} placeholder="https://catalog.example/prices.json" /></label>
+            <label>API key environment variable<input value={apiKeyEnvDraft} onChange={event => setApiKeyEnvDraft(event.target.value)} placeholder="AXON_PROVIDER_KEY" /></label>
+          </div>
+          <button disabled={busy || !providerNameDraft.trim() || !baseUrlDraft.trim()}>Register provider</button>
+        </form>
+        {termsProviderId && <form className="admin-form" onSubmit={saveProviderTerms}>
+          <h4>Review provider data terms: {providerName(termsProviderId)}</h4>
+          <div className="admin-form-grid">
+            <label>Processing regions<input value={termsRegions} onChange={event => setTermsRegions(event.target.value)} placeholder="us, eu" required /></label>
+            <label>Trains on API inputs<select value={termsTraining} onChange={event => setTermsTraining(event.target.value)}><option value="unknown">Unknown</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+            <label>Retention days<input value={termsRetention} onChange={event => setTermsRetention(event.target.value)} placeholder="unknown or 0" /></label>
+            <label>Retention description<input value={termsDescription} onChange={event => setTermsDescription(event.target.value)} required /></label>
+          </div>
+          <button disabled={busy || !termsDescription.trim()}>Confirm terms review</button>
+          <button type="button" className="secondary" onClick={() => setTermsProviderId("")}>Cancel</button>
+        </form>}
+        <div className="admin-model-meta">{providers.filter(provider => !provider.terms_reviewed_at).map(provider => <button type="button" className="secondary" key={provider.id} onClick={() => setTermsProviderId(provider.id)}>Review terms for {provider.name}</button>)}</div>
       </section>
 
       <section className="panel">
@@ -136,6 +244,23 @@ export function ModelAdmin({ onClose }: { onClose: () => void }) {
           })}
           {models.length === 0 && <p className="muted">No models registered. Newly discovered models must remain candidates until evaluated and explicitly approved.</p>}
         </div>
+        <form className="admin-form" onSubmit={createModel}>
+          <h4>Register a candidate model manually</h4>
+          <div className="admin-form-grid">
+            <label>Provider<select value={modelProviderId} onChange={event => setModelProviderId(event.target.value)} required><option value="">Select provider</option>{providers.filter(provider => provider.status === "active").map(provider => <option value={provider.id} key={provider.id}>{provider.name}</option>)}</select></label>
+            <label>Model name<input value={modelNameDraft} onChange={event => setModelNameDraft(event.target.value)} required /></label>
+            <label>Abilities (comma separated)<input value={modelAbilities} onChange={event => setModelAbilities(event.target.value)} required /></label>
+            <label>Categories (comma separated)<input value={modelCategories} onChange={event => setModelCategories(event.target.value)} required /></label>
+            <label>Regions (comma separated)<input value={modelRegions} onChange={event => setModelRegions(event.target.value)} /></label>
+            <label>Context length<input type="number" min="1" value={modelContext} onChange={event => setModelContext(event.target.value)} required /></label>
+            <label>Input cost per million tokens<input type="number" min="0" value={modelInputCost} onChange={event => setModelInputCost(event.target.value)} required /></label>
+            <label>Output cost per million tokens<input type="number" min="0" value={modelOutputCost} onChange={event => setModelOutputCost(event.target.value)} required /></label>
+            <label>Typical latency ms<input type="number" min="0" value={modelLatency} onChange={event => setModelLatency(event.target.value)} required /></label>
+            <label>Version<input value={modelVersion} onChange={event => setModelVersion(event.target.value)} /></label>
+            <label>Notes<input value={modelNotes} onChange={event => setModelNotes(event.target.value)} /></label>
+          </div>
+          <button disabled={busy || !modelProviderId || !modelNameDraft.trim()}>Register as candidate</button>
+        </form>
       </section>
 
       <section className="panel">
