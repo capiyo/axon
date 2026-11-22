@@ -311,15 +311,17 @@ pub async fn clear_flag(
     let mut flags: Vec<ModelChangeFlag> = state.list_entities(EntityKind::ModelChangeFlag, None).await
         .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Model change flags could not be loaded."))?
         .into_iter().filter_map(|entity| if let StoredEntity::ModelChangeFlag(item) = entity { Some(item) } else { None }).collect();
-    let flag = flags.iter_mut().find(|item| item.id == flag_id)
-        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Model change flag not found."))?;
-    if flag.cleared_at.is_some() {
-        return Err(error(StatusCode::CONFLICT, "This model change flag is already cleared."));
-    }
-    flag.cleared_at = Some(Utc::now());
-    flag.cleared_by = Some(user.user_id);
-    flag.resolution_note = Some(input.note.trim().into());
-    let updated_flag = flag.clone();
+    let (updated_flag, model_id) = {
+        let flag = flags.iter_mut().find(|item| item.id == flag_id)
+            .ok_or_else(|| error(StatusCode::NOT_FOUND, "Model change flag not found."))?;
+        if flag.cleared_at.is_some() {
+            return Err(error(StatusCode::CONFLICT, "This model change flag is already cleared."));
+        }
+        flag.cleared_at = Some(Utc::now());
+        flag.cleared_by = Some(user.user_id);
+        flag.resolution_note = Some(input.note.trim().into());
+        (flag.clone(), flag.model_id)
+    };
 
     let mut models: Vec<ModelRecord> = state.list_entities(EntityKind::Model, None).await
         .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Models could not be loaded."))?
@@ -339,7 +341,7 @@ pub async fn clear_flag(
         AuditEvent::attributed(
             format!("human:{}", user.user_id), None, "model_change_flag.cleared",
             "model_change_flag", flag_id.to_string(),
-            json!({"model_id": flag.model_id, "note": input.note.trim()}),
+            json!({"model_id": model_id, "note": input.note.trim()}),
         ),
     ).await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Flag resolution could not be persisted."))?;
     Ok(Json(updated_flag))
