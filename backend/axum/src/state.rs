@@ -2,6 +2,7 @@ use crate::{
     audit::{AuditEvent, AuditStore},
     chat_memory::ChatMemoryStore,
     firebase_auth::FirebaseVerifier,
+    model_registry::{DeterministicModelAssigner, ModelAssigner},
     model::{Agent, Artifact, Task, Workspace},
     robotics::TelemetryEvent,
     storage::{EntityKind, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
@@ -38,6 +39,7 @@ pub struct AppState {
     pub firebase_verifier: Option<FirebaseVerifier>,
     pub simulator_enabled: bool,
     platform_admin_uids: Arc<HashSet<String>>,
+    assignment_engine: Option<Arc<dyn ModelAssigner>>,
 }
 
 impl AppState {
@@ -203,6 +205,15 @@ impl AppState {
             Some(storage) => storage.list_audit_events(workspace_id).await,
             None => Ok(self.audit.read().await.list_workspace(workspace_id)),
         }
+    }
+
+    pub fn with_assignment_engine(mut self, engine: Arc<dyn ModelAssigner>) -> Self {
+        self.assignment_engine = Some(engine);
+        self
+    }
+
+    pub fn assignment_engine(&self) -> Arc<dyn ModelAssigner> {
+        self.assignment_engine.clone().unwrap_or_else(|| Arc::new(DeterministicModelAssigner))
     }
 
     pub fn with_platform_admin_uids(mut self, firebase_uids: Vec<String>) -> Self {
