@@ -825,6 +825,33 @@ mod tests {
         assert_eq!(assign_models(&profile(TaskLevel::Quick), &providers, &models, &[]), Err(AssignmentError::NoEligibleModels));
     }
 
+    #[tokio::test]
+    async fn evaluation_score_drop_flags_and_excludes_approved_model() {
+        use crate::{audit::AuditEvent, storage::{SqliteStorage, StorageMutation}};
+        let storage: Arc<dyn Storage> = SqliteStorage::connect_in_memory().await.unwrap().shared();
+        let (providers, models) = fixture();
+        for entity in [StoredEntity::Provider(providers[0].clone()), StoredEntity::Model(models[0].clone())] {
+            storage.apply(StorageMutation {
+                entity, related_entities: Vec::new(),
+                audit: AuditEvent::unattributed(None, "test.seeded", "test", "seed", serde_json::Value::Null),
+            }).await.unwrap();
+        }
+        let first = ModelEvaluation {
+            id: Uuid::new_v4(), model_id: models[0].id, category: "coding".into(),
+            test_set_version: "v1".into(), score: 0.95, run_at: Utc::now(), cost_micros: 10,
+        };
+        assert!(!record_evaluation(&storage, first, 0.10).await.unwrap());
+        let second = ModelEvaluation {
+            id: Uuid::new_v4(), model_id: models[0].id, category: "coding".into(),
+            test_set_version: "v1".into(), score: 0.70, run_at: Utc::now() + Duration::seconds(1), cost_micros: 12,
+        };
+        assert!(record_evaluation(&storage, second, 0.10).await.unwrap());
+        let stored = storage.list_entities(EntityKind::Model, None).await.unwrap();
+        assert!(matches!(&stored[0], StoredEntity::Model(model) if model.flagged_for_review && !model.healthy));
+        let flags = storage.list_entities(EntityKind::ModelChangeFlag, None).await.unwrap();
+        assert!(flags.iter().any(|entity| matches!(entity, StoredEntity::ModelChangeFlag(flag) if flag.change_kind == "score_drop")));
+    }
+
     #[test]
     fn diversity_shortfall_degrades_and_is_reported() {
         let (mut providers, mut models) = fixture();
