@@ -298,7 +298,31 @@ impl SupervisorRun {
             return Err(SupervisorError::InvalidCheckSet);
         }
         self.deterministic_checks = checks;
-        self.status = SupervisorRunStatus::AwaitingReviews;
+        if required_role_counts(self.assignment_level.as_ref()).2 == 0 {
+            let failed: Vec<_> = self.deterministic_checks.iter().filter(|check| !check.passed)
+                .map(|check| format!("Deterministic check failed: {}", check.id)).collect();
+            let outcome = if failed.is_empty() {
+                SupervisionOutcome::Accepted
+            } else if self.repair_rounds_used < MAX_REPAIR_ROUNDS {
+                SupervisionOutcome::RepairRequired
+            } else {
+                SupervisionOutcome::Failed
+            };
+            self.status = match outcome {
+                SupervisionOutcome::Accepted => SupervisorRunStatus::Accepted,
+                SupervisionOutcome::RepairRequired => SupervisorRunStatus::RepairRequired,
+                SupervisionOutcome::Failed => SupervisorRunStatus::Failed,
+            };
+            self.decision = Some(SupervisionDecision {
+                outcome,
+                repair_rounds_used: self.repair_rounds_used,
+                reasons: if failed.is_empty() {
+                    vec!["Quick task passed all deterministic checks.".into()]
+                } else { failed },
+            });
+        } else {
+            self.status = SupervisorRunStatus::AwaitingReviews;
+        }
         self.touch();
         Ok(())
     }
