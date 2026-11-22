@@ -95,7 +95,7 @@ async def _run(args: argparse.Namespace) -> int:
                 f"Context is {len(serialized)} characters; limit is {args.max_context_chars}."
             )
         print(
-            f"Source: Claude export | Conversation: {conversation.title}\n"
+            f"Source: {conversation.provider} export | Conversation: {conversation.title}\n"
             f"Messages: {len(conversation.messages)} | Context size: {len(serialized)} chars"
         )
 
