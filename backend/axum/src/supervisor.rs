@@ -485,7 +485,14 @@ pub fn merge_checklists(
 
 /// Validate the two independent worker outputs before deterministic checks begin.
 pub fn validate_worker_results(results: &[WorkerResult]) -> Result<(), SupervisorError> {
-    if results.len() != REQUIRED_WORKER_COUNT {
+    validate_worker_results_with_count(results, REQUIRED_WORKER_COUNT)
+}
+
+fn validate_worker_results_with_count(
+    results: &[WorkerResult],
+    required_count: usize,
+) -> Result<(), SupervisorError> {
+    if results.len() != required_count {
         return Err(SupervisorError::InvalidWorkerCount);
     }
 
