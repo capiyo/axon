@@ -212,7 +212,7 @@ fn score_candidate(
         TaskLevel::Quick => economy * 40.0 + speed * 35.0 + completion * 15.0 + pass * 10.0 - retries * 10.0,
         TaskLevel::Normal => completion * 30.0 + pass * 30.0 + speed * 20.0 + economy * 20.0 - retries * 15.0,
         TaskLevel::Important => completion * 40.0 + pass * 35.0 + (1.0 - retries) * 15.0 + speed * 5.0 + economy * 5.0,
-    }
+    } + 1000.0
 }
 
 fn candidates<'a>(
