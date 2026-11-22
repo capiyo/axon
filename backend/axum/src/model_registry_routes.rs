@@ -2,7 +2,7 @@ use crate::{
     auth_middleware::AuthenticatedUser,
     audit::AuditEvent,
     model_registry::{
-        AssignmentDecision, ModelEvaluation, ModelProvider, ModelRecord, ModelStat,
+        AssignmentDecision, ModelChangeFlag, ModelEvaluation, ModelProvider, ModelRecord, ModelStat,
         ProviderDataTerms, RegistryStatus,
     },
     storage::{EntityKind, StoredEntity},
@@ -283,4 +283,64 @@ pub async fn list_assignments(
     let entities = state.list_entities(EntityKind::AssignmentDecision, None).await
         .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Assignment decisions could not be loaded."))?;
     Ok(Json(entities.into_iter().filter_map(|entity| if let StoredEntity::AssignmentDecision(item) = entity { Some(item) } else { None }).collect()))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ClearFlagRequest { pub note: String }
+
+pub async fn list_flags(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+) -> AdminResult<Json<Vec<ModelChangeFlag>>> {
+    require_admin(&user)?;
+    let entities = state.list_entities(EntityKind::ModelChangeFlag, None).await
+        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Model change flags could not be loaded."))?;
+    Ok(Json(entities.into_iter().filter_map(|entity| if let StoredEntity::ModelChangeFlag(item) = entity { Some(item) } else { None }).collect()))
+}
+
+pub async fn clear_flag(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path(flag_id): Path<Uuid>,
+    Json(input): Json<ClearFlagRequest>,
+) -> AdminResult<Json<ModelChangeFlag>> {
+    require_admin(&user)?;
+    if input.note.trim().is_empty() || input.note.len() > 2000 {
+        return Err(error(StatusCode::BAD_REQUEST, "A resolution note is required."));
+    }
+    let mut flags: Vec<ModelChangeFlag> = state.list_entities(EntityKind::ModelChangeFlag, None).await
+        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Model change flags could not be loaded."))?
+        .into_iter().filter_map(|entity| if let StoredEntity::ModelChangeFlag(item) = entity { Some(item) } else { None }).collect();
+    let flag = flags.iter_mut().find(|item| item.id == flag_id)
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Model change flag not found."))?;
+    if flag.cleared_at.is_some() {
+        return Err(error(StatusCode::CONFLICT, "This model change flag is already cleared."));
+    }
+    flag.cleared_at = Some(Utc::now());
+    flag.cleared_by = Some(user.user_id);
+    flag.resolution_note = Some(input.note.trim().into());
+    let updated_flag = flag.clone();
+
+    let mut models: Vec<ModelRecord> = state.list_entities(EntityKind::Model, None).await
+        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Models could not be loaded."))?
+        .into_iter().filter_map(|entity| if let StoredEntity::Model(item) = entity { Some(item) } else { None }).collect();
+    let model = models.iter_mut().find(|item| item.id == flag.model_id)
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Flagged model not found."))?;
+    let has_open_flags = flags.iter().any(|item| item.model_id == model.id && item.cleared_at.is_none());
+    if !has_open_flags {
+        model.flagged_for_review = false;
+        model.healthy = model.status == RegistryStatus::Approved;
+        model.updated_at = Utc::now();
+    }
+    let updated_model = model.clone();
+    state.persist_entity(
+        StoredEntity::ModelChangeFlag(updated_flag.clone()),
+        vec![StoredEntity::Model(updated_model)],
+        AuditEvent::attributed(
+            format!("human:{}", user.user_id), None, "model_change_flag.cleared",
+            "model_change_flag", flag_id.to_string(),
+            json!({"model_id": flag.model_id, "note": input.note.trim()}),
+        ),
+    ).await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Flag resolution could not be persisted."))?;
+    Ok(Json(updated_flag))
 }
