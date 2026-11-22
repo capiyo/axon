@@ -51,7 +51,15 @@ pub struct CreateProvider {
 fn active_status() -> String { "active".into() }
 fn default_rate_limit() -> u16 { 10 }
 fn valid_configured_url(value: &str) -> bool {
-    value.starts_with("https://") || value.starts_with("http://localhost") || value.starts_with("http://127.0.0.1")
+    let secure_origin = value.starts_with("https://")
+        || value.starts_with("http://localhost")
+        || value.starts_with("http://127.0.0.1");
+    let lower = value.to_ascii_lowercase();
+    let query_is_secret = lower.split_once('?').is_some_and(|(_, query)| {
+        ["key=", "token=", "secret=", "password=", "authorization="]
+            .iter().any(|marker| query.contains(marker))
+    });
+    secure_origin && !value.contains('@') && !query_is_secret
 }
 
 #[derive(Debug, Deserialize)]
@@ -121,6 +129,7 @@ pub async fn create_provider(
         || input.model_discovery_url.as_deref().is_some_and(|url| !valid_configured_url(url))
         || input.pricing_source_url.as_deref().is_some_and(|url| !valid_configured_url(url))
         || input.discovery_enabled && input.model_discovery_url.is_none()
+        || input.api_key_env.as_deref().is_some_and(|name| name.trim().is_empty() || !name.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_'))
         || input.status != "active" && input.status != "disabled"
     {
         return Err(error(StatusCode::BAD_REQUEST, "Provider name, configured HTTPS source URLs and status are invalid."));
