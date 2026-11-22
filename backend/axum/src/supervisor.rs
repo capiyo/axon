@@ -264,16 +264,17 @@ impl SupervisorRun {
         {
             return Err(SupervisorError::DuplicateSubmission);
         }
+        let required_workers = required_role_counts(self.assignment_level.as_ref()).1;
         let mut results = self.worker_results.clone();
         results.push(result);
-        if results.len() > REQUIRED_WORKER_COUNT {
+        if results.len() > required_workers {
             return Err(SupervisorError::InvalidWorkerCount);
         }
-        if results.len() == REQUIRED_WORKER_COUNT {
-            validate_worker_results(&results)?;
+        if results.len() == required_workers {
+            validate_worker_results_with_count(&results, required_workers)?;
         }
         self.worker_results = results;
-        self.status = if self.worker_results.len() == REQUIRED_WORKER_COUNT {
+        self.status = if self.worker_results.len() == required_workers {
             SupervisorRunStatus::AwaitingChecks
         } else {
             SupervisorRunStatus::WorkersRunning
