@@ -449,6 +449,8 @@ mod tests {
             terms_reviewed_at: Some(Utc::now()), reviewed_by: Some(Uuid::new_v4()), created_at: Utc::now(), updated_at: Utc::now(),
         };
         let provider_b = ModelProvider { id: Uuid::new_v4(), name: "Provider B".into(), ..provider_a.clone() };
+        let provider_c = ModelProvider { id: Uuid::new_v4(), name: "Provider C".into(), ..provider_a.clone() };
+        let provider_d = ModelProvider { id: Uuid::new_v4(), name: "Provider D".into(), ..provider_a.clone() };
         let mut abilities = BTreeSet::new(); abilities.insert("text".into()); abilities.insert("code".into());
         let mut categories = BTreeSet::new(); categories.insert("coding".into());
         let model = |provider_id| ModelRecord {
@@ -459,7 +461,8 @@ mod tests {
             notes: String::new(), curated_rank: BTreeMap::new(), healthy: true, flagged_for_review: false,
             created_at: Utc::now(), updated_at: Utc::now(),
         };
-        (vec![provider_a.clone(), provider_b.clone()], vec![model(provider_a.id), model(provider_b.id)])
+        (vec![provider_a.clone(), provider_b.clone(), provider_c.clone(), provider_d.clone()],
+         vec![model(provider_a.id), model(provider_b.id), model(provider_c.id), model(provider_d.id)])
     }
 
     fn profile(level: TaskLevel) -> AssignmentProfile {
