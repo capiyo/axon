@@ -1,6 +1,8 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
+use uuid::Uuid;
 
 pub const REQUIRED_WORKER_COUNT: usize = 2;
 pub const REQUIRED_SUPERVISOR_COUNT: usize = 2;
@@ -86,6 +88,38 @@ pub struct SupervisionDecision {
     pub reasons: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SupervisorRunStatus {
+    CollectingChecklists,
+    ReadyForWorkers,
+    WorkersRunning,
+    AwaitingChecks,
+    AwaitingReviews,
+    RepairRequired,
+    Accepted,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SupervisorRun {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub title: String,
+    pub objective: String,
+    pub status: SupervisorRunStatus,
+    pub version: u64,
+    pub repair_rounds_used: u8,
+    pub checklist_proposals: Vec<ChecklistProposal>,
+    pub merged_checklist: Vec<MergedChecklistItem>,
+    pub worker_results: Vec<WorkerResult>,
+    pub deterministic_checks: Vec<DeterministicCheck>,
+    pub reviews: Vec<SupervisorReview>,
+    pub decision: Option<SupervisionDecision>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum SupervisorError {
     #[error("checklist writers must be distinct and have non-empty identifiers")]
@@ -115,6 +149,132 @@ pub enum SupervisorError {
     InvalidCheckSet,
     #[error("repair rounds used cannot exceed the configured maximum of two")]
     InvalidRepairRound,
+    #[error("supervisor run title and objective must be non-empty")]
+    InvalidRunInput,
+    #[error("operation is not valid in the current supervisor run state")]
+    InvalidRunState,
+    #[error("this role has already submitted to the current run stage")]
+    DuplicateSubmission,
+    #[error("a repair is not available after the configured repair limit")]
+    RepairNotAvailable,
+}
+
+
+impl SupervisorRun {
+    pub fn new(workspace_id: Uuid, title: String, objective: String) -> Result<Self, SupervisorError> {
+        let title = title.trim();
+        let objective = objective.trim();
+        if title.is_empty() || objective.is_empty() {
+            return Err(SupervisorError::InvalidRunInput);
+        }
+        let now = Utc::now();
+        Ok(Self {
+            id: Uuid::new_v4(), workspace_id, title: title.to_owned(), objective: objective.to_owned(),
+            status: SupervisorRunStatus::CollectingChecklists, version: 0, repair_rounds_used: 0,
+            checklist_proposals: Vec::new(), merged_checklist: Vec::new(), worker_results: Vec::new(),
+            deterministic_checks: Vec::new(), reviews: Vec::new(), decision: None,
+            created_at: now, updated_at: now,
+        })
+    }
+
+    pub fn submit_checklist(&mut self, proposal: ChecklistProposal) -> Result<(), SupervisorError> {
+        if self.status != SupervisorRunStatus::CollectingChecklists {
+            return Err(SupervisorError::InvalidRunState);
+        }
+        if self.checklist_proposals.iter().any(|item| item.writer_id == proposal.writer_id) {
+            return Err(SupervisorError::DuplicateSubmission);
+        }
+        if self.checklist_proposals.len() >= 2 {
+            return Err(SupervisorError::InvalidWriters);
+        }
+        self.checklist_proposals.push(proposal);
+        if self.checklist_proposals.len() == 2 {
+            self.merged_checklist = merge_checklists(&self.checklist_proposals[0], &self.checklist_proposals[1])?;
+            self.status = SupervisorRunStatus::ReadyForWorkers;
+        }
+        self.touch();
+        Ok(())
+    }
+
+    pub fn submit_worker_result(&mut self, result: WorkerResult) -> Result<(), SupervisorError> {
+        if !matches!(self.status, SupervisorRunStatus::ReadyForWorkers | SupervisorRunStatus::WorkersRunning) {
+            return Err(SupervisorError::InvalidRunState);
+        }
+        if self.worker_results.iter().any(|item| item.worker_id == result.worker_id) {
+            return Err(SupervisorError::DuplicateSubmission);
+        }
+        if self.worker_results.len() >= REQUIRED_WORKER_COUNT {
+            return Err(SupervisorError::InvalidWorkerCount);
+        }
+        self.worker_results.push(result);
+        if self.worker_results.len() == 1 {
+            self.status = SupervisorRunStatus::WorkersRunning;
+        } else {
+            validate_worker_results(&self.worker_results)?;
+            self.status = SupervisorRunStatus::AwaitingChecks;
+        }
+        self.touch();
+        Ok(())
+    }
+
+    pub fn record_checks(&mut self, checks: Vec<DeterministicCheck>) -> Result<(), SupervisorError> {
+        if self.status != SupervisorRunStatus::AwaitingChecks || checks.is_empty() {
+            return Err(SupervisorError::InvalidRunState);
+        }
+        let mut check_ids = BTreeSet::new();
+        if checks.iter().any(|check| check.id.trim().is_empty() || !check_ids.insert(&check.id)) {
+            return Err(SupervisorError::InvalidCheckSet);
+        }
+        self.deterministic_checks = checks;
+        self.status = SupervisorRunStatus::AwaitingReviews;
+        self.touch();
+        Ok(())
+    }
+
+    pub fn submit_review(&mut self, review: SupervisorReview) -> Result<Option<SupervisionDecision>, SupervisorError> {
+        if self.status != SupervisorRunStatus::AwaitingReviews {
+            return Err(SupervisorError::InvalidRunState);
+        }
+        if self.reviews.iter().any(|item| item.supervisor_id == review.supervisor_id) {
+            return Err(SupervisorError::DuplicateSubmission);
+        }
+        if self.reviews.len() >= REQUIRED_SUPERVISOR_COUNT {
+            return Err(SupervisorError::InvalidSupervisorCount);
+        }
+        self.reviews.push(review);
+        if self.reviews.len() < REQUIRED_SUPERVISOR_COUNT {
+            self.touch();
+            return Ok(None);
+        }
+        let decision = evaluate_supervision(&self.deterministic_checks, &self.reviews, self.repair_rounds_used)?;
+        self.status = match decision.outcome {
+            SupervisionOutcome::Accepted => SupervisorRunStatus::Accepted,
+            SupervisionOutcome::RepairRequired => SupervisorRunStatus::RepairRequired,
+            SupervisionOutcome::Failed => SupervisorRunStatus::Failed,
+        };
+        self.decision = Some(decision.clone());
+        self.touch();
+        Ok(Some(decision))
+    }
+
+    pub fn start_repair(&mut self) -> Result<(), SupervisorError> {
+        if self.status != SupervisorRunStatus::RepairRequired || self.repair_rounds_used >= MAX_REPAIR_ROUNDS {
+            return Err(SupervisorError::RepairNotAvailable);
+        }
+        self.repair_rounds_used += 1;
+        self.worker_results.clear();
+        self.deterministic_checks.clear();
+        self.reviews.clear();
+        self.decision = None;
+        self.status = SupervisorRunStatus::ReadyForWorkers;
+        self.touch();
+        Ok(())
+    }
+
+    fn touch(&mut self) {
+        self.version += 1;
+        self.updated_at = Utc::now();
+    }
 }
 
 fn normalized_key(key: &str) -> Result<String, SupervisorError> {
