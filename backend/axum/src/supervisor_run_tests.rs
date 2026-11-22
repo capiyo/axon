@@ -121,7 +121,6 @@ fn repair_rounds_are_bounded_and_terminal_failure_cannot_restart() {
     }
 }
 
-
 #[tokio::test]
 async fn supervisor_run_is_restored_from_sqlite_after_restart() {
     let storage = SqliteStorage::connect_in_memory().await.unwrap().shared();
