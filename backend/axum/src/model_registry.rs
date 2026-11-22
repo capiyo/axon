@@ -356,20 +356,20 @@ pub fn assign_models(
             if level == TaskLevel::Quick && profile.low_risk {
                 let pool = candidates(profile, providers, models, stats, &level, &AssignmentRole::Worker);
                 if let Some(exploration) = exploration_candidate(&pool, &used_models, profile, &level) {
-                    let slot = decisions.iter().filter(|decision| decision.role == AssignmentRole::Worker).count() as u8;
-                    let cost = exploration.estimated_cost;
-                    if estimated_total.saturating_add(cost) <= profile.per_task_budget_micros
-                        && estimated_total.saturating_add(cost) <= profile.daily_budget_remaining_micros {
-                        decisions.push(AssignmentDecision {
-                            id: Uuid::new_v4(), run_id: profile.run_id, role: AssignmentRole::Worker, slot,
-                            candidates_considered: pool.iter().map(|candidate| candidate.model.id).collect(),
-                            filters_applied: vec!["approved_only".into(), "low_risk_quick_exploration".into()],
-                            chosen_model_id: exploration.model.id,
-                            reason: "Approved recently-seen model selected by configured low-risk exploration.".into(),
-                            estimated_cost_micros: cost, created_at: Utc::now(),
-                        });
-                        estimated_total = estimated_total.saturating_add(cost);
-                        exploration_used = true;
+                    if let Some(decision) = decisions.iter_mut().find(|decision| decision.role == AssignmentRole::Worker) {
+                        let revised_total = estimated_total
+                            .saturating_sub(decision.estimated_cost_micros)
+                            .saturating_add(exploration.estimated_cost);
+                        if revised_total <= profile.per_task_budget_micros
+                            && revised_total <= profile.daily_budget_remaining_micros {
+                            decision.candidates_considered = pool.iter().map(|candidate| candidate.model.id).collect();
+                            decision.filters_applied.push("low_risk_quick_exploration".into());
+                            decision.chosen_model_id = exploration.model.id;
+                            decision.reason = "Approved recently-seen model selected by configured low-risk exploration.".into();
+                            decision.estimated_cost_micros = exploration.estimated_cost;
+                            estimated_total = revised_total;
+                            exploration_used = true;
+                        }
                     }
                 }
             }
@@ -523,10 +523,13 @@ mod tests {
     }
 
     #[test]
-    fn no_supervisor_from_worker_provider_when_diversity_is_unavailable() {
+    fn diversity_shortfall_degrades_and_is_reported() {
         let (mut providers, mut models) = fixture();
         providers.truncate(1);
         models.truncate(1);
-        assert_eq!(assign_models(&profile(TaskLevel::Important), &providers, &models, &[]), Err(AssignmentError::DiversityUnavailable));
+        let plan = assign_models(&profile(TaskLevel::Important), &providers, &models, &[]).unwrap();
+        assert_eq!(plan.level, TaskLevel::Quick);
+        assert!(plan.diversity_degraded);
+        assert!(!plan.notices.is_empty());
     }
 }
