@@ -45,6 +45,26 @@ pub struct CreateSupervisorRun {
 fn default_category() -> String { "general".into() }
 fn default_level() -> TaskLevel { TaskLevel::Normal }
 
+fn is_low_risk_quick(level: &TaskLevel, title: &str, objective: &str) -> bool {
+    if *level != TaskLevel::Quick || objective.len() > 4_000 { return false; }
+    let text = format!("{title} {objective}").to_ascii_lowercase();
+    let high_risk_terms = [
+        "delete", "drop table", "truncate", "migration", "deploy", "production",
+        "security", "authentication", "authorization", "password", "secret",
+        "payment", "financial", "medical", "legal", "execute command", "shell",
+        "database", "credential", "account access",
+    ];
+    !high_risk_terms.iter().any(|term| text.contains(term))
+}
+
+fn configured_curated_models(category: &str) -> Vec<Uuid> {
+    let suffix: String = category.chars().map(|ch| if ch.is_ascii_alphanumeric() { ch.to_ascii_uppercase() } else { '_' }).collect();
+    let key = format!("AXON_CURATED_MODELS_{suffix}");
+    std::env::var(key).unwrap_or_default().split(',')
+        .filter_map(|value| Uuid::parse_str(value.trim()).ok())
+        .take(6).collect()
+}
+
 async fn persist_created_run(
     state: &AppState,
     user: &AuthenticatedUser,
@@ -190,7 +210,7 @@ pub async fn create_run(
         run_id: run.id,
         category: if input.category.trim().is_empty() { "general".into() } else { input.category.trim().to_ascii_lowercase() },
         level: input.level,
-        low_risk: false,
+        low_risk: is_low_risk_quick(&input.level, &run.title, &run.objective),
         required_abilities,
         required_context_tokens: input.required_context_tokens.max(objective_tokens + 4096),
         privacy,
@@ -200,7 +220,7 @@ pub async fn create_run(
         daily_budget_remaining_micros: daily_budget_limit.saturating_sub(spent_today),
         exploration_percent: std::env::var("AXON_EXPLORATION_PERCENT").ok().and_then(|v| v.parse().ok()).unwrap_or(5),
         minimum_history_runs: std::env::var("AXON_MIN_MODEL_HISTORY_RUNS").ok().and_then(|v| v.parse().ok()).unwrap_or(10),
-        curated_model_ids: Vec::new(),
+        curated_model_ids: configured_curated_models(&input.category),
     };
     let assignment_engine = state.assignment_engine();
     let mut assignment = assignment_engine.assign(&profile, &providers, &models, &stats);
