@@ -2,6 +2,7 @@ use crate::{
     audit::AuditEvent,
     chat_memory::ChatMemoryStore,
     model::{Agent, Artifact, Task, Workspace},
+    supervisor::SupervisorRun,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -42,6 +43,7 @@ pub enum EntityKind {
     Agent,
     Artifact,
     Task,
+    SupervisorRun,
 }
 
 impl EntityKind {
@@ -62,6 +64,7 @@ pub enum StoredEntity {
     Agent(Agent),
     Artifact(Artifact),
     Task(Task),
+    SupervisorRun(SupervisorRun),
 }
 
 impl StoredEntity {
@@ -71,6 +74,7 @@ impl StoredEntity {
             Self::Agent(_) => EntityKind::Agent,
             Self::Artifact(_) => EntityKind::Artifact,
             Self::Task(_) => EntityKind::Task,
+            Self::SupervisorRun(_) => EntityKind::SupervisorRun,
         }
     }
 
@@ -80,6 +84,7 @@ impl StoredEntity {
             Self::Agent(record) => record.id,
             Self::Artifact(record) => record.id,
             Self::Task(record) => record.id,
+            Self::SupervisorRun(record) => record.id,
         }
     }
 
@@ -89,6 +94,7 @@ impl StoredEntity {
             Self::Agent(record) => Some(record.workspace_id),
             Self::Artifact(record) => Some(record.workspace_id),
             Self::Task(record) => Some(record.workspace_id),
+            Self::SupervisorRun(record) => Some(record.workspace_id),
         }
     }
 
@@ -98,6 +104,7 @@ impl StoredEntity {
             Self::Agent(record) => record.created_at,
             Self::Artifact(record) => record.captured_at,
             Self::Task(record) => record.created_at,
+            Self::SupervisorRun(record) => record.created_at,
         }
     }
 }
