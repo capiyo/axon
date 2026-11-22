@@ -10,6 +10,7 @@ import sys
 
 from .api import AxonApiClient, AxonApiError
 from .models import AxonEnvelope
+from .providers.chatgpt import load_chatgpt_export
 from .providers.claude import load_claude_export
 from .providers.deepseek import DeepSeekClient, DeepSeekError
 from .transfer import transfer_to_deepseek
@@ -17,7 +18,9 @@ from .transfer import transfer_to_deepseek
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="axon-bridge")
-    parser.add_argument("claude_export", help="Path to one conversation JSON from a Claude export.")
+    parser.add_argument("claude_export", help="Path to a Claude or ChatGPT export JSON file.")
+    parser.add_argument("--provider", choices=["claude", "chatgpt"], default="claude")
+    parser.add_argument("--conversation-id", help="Select one conversation from a multi-conversation ChatGPT export.")
     parser.add_argument("--workspace-id", required=True)
     parser.add_argument(
         "--actor-id",
@@ -77,7 +80,12 @@ async def _run(args: argparse.Namespace) -> int:
         if args.persist_response and not args.axon_id_token:
             raise ValueError("--persist-response requires AXON_FIREBASE_ID_TOKEN.")
 
-        conversation = load_claude_export(args.claude_export)
+        if args.provider == "chatgpt":
+            conversation = load_chatgpt_export(args.claude_export, args.conversation_id)
+        else:
+            if args.conversation_id:
+                raise ValueError("--conversation-id is only supported with --provider chatgpt.")
+            conversation = load_claude_export(args.claude_export)
         envelope = AxonEnvelope.from_conversation(
             conversation, workspace_id=args.workspace_id, actor_id=args.actor_id
         )
