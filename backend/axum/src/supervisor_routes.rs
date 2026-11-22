@@ -223,7 +223,10 @@ pub async fn create_run(
     }
     match assignment {
         Ok(plan) => {
-            run.assignment_level = Some(plan.level);
+            run.assignment_level = Some(plan.level.clone());
+            if plan.level == TaskLevel::Quick {
+                run.status = SupervisorRunStatus::ReadyForWorkers;
+            }
             run.assignment_notice = if plan.notices.is_empty() { None } else { Some(plan.notices.join(" ")) };
             run.assignment_decisions = plan.decisions;
         }
