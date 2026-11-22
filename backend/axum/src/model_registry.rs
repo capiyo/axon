@@ -62,6 +62,19 @@ pub struct ModelRecord {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModelChangeFlag {
+    pub id: Uuid,
+    pub model_id: Uuid,
+    pub change_kind: String,
+    pub previous_value: Option<String>,
+    pub observed_value: Option<String>,
+    pub detected_at: DateTime<Utc>,
+    pub cleared_at: Option<DateTime<Utc>>,
+    pub cleared_by: Option<Uuid>,
+    pub resolution_note: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ModelEvaluation {
     pub id: Uuid,
