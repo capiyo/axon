@@ -1,6 +1,6 @@
 # State of Repository
 
-**Last updated:** 2026-11-21
+**Last updated:** 2026-11-22
 
 **Product identity:** Axon (working name; public trademark/domain clearance remains outstanding).
 
@@ -77,7 +77,7 @@
 - Durable simulator telemetry, device cryptographic enrollment, persistent replay/idempotency enforcement, device gateway and hardware-in-the-loop tests.
 - Artifact content hashing, classification enforcement, context bundle read API and retention controls. The current API bridge writes artifacts through the existing workspace-scoped endpoint; it does not yet implement a dedicated AXP context-bundle read/write protocol.
 - Account/data deletion execution, legal retention policy and deletion worker; see [ACCOUNT_AND_DATA_DELETION_DESIGN.md](ACCOUNT_AND_DATA_DELETION_DESIGN.md).
-- End-to-end supervisor orchestration: durable supervisor-run persistence, independent provider calls for both checklist writers/workers/supervisors, bounded context dispatch, repair-task creation, and web/mobile run dashboard. The deterministic policy core exists, but provider execution and lifecycle APIs are not yet wired.
+- End-to-end autonomous supervisor execution: provider API calls for both checklist writers/workers/supervisors, proof of independent agent identities, bounded context dispatch, automated deterministic CI/build/test runner integration, repair-task generation, and web/mobile run dashboard. The state machine and authenticated persistence API are implemented, but automatic provider execution and frontend workflow UI are not yet wired.
 - Additional agent provider APIs, webhooks and autonomous agent execution.
 - C++/Drogon service and Zig utilities (intentionally deferred until justified).
 - Production deployment, secrets management, persistent-volume configuration, backups, monitoring and operational runbooks.
