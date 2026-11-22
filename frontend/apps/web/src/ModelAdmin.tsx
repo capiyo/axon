@@ -14,6 +14,7 @@ type Model = {
 };
 type Evaluation = { model_id: string; category: string; score: number; test_set_version: string; run_at: string; cost_micros: number };
 type Stat = { model_id: string; category: string; role: string; runs: number; completion_rate: number; supervisor_pass_rate: number; user_retry_rate: number; cost_per_run_micros: number; latency_ms: number };
+type Flag = { id: string; model_id: string; change_kind: string; previous_value: string | null; observed_value: string | null; detected_at: string; cleared_at: string | null; resolution_note: string | null };
 type Decision = { run_id: string; role: string; slot: number; candidates_considered: string[]; chosen_model_id: string; reason: string; estimated_cost_micros: number; created_at: string };
 
 async function adminApi<T>(path: string, init?: RequestInit): Promise<T> {
@@ -35,23 +36,27 @@ export function ModelAdmin({ onClose }: { onClose: () => void }) {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [stats, setStats] = useState<Stat[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [flags, setFlags] = useState<Flag[]>([]);
+  const [flagNotes, setFlagNotes] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
-    const [providerRows, modelRows, evaluationRows, statRows, decisionRows] = await Promise.all([
+    const [providerRows, modelRows, evaluationRows, statRows, decisionRows, flagRows] = await Promise.all([
       adminApi<Provider[]>("/api/v1/admin/providers"),
       adminApi<Model[]>("/api/v1/admin/models"),
       adminApi<Evaluation[]>("/api/v1/admin/evaluations"),
       adminApi<Stat[]>("/api/v1/admin/stats"),
-      adminApi<Decision[]>("/api/v1/admin/assignments")
+      adminApi<Decision[]>("/api/v1/admin/assignments"),
+      adminApi<Flag[]>("/api/v1/admin/flags")
     ]);
     setProviders(providerRows);
     setModels(modelRows);
     setEvaluations(evaluationRows);
     setStats(statRows);
     setDecisions(decisionRows);
+    setFlags(flagRows);
   }
 
   useEffect(() => {
@@ -74,6 +79,20 @@ export function ModelAdmin({ onClose }: { onClose: () => void }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function clearFlag(flag: Flag) {
+    const note = flagNotes[flag.id]?.trim();
+    if (!note || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await adminApi<Flag>(`/api/v1/admin/flags/${flag.id}/clear`, { method: "POST", body: JSON.stringify({ note }) });
+      setFlagNotes(current => ({ ...current, [flag.id]: "" }));
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not resolve model flag.");
+    } finally { setBusy(false); }
   }
 
   const providerName = (id: string) => providers.find(provider => provider.id === id)?.name ?? "Unknown provider";
@@ -120,7 +139,19 @@ export function ModelAdmin({ onClose }: { onClose: () => void }) {
       </section>
 
       <section className="panel">
-        <div className="panel-heading"><div><span className="kicker">03 · ASSIGNMENT AUDIT</span><h3>Recent decisions</h3></div><span className="count">{decisions.length} DECISIONS</span></div>
+        <div className="panel-heading"><div><span className="kicker">03 · CHANGE CONTROL</span><h3>Flagged model changes</h3></div><span className="count">{flags.filter(flag => !flag.cleared_at).length} OPEN FLAGS</span></div>
+        <div className="admin-model-list">
+          {flags.map(flag => <article className="admin-model" key={flag.id}>
+            <div className="admin-model-head"><div><strong>{models.find(model => model.id === flag.model_id)?.model_name ?? flag.model_id}</strong><small>{flag.change_kind} · {new Date(flag.detected_at).toLocaleString()}</small></div><span className={flag.cleared_at ? "admin-status approved" : "admin-status candidate"}>{flag.cleared_at ? "Resolved" : "Review required"}</span></div>
+            <div className="admin-model-meta"><span>Previous: {flag.previous_value ?? "Unknown"}</span><span>Observed: {flag.observed_value ?? "Unknown"}</span></div>
+            {flag.cleared_at ? <p className="muted">Resolution: {flag.resolution_note}</p> : <div className="candidate-review"><label htmlFor={`flag-${flag.id}`}>Resolution note</label><textarea id={`flag-${flag.id}`} rows={2} value={flagNotes[flag.id] ?? ""} onChange={event => setFlagNotes(current => ({ ...current, [flag.id]: event.target.value }))} placeholder="Explain the review and why this model can be re-enabled…" /><div><button type="button" disabled={busy || !flagNotes[flag.id]?.trim()} onClick={() => void clearFlag(flag)}>Clear flag</button></div></div>}
+          </article>)}
+          {flags.length === 0 && <p className="muted">No provider, price or evaluation changes have been flagged.</p>}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading"><div><span className="kicker">04 · ASSIGNMENT AUDIT</span><h3>Recent decisions</h3></div><span className="count">{decisions.length} DECISIONS</span></div>
         <div className="admin-table">
           {decisions.slice().sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 50).map(decision => <article className="admin-row" key={decision.run_id + decision.role + decision.slot}>
             <div><strong>{decision.role} · slot {decision.slot + 1}</strong><small>Run {decision.run_id}</small></div>
