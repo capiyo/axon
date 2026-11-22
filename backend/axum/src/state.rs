@@ -37,6 +37,7 @@ pub struct AppState {
     pub chat_memory: Option<ChatMemoryStore>,
     pub firebase_verifier: Option<FirebaseVerifier>,
     pub simulator_enabled: bool,
+    platform_admin_uids: Arc<HashSet<String>>,
 }
 
 impl AppState {
@@ -191,6 +192,24 @@ impl AppState {
             Some(storage) => storage.list_audit_events(workspace_id).await,
             None => Ok(self.audit.read().await.list_workspace(workspace_id)),
         }
+    }
+
+    pub fn with_platform_admin_uids(mut self, firebase_uids: Vec<String>) -> Self {
+        self.platform_admin_uids = Arc::new(firebase_uids.into_iter().collect());
+        self
+    }
+
+    pub async fn bootstrap_platform_admin(&self, user_id: Uuid, firebase_uid: &str) -> Result<bool, StorageError> {
+        if !self.platform_admin_uids.contains(firebase_uid) {
+            return Ok(false);
+        }
+        let Some(storage) = &self.storage else {
+            return Ok(false);
+        };
+        if !storage.is_platform_admin(user_id).await? {
+            storage.grant_platform_admin(user_id, firebase_uid).await?;
+        }
+        Ok(true)
     }
 
     pub fn storage_is_durable(&self) -> bool {
