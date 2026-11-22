@@ -206,11 +206,13 @@ pub async fn create_run(
         .and_then(|value| value.parse().ok()).unwrap_or(10_000_000u64);
     let spent_today = state.daily_model_spend(user.user_id, &usage_date).await
         .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Daily model budget could not be loaded."))?;
+    let low_risk = is_low_risk_quick(&input.level, &run.title, &run.objective);
+    let curated_model_ids = configured_curated_models(&input.category);
     let mut profile = AssignmentProfile {
         run_id: run.id,
         category: if input.category.trim().is_empty() { "general".into() } else { input.category.trim().to_ascii_lowercase() },
         level: input.level,
-        low_risk: is_low_risk_quick(&input.level, &run.title, &run.objective),
+        low_risk,
         required_abilities,
         required_context_tokens: input.required_context_tokens.max(objective_tokens + 4096),
         privacy,
@@ -220,7 +222,7 @@ pub async fn create_run(
         daily_budget_remaining_micros: daily_budget_limit.saturating_sub(spent_today),
         exploration_percent: std::env::var("AXON_EXPLORATION_PERCENT").ok().and_then(|v| v.parse().ok()).unwrap_or(5),
         minimum_history_runs: std::env::var("AXON_MIN_MODEL_HISTORY_RUNS").ok().and_then(|v| v.parse().ok()).unwrap_or(10),
-        curated_model_ids: configured_curated_models(&input.category),
+        curated_model_ids,
     };
     let assignment_engine = state.assignment_engine();
     let mut assignment = assignment_engine.assign(&profile, &providers, &models, &stats);
