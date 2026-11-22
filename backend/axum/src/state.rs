@@ -28,6 +28,7 @@ pub struct AppState {
     pub artifacts: Arc<RwLock<HashMap<Uuid, Artifact>>>,
     pub tasks: Arc<RwLock<HashMap<Uuid, Task>>>,
     pub supervisor_runs: Arc<RwLock<HashMap<Uuid, SupervisorRun>>>,
+    pub supervisor_run_lock: Arc<tokio::sync::Mutex<()>>,
     /// Bounded in-memory simulator stream; never treated as durable device telemetry.
     pub telemetry: Arc<RwLock<TelemetryStore>>,
     /// Runtime cache backed by the append-only audit table when SQLite is configured.
