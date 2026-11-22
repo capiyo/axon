@@ -78,7 +78,8 @@ fn valid_configured_url(value: &str) -> bool {
     let lower = value.to_ascii_lowercase();
     let query_is_secret = lower.split_once('?').is_some_and(|(_, query)| {
         ["key=", "token=", "secret=", "password=", "authorization="]
-            .iter().any(|marker| query.contains(marker))
+            .iter()
+            .any(|marker| query.contains(marker))
     });
     secure_origin && !value.contains('@') && !query_is_secret
 }
