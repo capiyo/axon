@@ -299,12 +299,21 @@ impl Storage for SqliteStorage {
                         .execute(&mut *transaction).await?;
                 }
                 StoredEntity::AssignmentDecision(item) => {
-                    let role = match item.role { crate::model_registry::AssignmentRole::ChecklistWriter => "checklist_writer", crate::model_registry::AssignmentRole::Worker => "worker", crate::model_registry::AssignmentRole::Supervisor => "supervisor" };
+                    let role = match &item.role { crate::model_registry::AssignmentRole::ChecklistWriter => "checklist_writer", crate::model_registry::AssignmentRole::Worker => "worker", crate::model_registry::AssignmentRole::Supervisor => "supervisor" };
                     sqlx::query("INSERT INTO assignment_decisions (id, run_id, role, slot, candidates_json, filters_json, chosen_model_id, reason, estimated_cost_micros, created_at, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(run_id, role, slot) DO UPDATE SET candidates_json=excluded.candidates_json, filters_json=excluded.filters_json, chosen_model_id=excluded.chosen_model_id, reason=excluded.reason, estimated_cost_micros=excluded.estimated_cost_micros, created_at=excluded.created_at, payload_json=excluded.payload_json")
                         .bind(item.id.to_string()).bind(item.run_id.to_string()).bind(role).bind(item.slot as i64)
                         .bind(serde_json::to_string(&item.candidates_considered)?).bind(serde_json::to_string(&item.filters_applied)?)
                         .bind(item.chosen_model_id.to_string()).bind(&item.reason).bind(item.estimated_cost_micros as i64)
                         .bind(item.created_at.to_rfc3339()).bind(payload)
+                        .execute(&mut *transaction).await?;
+                }
+                StoredEntity::ModelChangeFlag(item) => {
+                    sqlx::query("INSERT INTO model_change_flags (id, model_id, change_kind, previous_value, observed_value, detected_at, cleared_at, cleared_by, resolution_note, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET cleared_at=excluded.cleared_at, cleared_by=excluded.cleared_by, resolution_note=excluded.resolution_note, payload_json=excluded.payload_json")
+                        .bind(item.id.to_string()).bind(item.model_id.to_string()).bind(&item.change_kind)
+                        .bind(&item.previous_value).bind(&item.observed_value).bind(item.detected_at.to_rfc3339())
+                        .bind(item.cleared_at.map(|value| value.to_rfc3339()))
+                        .bind(item.cleared_by.map(|value| value.to_string()))
+                        .bind(&item.resolution_note).bind(payload)
                         .execute(&mut *transaction).await?;
                 }
                 _ => {}
