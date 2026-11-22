@@ -143,6 +143,19 @@ pub struct AssignmentPlan {
     pub notices: Vec<String>,
 }
 
+pub trait ModelAssigner: Send + Sync {
+    fn assign(
+        &self,
+        profile: &AssignmentProfile,
+        providers: &[ModelProvider],
+        models: &[ModelRecord],
+        stats: &[ModelStat],
+    ) -> Result<AssignmentPlan, AssignmentError>;
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DeterministicModelAssigner;
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum AssignmentError {
     #[error("no approved, healthy model satisfies the task's category, ability, context and privacy requirements")]
@@ -162,6 +175,18 @@ struct Candidate<'a> {
     stat: Option<&'a ModelStat>,
     estimated_cost: u64,
     score: f64,
+}
+
+impl ModelAssigner for DeterministicModelAssigner {
+    fn assign(
+        &self,
+        profile: &AssignmentProfile,
+        providers: &[ModelProvider],
+        models: &[ModelRecord],
+        stats: &[ModelStat],
+    ) -> Result<AssignmentPlan, AssignmentError> {
+        assign_models(profile, providers, models, stats)
+    }
 }
 
 fn level_counts(level: &TaskLevel) -> (usize, usize, usize) {
