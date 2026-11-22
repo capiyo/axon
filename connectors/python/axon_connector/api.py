@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from urllib.parse import urlsplit
+from uuid import UUID
 
 import httpx
 
@@ -45,8 +46,10 @@ class AxonApiClient:
         *,
         source_agent_id: str | None = None,
     ) -> dict[str, object]:
-        if not workspace_id.strip():
-            raise ValueError("Workspace ID is required.")
+        try:
+            normalized_workspace_id = str(UUID(workspace_id))
+        except (ValueError, AttributeError):
+            raise ValueError("Workspace ID must be a valid UUID.") from None
         if not title.strip() or len(title.strip()) > 200:
             raise ValueError("Artifact title must contain between 1 and 200 characters.")
         if not content or len(content.encode("utf-8")) > 512_000:
@@ -62,7 +65,7 @@ class AxonApiClient:
                 timeout=self._timeout, transport=self._transport
             ) as client:
                 response = await client.post(
-                    f"{self._base_url}/api/v1/workspaces/{workspace_id}/artifacts",
+                    f"{self._base_url}/api/v1/workspaces/{normalized_workspace_id}/artifacts",
                     headers={"Authorization": f"Bearer {self._token}"},
                     json=payload,
                 )
