@@ -184,6 +184,17 @@ impl AppState {
         }
     }
 
+    pub async fn list_entities(
+        &self,
+        kind: EntityKind,
+        workspace_id: Option<Uuid>,
+    ) -> Result<Vec<StoredEntity>, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.list_entities(kind, workspace_id).await,
+            None => Ok(Vec::new()),
+        }
+    }
+
     pub async fn list_audit_events(
         &self,
         workspace_id: uuid::Uuid,
