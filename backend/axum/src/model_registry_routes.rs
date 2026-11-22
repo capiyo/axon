@@ -50,6 +50,9 @@ pub struct CreateProvider {
 }
 fn active_status() -> String { "active".into() }
 fn default_rate_limit() -> u16 { 10 }
+fn valid_configured_url(value: &str) -> bool {
+    value.starts_with("https://") || value.starts_with("http://localhost") || value.starts_with("http://127.0.0.1")
+}
 
 #[derive(Debug, Deserialize)]
 pub struct ReviewProviderTerms {
@@ -114,10 +117,13 @@ pub async fn create_provider(
 ) -> AdminResult<(StatusCode, Json<ModelProvider>)> {
     require_admin(&user)?;
     if input.name.trim().is_empty() || input.name.len() > 120
-        || !(input.base_url.starts_with("https://") || input.base_url.starts_with("http://localhost"))
+        || !valid_configured_url(&input.base_url)
+        || input.model_discovery_url.as_deref().is_some_and(|url| !valid_configured_url(url))
+        || input.pricing_source_url.as_deref().is_some_and(|url| !valid_configured_url(url))
+        || input.discovery_enabled && input.model_discovery_url.is_none()
         || input.status != "active" && input.status != "disabled"
     {
-        return Err(error(StatusCode::BAD_REQUEST, "Provider name, HTTPS base URL and status are invalid."));
+        return Err(error(StatusCode::BAD_REQUEST, "Provider name, configured HTTPS source URLs and status are invalid."));
     }
     let now = Utc::now();
     let provider = ModelProvider {
