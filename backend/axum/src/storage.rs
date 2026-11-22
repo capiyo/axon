@@ -695,6 +695,17 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn platform_admin_grant_is_persisted_and_audited() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let user_id = Uuid::new_v4();
+        storage.grant_platform_admin(user_id, "configured-admin-uid").await.unwrap();
+        assert!(storage.is_platform_admin(user_id).await.unwrap());
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_events WHERE event_type = 'platform_admin.granted'")
+            .fetch_one(&storage.pool).await.unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
     async fn firebase_first_login_is_idempotent_under_concurrent_requests() {
         let database_path =
             std::env::temp_dir().join(format!("axon-identity-{}.db", Uuid::new_v4()));
