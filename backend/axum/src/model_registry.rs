@@ -573,14 +573,16 @@ pub fn assign_models(
                 };
                 budget_downgraded = true;
             }
-            AssignmentError::DiversityUnavailable if level != TaskLevel::Quick => {
+            AssignmentError::DiversityUnavailable | AssignmentError::NoEligibleModels
+                if level != TaskLevel::Quick =>
+            {
                 level = match level {
                     TaskLevel::Important => TaskLevel::Normal,
                     TaskLevel::Normal => TaskLevel::Quick,
                     TaskLevel::Quick => unreachable!(),
                 };
                 diversity_degraded = true;
-                notices.push("Provider diversity could not be satisfied; Axon reduced the supervision level.".into());
+                notices.push("Eligible models or provider diversity could not satisfy the requested supervision level; Axon reduced the supervision level.".into());
             }
             other => return Err(other),
         }
