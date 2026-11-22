@@ -41,7 +41,7 @@ fn api_error(status: StatusCode, message: impl Into<String>) -> (StatusCode, Jso
 }
 
 fn supervisor_error(error: SupervisorError) -> (StatusCode, Json<ApiError>) {
-    let status = match error {
+    let status = match &error {
         SupervisorError::InvalidRunState
         | SupervisorError::DuplicateSubmission
         | SupervisorError::RepairNotAvailable => StatusCode::CONFLICT,
@@ -79,12 +79,12 @@ async fn persist_run(
     Ok(run)
 }
 
-fn find_run(
+async fn find_run(
     state: &AppState,
     workspace_id: Uuid,
     run_id: Uuid,
 ) -> Result<SupervisorRun, (StatusCode, Json<ApiError>)> {
-    let runs = state.supervisor_runs.blocking_read();
+    let runs = state.supervisor_runs.read().await;
     runs.get(&run_id)
         .filter(|run| run.workspace_id == workspace_id)
         .cloned()
@@ -154,7 +154,8 @@ pub async fn submit_checklist(
     Path((workspace_id, run_id)): Path<(Uuid, Uuid)>,
     Json(proposal): Json<ChecklistProposal>,
 ) -> ApiResult<Json<SupervisorRun>> {
-    let mut run = find_run(&state, workspace_id, run_id)?;
+    let _guard = state.supervisor_run_lock.lock().await;
+    let mut run = find_run(&state, workspace_id, run_id).await?;
     run.submit_checklist(proposal).map_err(supervisor_error)?;
     let event = if run.status == SupervisorRunStatus::ReadyForWorkers {
         "supervisor_run.checklists_merged"
