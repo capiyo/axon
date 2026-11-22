@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { auth } from "./firebase";
 
 type Provider = {
@@ -84,7 +85,7 @@ export function ModelAdmin({ onClose }: { onClose: () => void }) {
     void refresh().catch(cause => setError(cause instanceof Error ? cause.message : "Could not load model registry."));
   }, []);
 
-  async function createProvider(event: React.FormEvent<HTMLFormElement>) {
+  async function createProvider(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
     setBusy(true); setError("");
