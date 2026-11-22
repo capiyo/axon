@@ -61,7 +61,7 @@ All amounts below are integer micro-units of the billing currency.
 - `AXON_DAILY_BUDGET_MICROS`: per-user daily reservation limit; default 10,000,000.
 - `AXON_MIN_MODEL_HISTORY_RUNS`: minimum runs before historical statistics override curated cold-start ranking; default 10.
 - `AXON_EXPLORATION_PERCENT`: low-risk Quick exploration share; default 5.
-- `AXON_CURATED_MODELS_<CATEGORY>`: comma-separated model UUIDs in preferred order, up to six. Example: `AXON_CURATED_MODELS_CODING`.
+- `AXON_CURATED_MODELS_<CATEGORY>`: comma-separated model UUIDs in preferred order (four to six per category). Example: `AXON_CURATED_MODELS_CODING`. Until a category has a four-to-six model ranking (or individual models have a stored curated rank), unranked cold-start models are not assigned.
 
 Privacy defaults to no training and no retention unless a run supplies a stricter or explicitly chosen requirement. Providers with unknown training or retention terms fail those strict filters.
 
