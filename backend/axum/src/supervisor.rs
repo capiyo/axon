@@ -37,6 +37,13 @@ pub struct MergedChecklistItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkerResult {
+    pub worker_id: String,
+    pub summary: String,
+    pub artifact_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DeterministicCheck {
     pub id: String,
     pub passed: bool,
@@ -87,6 +94,12 @@ pub enum SupervisorError {
     InvalidChecklistItem,
     #[error("a checklist proposal contains a duplicate item key: {0}")]
     DuplicateChecklistKey(String),
+    #[error("exactly two independent worker results are required")]
+    InvalidWorkerCount,
+    #[error("worker identifiers must be non-empty and distinct")]
+    InvalidWorkerIdentity,
+    #[error("each worker result must include a summary and at least one artifact")]
+    MissingWorkerEvidence,
     #[error("exactly two distinct supervisor reviews are required")]
     InvalidSupervisorCount,
     #[error("supervisor identifiers must be non-empty and distinct")]
@@ -207,6 +220,28 @@ pub fn merge_checklists(
         });
     }
     Ok(merged)
+}
+
+
+/// Validate the two independent worker outputs before deterministic checks begin.
+pub fn validate_worker_results(results: &[WorkerResult]) -> Result<(), SupervisorError> {
+    if results.len() != REQUIRED_WORKER_COUNT {
+        return Err(SupervisorError::InvalidWorkerCount);
+    }
+
+    let mut worker_ids = BTreeSet::new();
+    for result in results {
+        if result.worker_id.trim().is_empty() || !worker_ids.insert(result.worker_id.trim()) {
+            return Err(SupervisorError::InvalidWorkerIdentity);
+        }
+        if result.summary.trim().is_empty()
+            || result.artifact_ids.is_empty()
+            || result.artifact_ids.iter().any(|id| id.trim().is_empty())
+        {
+            return Err(SupervisorError::MissingWorkerEvidence);
+        }
+    }
+    Ok(())
 }
 
 /// Accept only when both independent supervisors approve with traceable evidence
@@ -367,6 +402,26 @@ mod tests {
             merge_checklists(&proposal, &other),
             Err(SupervisorError::DuplicateChecklistKey("same".into()))
         );
+    }
+
+
+    #[test]
+    fn exactly_two_independent_workers_must_return_artifacts() {
+        let results = vec![
+            WorkerResult { worker_id: "worker-a".into(), summary: "Backend change.".into(), artifact_ids: vec!["artifact-a".into()] },
+            WorkerResult { worker_id: "worker-b".into(), summary: "Frontend change.".into(), artifact_ids: vec!["artifact-b".into()] },
+        ];
+        assert_eq!(validate_worker_results(&results), Ok(()));
+        assert_eq!(validate_worker_results(&results[..1]), Err(SupervisorError::InvalidWorkerCount));
+    }
+
+    #[test]
+    fn duplicate_worker_identity_is_rejected() {
+        let results = vec![
+            WorkerResult { worker_id: "worker-a".into(), summary: "First.".into(), artifact_ids: vec!["artifact-a".into()] },
+            WorkerResult { worker_id: "worker-a".into(), summary: "Second.".into(), artifact_ids: vec!["artifact-b".into()] },
+        ];
+        assert_eq!(validate_worker_results(&results), Err(SupervisorError::InvalidWorkerIdentity));
     }
 
     #[test]
