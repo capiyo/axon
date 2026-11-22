@@ -1,3 +1,4 @@
+use crate::model_registry::{AssignmentDecision, TaskLevel};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -116,6 +117,12 @@ pub struct SupervisorRun {
     pub deterministic_checks: Vec<DeterministicCheck>,
     pub reviews: Vec<SupervisorReview>,
     pub decision: Option<SupervisionDecision>,
+    #[serde(default)]
+    pub assignment_decisions: Vec<AssignmentDecision>,
+    #[serde(default)]
+    pub assignment_level: Option<TaskLevel>,
+    #[serde(default)]
+    pub assignment_notice: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -185,6 +192,9 @@ impl SupervisorRun {
             deterministic_checks: Vec::new(),
             reviews: Vec::new(),
             decision: None,
+            assignment_decisions: Vec::new(),
+            assignment_level: None,
+            assignment_notice: None,
             created_at: now,
             updated_at: now,
         })
