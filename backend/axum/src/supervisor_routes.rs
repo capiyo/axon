@@ -1,7 +1,7 @@
 use crate::auth_middleware::AuthenticatedUser;
 use crate::{
     audit::AuditEvent,
-    model_registry::{assign_models, AssignmentProfile, ModelProvider, ModelRecord, ModelStat, PrivacyRequirement, TaskLevel},
+    model_registry::{AssignmentProfile, ModelProvider, ModelRecord, ModelStat, PrivacyRequirement, TaskLevel},
     storage::{EntityKind, StoredEntity},
     supervisor::{
         ChecklistProposal, DeterministicCheck, SupervisorError, SupervisorReview, SupervisorRun,
@@ -196,7 +196,8 @@ pub async fn create_run(
         minimum_history_runs: std::env::var("AXON_MIN_MODEL_HISTORY_RUNS").ok().and_then(|v| v.parse().ok()).unwrap_or(10),
         curated_model_ids: Vec::new(),
     };
-    match assign_models(&profile, &providers, &models, &stats) {
+    let assignment_engine = state.assignment_engine();
+    match assignment_engine.assign(&profile, &providers, &models, &stats) {
         Ok(plan) => {
             run.assignment_level = Some(plan.level);
             run.assignment_notice = if plan.notices.is_empty() { None } else { Some(plan.notices.join(" ")) };
