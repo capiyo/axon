@@ -91,8 +91,9 @@ The workspace UI can create and advance tasks. To simulate the manual handoff, a
 
 ## Known prototype constraints
 
-- Data is lost when the API process stops.
-- Agent names/provider labels do not connect to provider APIs.
-- The person using the UI performs the copy/paste and confirms the response source.
-- Authentication, workspace membership, audit persistence, durable storage, and external actions are not implemented.
-- Never place secrets or sensitive personal data in this prototype.
+- SQLite data persists across API restarts when the database file is retained; back up the file and do not use an ephemeral container filesystem.
+- Agent names/provider labels in the UI remain descriptive; they do not create live provider sessions.
+- The Python connector currently supports user-selected Claude export files and DeepSeek API handoffs. It can persist selected source context and approved responses through the authenticated Axon artifact API.
+- Browser capture is not an automatic background clipboard monitor. The user must select and approve what is shared.
+- Production deployment, backup/restore, multi-instance availability, provider credential vaulting and delegated autonomous execution remain unimplemented.
+- Never place secrets or sensitive personal data in public logs, source control, or untrusted provider prompts.
