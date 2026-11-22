@@ -58,4 +58,3 @@ pub trait AiProvider: Send + Sync {
 
     async fn generate(&self, request: AiRequest) -> Result<AiResponse, AiProviderError>;
 }
-
