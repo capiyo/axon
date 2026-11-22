@@ -67,3 +67,9 @@ def test_artifact_limits_are_checked_before_network_access():
     client = AxonApiClient("https://axon.example", "token")
     with pytest.raises(ValueError, match="512000"):
         asyncio.run(client.create_artifact(str(uuid4()), "Title", "x" * 512_001))
+
+
+def test_workspace_id_must_be_a_uuid():
+    client = AxonApiClient("https://axon.example", "token")
+    with pytest.raises(ValueError, match="valid UUID"):
+        asyncio.run(client.create_artifact("../other-workspace", "Title", "Content"))
