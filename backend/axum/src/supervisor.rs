@@ -178,7 +178,11 @@ pub fn merge_checklists(
         }
         if let Some(item) = right {
             summaries.push(item.summary.trim().to_owned());
-            criteria.extend(item.acceptance_criteria.iter().map(|value| value.trim().to_owned()));
+            criteria.extend(
+                item.acceptance_criteria
+                    .iter()
+                    .map(|value| value.trim().to_owned()),
+            );
             proposed_by.push(second.writer_id.clone());
         }
 
