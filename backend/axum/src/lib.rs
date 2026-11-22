@@ -8,6 +8,7 @@ mod chat_memory_routes;
 pub mod firebase_auth;
 pub mod identity;
 pub mod model_registry;
+pub mod model_discovery;
 mod model;
 mod model_registry_routes;
 #[cfg(test)]
