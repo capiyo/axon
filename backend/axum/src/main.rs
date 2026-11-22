@@ -1,4 +1,7 @@
-use axon_api::{app, firebase_auth::FirebaseVerifier, model_discovery::run_discovery_scheduler, storage::SqliteStorage, AppState};
+use axon_api::{
+    app, firebase_auth::FirebaseVerifier, model_discovery::run_discovery_scheduler,
+    storage::SqliteStorage, AppState,
+};
 use std::{env, net::SocketAddr};
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
