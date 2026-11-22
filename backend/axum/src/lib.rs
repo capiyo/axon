@@ -10,6 +10,8 @@ pub mod identity;
 pub mod model_registry;
 mod model;
 mod model_registry_routes;
+#[cfg(test)]
+mod model_registry_routes_tests;
 pub mod robotics;
 mod robotics_routes;
 mod routes;
