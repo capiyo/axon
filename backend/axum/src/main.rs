@@ -1,4 +1,4 @@
-use axon_api::{app, firebase_auth::FirebaseVerifier, storage::SqliteStorage, AppState};
+use axon_api::{app, firebase_auth::FirebaseVerifier, model_discovery::run_discovery_scheduler, storage::SqliteStorage, AppState};
 use std::{env, net::SocketAddr};
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -26,6 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url =
         env::var("AXON_DATABASE_URL").unwrap_or_else(|_| "sqlite://axon.db".to_owned());
     let storage = SqliteStorage::connect(&database_url).await?;
+    let storage_handle = storage.shared();
     let simulator_enabled = env::var("AXON_ENABLE_SIMULATOR")
         .map(|value| value.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
@@ -36,10 +37,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|uid| !uid.is_empty())
         .map(ToOwned::to_owned)
         .collect();
-    let state = AppState::with_storage(storage.shared())
+    let state = AppState::with_storage(storage_handle.clone())
         .await?
         .with_platform_admin_uids(admin_uids)
         .with_firebase_verifier(verifier, simulator_enabled);
+    tokio::spawn(run_discovery_scheduler(storage_handle));
 
     let listener = TcpListener::bind(address).await?;
     tracing::info!(
