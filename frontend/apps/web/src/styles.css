@@ -213,3 +213,36 @@ body {
   .chat-compose, .memory-compose { flex-wrap: wrap; }
   .chat-compose textarea, .memory-compose input { flex-basis: 100%; }
 }
+
+
+.topbar-actions { display: flex; align-items: center; gap: 16px; }
+.admin-entry { border: 1px solid #dce6f2; border-radius: 10px; background: #fff; color: #315f9a; padding: 9px 12px; font-size: 11px; font-weight: 700; cursor: pointer; }
+.admin-entry:hover { border-color: #91b6e8; background: #f6f9ff; }
+.model-admin { display: flex; flex-direction: column; gap: 16px; margin-top: 34px; }
+.model-admin-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.model-admin-header h2 { font: 800 27px Manrope; letter-spacing: -.04em; margin: 8px 0 5px; }
+.model-admin-header p { color: #8995a0; font-size: 12px; margin: 0; }
+.model-admin .panel { margin: 0; }
+.admin-table, .admin-model-list { display: flex; flex-direction: column; gap: 10px; }
+.admin-row { display: grid; grid-template-columns: 1.1fr 1fr 1.2fr; gap: 14px; padding: 13px; border: 1px solid #edf0f3; border-radius: 11px; align-items: center; }
+.admin-row strong, .admin-row small { display: block; overflow-wrap: anywhere; }
+.admin-row strong { color: #344656; font-size: 11px; }
+.admin-row small { color: #8995a0; font-size: 10px; line-height: 1.5; margin-top: 4px; }
+.admin-status { display: inline-flex; border-radius: 20px; padding: 5px 8px; background: #eef3f8; color: #61748b; font: 500 9px "DM Mono", monospace; text-transform: uppercase; }
+.admin-status.approved { background: #e7f6ee; color: #23855d; }
+.admin-status.candidate { background: #fff5e6; color: #986b29; }
+.admin-status.disabled { background: #fff0f0; color: #a33b3b; }
+.admin-model { padding: 15px; border: 1px solid #edf0f3; border-radius: 12px; }
+.admin-model-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.admin-model-head strong, .admin-model-head small { display: block; }
+.admin-model-head strong { color: #344656; font: 700 13px Manrope; }
+.admin-model-head small { color: #8995a0; font-size: 10px; margin-top: 4px; }
+.admin-model-meta { display: flex; flex-wrap: wrap; gap: 6px 15px; margin-top: 10px; color: #788694; font-size: 10px; }
+.candidate-review { margin-top: 13px; padding-top: 12px; border-top: 1px solid #edf0f3; display: flex; flex-direction: column; gap: 8px; }
+.candidate-review label { color: #63717e; font-size: 10px; font-weight: 700; }
+.candidate-review textarea { width: 100%; border: 1px solid #e8edf1; border-radius: 9px; padding: 9px; font: 11px "DM Sans", sans-serif; resize: vertical; }
+.candidate-review > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.candidate-review button { border: 0; border-radius: 9px; background: #1d6be5; color: white; padding: 9px 12px; font-size: 10px; font-weight: 700; cursor: pointer; }
+.candidate-review button.secondary, .model-admin button.secondary { border: 1px solid #e2e8ee; background: #fff; color: #647381; }
+.candidate-review button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 700px) { .topbar-actions { flex-direction: column; align-items: flex-end; gap: 8px; }.admin-row { grid-template-columns: 1fr; }.model-admin-header { flex-direction: column; }.model-admin-header h2 { font-size: 23px; } }
