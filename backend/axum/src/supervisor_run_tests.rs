@@ -2,8 +2,9 @@ use crate::{
     audit::AuditEvent,
     storage::{SqliteStorage, StoredEntity},
     supervisor::{
-    ChecklistItem, ChecklistProposal, DeterministicCheck, EvidenceReference, SupervisorReview,
-    SupervisorRun, SupervisorRunStatus, SupervisorVerdict, SupervisionOutcome, WorkerResult,
+        ChecklistItem, ChecklistProposal, DeterministicCheck, EvidenceReference,
+        SupervisionOutcome, SupervisorReview, SupervisorRun, SupervisorRunStatus,
+        SupervisorVerdict, WorkerResult,
     },
     AppState,
 };
