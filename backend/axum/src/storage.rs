@@ -53,6 +53,7 @@ impl EntityKind {
             Self::Agent => "agent",
             Self::Artifact => "artifact",
             Self::Task => "task",
+            Self::SupervisorRun => "supervisor_run",
         }
     }
 }
