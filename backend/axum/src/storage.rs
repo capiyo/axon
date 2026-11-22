@@ -32,6 +32,8 @@ pub enum StorageError {
     InvalidStoredSequence,
     #[error("stored entity kind does not match its table")]
     InvalidStoredEntityKind,
+    #[error("model evaluation score or metadata is invalid")]
+    InvalidModelEvaluation,
     #[error("identity storage is unavailable")]
     IdentityStorageUnavailable,
     #[error("Firebase UID is already bound to a different Firebase project")]
