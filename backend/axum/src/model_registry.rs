@@ -582,7 +582,9 @@ pub fn assign_models(
                     TaskLevel::Quick => unreachable!(),
                 };
                 diversity_degraded = true;
-                notices.push("Eligible models or provider diversity could not satisfy the requested supervision level; Axon reduced the supervision level.".into());
+                notices.push(
+                    "Eligible models or provider diversity could not satisfy the requested supervision level; Axon reduced the supervision level.".into(),
+                );
             }
             other => return Err(other),
         }
