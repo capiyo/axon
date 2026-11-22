@@ -190,6 +190,9 @@ pub trait Storage: Send + Sync {
         name: String,
         actor: String,
     ) -> Result<Workspace, StorageError>;
+
+    async fn grant_platform_admin(&self, user_id: Uuid, firebase_uid: &str) -> Result<(), StorageError>;
+    async fn is_platform_admin(&self, user_id: Uuid) -> Result<bool, StorageError>;
 }
 
 #[derive(Clone)]
@@ -510,6 +513,34 @@ impl Storage for SqliteStorage {
             .execute(&mut *tx).await?;
         tx.commit().await?;
         Ok(workspace)
+    }
+
+    async fn grant_platform_admin(&self, user_id: Uuid, firebase_uid: &str) -> Result<(), StorageError> {
+        let mut tx = self.pool.begin().await?;
+        let now = Utc::now();
+        sqlx::query("INSERT INTO platform_admins (user_id, firebase_uid, granted_at, granted_by) VALUES (?, ?, ?, 'bootstrap:AXON_ADMIN_UIDS') ON CONFLICT(user_id) DO NOTHING")
+            .bind(user_id.to_string())
+            .bind(firebase_uid)
+            .bind(now.to_rfc3339())
+            .execute(&mut *tx).await?;
+        let event = AuditEvent::attributed(
+            "system:admin_allowlist_bootstrap", None, "platform_admin.granted",
+            "platform_admin", user_id.to_string(),
+            serde_json::json!({"firebase_uid": firebase_uid, "source": "AXON_ADMIN_UIDS"}),
+        );
+        sqlx::query("INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)")
+            .bind(event.event_id.to_string()).bind(event.actor).bind(event.event_type)
+            .bind(event.entity_type).bind(event.entity_id).bind(event.occurred_at.to_rfc3339())
+            .bind(serde_json::to_string(&event.metadata)?)
+            .execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn is_platform_admin(&self, user_id: Uuid) -> Result<bool, StorageError> {
+        let exists: Option<i64> = sqlx::query_scalar("SELECT 1 FROM platform_admins WHERE user_id = ?")
+            .bind(user_id.to_string()).fetch_optional(&self.pool).await?;
+        Ok(exists.is_some())
     }
 }
 
