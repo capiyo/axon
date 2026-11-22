@@ -161,7 +161,11 @@ pub enum SupervisorError {
 
 
 impl SupervisorRun {
-    pub fn new(workspace_id: Uuid, title: String, objective: String) -> Result<Self, SupervisorError> {
+    pub fn new(
+        workspace_id: Uuid,
+        title: String,
+        objective: String,
+    ) -> Result<Self, SupervisorError> {
         let title = title.trim();
         let objective = objective.trim();
         if title.is_empty() || objective.is_empty() {
@@ -169,60 +173,104 @@ impl SupervisorRun {
         }
         let now = Utc::now();
         Ok(Self {
-            id: Uuid::new_v4(), workspace_id, title: title.to_owned(), objective: objective.to_owned(),
-            status: SupervisorRunStatus::CollectingChecklists, version: 0, repair_rounds_used: 0,
-            checklist_proposals: Vec::new(), merged_checklist: Vec::new(), worker_results: Vec::new(),
-            deterministic_checks: Vec::new(), reviews: Vec::new(), decision: None,
-            created_at: now, updated_at: now,
+            id: Uuid::new_v4(),
+            workspace_id,
+            title: title.to_owned(),
+            objective: objective.to_owned(),
+            status: SupervisorRunStatus::CollectingChecklists,
+            version: 0,
+            repair_rounds_used: 0,
+            checklist_proposals: Vec::new(),
+            merged_checklist: Vec::new(),
+            worker_results: Vec::new(),
+            deterministic_checks: Vec::new(),
+            reviews: Vec::new(),
+            decision: None,
+            created_at: now,
+            updated_at: now,
         })
     }
 
-    pub fn submit_checklist(&mut self, proposal: ChecklistProposal) -> Result<(), SupervisorError> {
+    pub fn submit_checklist(
+        &mut self,
+        proposal: ChecklistProposal,
+    ) -> Result<(), SupervisorError> {
         if self.status != SupervisorRunStatus::CollectingChecklists {
             return Err(SupervisorError::InvalidRunState);
         }
-        if self.checklist_proposals.iter().any(|item| item.writer_id == proposal.writer_id) {
+        if proposal.writer_id.trim().is_empty()
+            || self
+                .checklist_proposals
+                .iter()
+                .any(|item| item.writer_id.trim() == proposal.writer_id.trim())
+        {
             return Err(SupervisorError::DuplicateSubmission);
         }
-        if self.checklist_proposals.len() >= 2 {
-            return Err(SupervisorError::InvalidWriters);
-        }
-        self.checklist_proposals.push(proposal);
-        if self.checklist_proposals.len() == 2 {
-            self.merged_checklist = merge_checklists(&self.checklist_proposals[0], &self.checklist_proposals[1])?;
+        index_proposal(&proposal)?;
+        let mut proposals = self.checklist_proposals.clone();
+        proposals.push(proposal);
+        let merged = if proposals.len() == 2 {
+            Some(merge_checklists(&proposals[0], &proposals[1])?)
+        } else {
+            None
+        };
+        self.checklist_proposals = proposals;
+        if let Some(merged) = merged {
+            self.merged_checklist = merged;
             self.status = SupervisorRunStatus::ReadyForWorkers;
         }
         self.touch();
         Ok(())
     }
 
-    pub fn submit_worker_result(&mut self, result: WorkerResult) -> Result<(), SupervisorError> {
-        if !matches!(self.status, SupervisorRunStatus::ReadyForWorkers | SupervisorRunStatus::WorkersRunning) {
+    pub fn submit_worker_result(
+        &mut self,
+        result: WorkerResult,
+    ) -> Result<(), SupervisorError> {
+        if !matches!(
+            self.status,
+            SupervisorRunStatus::ReadyForWorkers | SupervisorRunStatus::WorkersRunning
+        ) {
             return Err(SupervisorError::InvalidRunState);
         }
-        if self.worker_results.iter().any(|item| item.worker_id == result.worker_id) {
+        if result.worker_id.trim().is_empty()
+            || self
+                .worker_results
+                .iter()
+                .any(|item| item.worker_id.trim() == result.worker_id.trim())
+        {
             return Err(SupervisorError::DuplicateSubmission);
         }
-        if self.worker_results.len() >= REQUIRED_WORKER_COUNT {
+        let mut results = self.worker_results.clone();
+        results.push(result);
+        if results.len() > REQUIRED_WORKER_COUNT {
             return Err(SupervisorError::InvalidWorkerCount);
         }
-        self.worker_results.push(result);
-        if self.worker_results.len() == 1 {
-            self.status = SupervisorRunStatus::WorkersRunning;
-        } else {
-            validate_worker_results(&self.worker_results)?;
-            self.status = SupervisorRunStatus::AwaitingChecks;
+        if results.len() == REQUIRED_WORKER_COUNT {
+            validate_worker_results(&results)?;
         }
+        self.worker_results = results;
+        self.status = if self.worker_results.len() == REQUIRED_WORKER_COUNT {
+            SupervisorRunStatus::AwaitingChecks
+        } else {
+            SupervisorRunStatus::WorkersRunning
+        };
         self.touch();
         Ok(())
     }
 
-    pub fn record_checks(&mut self, checks: Vec<DeterministicCheck>) -> Result<(), SupervisorError> {
+    pub fn record_checks(
+        &mut self,
+        checks: Vec<DeterministicCheck>,
+    ) -> Result<(), SupervisorError> {
         if self.status != SupervisorRunStatus::AwaitingChecks || checks.is_empty() {
             return Err(SupervisorError::InvalidRunState);
         }
         let mut check_ids = BTreeSet::new();
-        if checks.iter().any(|check| check.id.trim().is_empty() || !check_ids.insert(&check.id)) {
+        if checks
+            .iter()
+            .any(|check| check.id.trim().is_empty() || !check_ids.insert(&check.id))
+        {
             return Err(SupervisorError::InvalidCheckSet);
         }
         self.deterministic_checks = checks;
@@ -231,22 +279,49 @@ impl SupervisorRun {
         Ok(())
     }
 
-    pub fn submit_review(&mut self, review: SupervisorReview) -> Result<Option<SupervisionDecision>, SupervisorError> {
+    pub fn submit_review(
+        &mut self,
+        review: SupervisorReview,
+    ) -> Result<Option<SupervisionDecision>, SupervisorError> {
         if self.status != SupervisorRunStatus::AwaitingReviews {
             return Err(SupervisorError::InvalidRunState);
         }
-        if self.reviews.iter().any(|item| item.supervisor_id == review.supervisor_id) {
+        if review.supervisor_id.trim().is_empty()
+            || self
+                .reviews
+                .iter()
+                .any(|item| item.supervisor_id.trim() == review.supervisor_id.trim())
+        {
             return Err(SupervisorError::DuplicateSubmission);
         }
-        if self.reviews.len() >= REQUIRED_SUPERVISOR_COUNT {
-            return Err(SupervisorError::InvalidSupervisorCount);
+        if review.evidence.is_empty()
+            || review.evidence.iter().any(|evidence| {
+                evidence.source.trim().is_empty()
+                    || evidence.observation.trim().is_empty()
+                    || !self
+                        .deterministic_checks
+                        .iter()
+                        .any(|check| check.id == evidence.check_id)
+            })
+        {
+            return Err(SupervisorError::MissingEvidence {
+                supervisor_id: review.supervisor_id,
+            });
         }
-        self.reviews.push(review);
-        if self.reviews.len() < REQUIRED_SUPERVISOR_COUNT {
+
+        let mut reviews = self.reviews.clone();
+        reviews.push(review);
+        if reviews.len() < REQUIRED_SUPERVISOR_COUNT {
+            self.reviews = reviews;
             self.touch();
             return Ok(None);
         }
-        let decision = evaluate_supervision(&self.deterministic_checks, &self.reviews, self.repair_rounds_used)?;
+        let decision = evaluate_supervision(
+            &self.deterministic_checks,
+            &reviews,
+            self.repair_rounds_used,
+        )?;
+        self.reviews = reviews;
         self.status = match decision.outcome {
             SupervisionOutcome::Accepted => SupervisorRunStatus::Accepted,
             SupervisionOutcome::RepairRequired => SupervisorRunStatus::RepairRequired,
@@ -258,7 +333,9 @@ impl SupervisorRun {
     }
 
     pub fn start_repair(&mut self) -> Result<(), SupervisorError> {
-        if self.status != SupervisorRunStatus::RepairRequired || self.repair_rounds_used >= MAX_REPAIR_ROUNDS {
+        if self.status != SupervisorRunStatus::RepairRequired
+            || self.repair_rounds_used >= MAX_REPAIR_ROUNDS
+        {
             return Err(SupervisorError::RepairNotAvailable);
         }
         self.repair_rounds_used += 1;
