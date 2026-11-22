@@ -2,8 +2,8 @@ use crate::{
     audit::{AuditEvent, AuditStore},
     chat_memory::ChatMemoryStore,
     firebase_auth::FirebaseVerifier,
-    model_registry::{DeterministicModelAssigner, ModelAssigner},
     model::{Agent, Artifact, Task, Workspace},
+    model_registry::{DeterministicModelAssigner, ModelAssigner},
     robotics::TelemetryEvent,
     storage::{EntityKind, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
     supervisor::SupervisorRun,
@@ -186,16 +186,30 @@ impl AppState {
         }
     }
 
-    pub async fn daily_model_spend(&self, user_id: Uuid, usage_date: &str) -> Result<u64, StorageError> {
+    pub async fn daily_model_spend(
+        &self,
+        user_id: Uuid,
+        usage_date: &str,
+    ) -> Result<u64, StorageError> {
         match &self.storage {
             Some(storage) => storage.daily_model_spend(user_id, usage_date).await,
             None => Ok(0),
         }
     }
 
-    pub async fn reserve_model_spend(&self, user_id: Uuid, usage_date: &str, amount_micros: u64, daily_limit_micros: u64) -> Result<bool, StorageError> {
+    pub async fn reserve_model_spend(
+        &self,
+        user_id: Uuid,
+        usage_date: &str,
+        amount_micros: u64,
+        daily_limit_micros: u64,
+    ) -> Result<bool, StorageError> {
         match &self.storage {
-            Some(storage) => storage.reserve_model_spend(user_id, usage_date, amount_micros, daily_limit_micros).await,
+            Some(storage) => {
+                storage
+                    .reserve_model_spend(user_id, usage_date, amount_micros, daily_limit_micros)
+                    .await
+            }
             None => Ok(false),
         }
     }
@@ -227,7 +241,9 @@ impl AppState {
     }
 
     pub fn assignment_engine(&self) -> Arc<dyn ModelAssigner> {
-        self.assignment_engine.clone().unwrap_or_else(|| Arc::new(DeterministicModelAssigner))
+        self.assignment_engine
+            .clone()
+            .unwrap_or_else(|| Arc::new(DeterministicModelAssigner))
     }
 
     pub fn with_platform_admin_uids(mut self, firebase_uids: Vec<String>) -> Self {
@@ -235,7 +251,11 @@ impl AppState {
         self
     }
 
-    pub async fn bootstrap_platform_admin(&self, user_id: Uuid, firebase_uid: &str) -> Result<bool, StorageError> {
+    pub async fn bootstrap_platform_admin(
+        &self,
+        user_id: Uuid,
+        firebase_uid: &str,
+    ) -> Result<bool, StorageError> {
         if !self.platform_admin_uids.contains(firebase_uid) {
             return Ok(false);
         }
