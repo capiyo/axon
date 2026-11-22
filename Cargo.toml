@@ -15,7 +15,7 @@ serde_json = "1"
 async-trait = "0.1"
 thiserror = "2"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid", "migrate", "macros"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
 tower = "0.5"
 tower-http = { version = "0.5", features = ["trace", "cors", "limit"] }
 tracing = "0.1"
