@@ -33,7 +33,7 @@ class ImportedConversation:
     capture_method: str = "manual_import"
 
     def __post_init__(self) -> None:
-        if self.provider != "claude":
+        if self.provider not in {"claude", "chatgpt"}:
             raise ValueError("This importer currently accepts Claude conversations only.")
         if not self.conversation_id.strip():
             raise ValueError("Conversation ID is required.")
