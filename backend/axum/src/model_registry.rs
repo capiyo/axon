@@ -716,17 +716,17 @@ pub fn update_model_stat(
         runs,
         completion_rate: blend(
             previous.as_ref().map_or(0.0, |stat| stat.completion_rate),
-            completed,
+            observation.completed,
         ),
         supervisor_pass_rate: blend(
             previous
                 .as_ref()
                 .map_or(0.0, |stat| stat.supervisor_pass_rate),
-            supervisor_passed,
+            observation.supervisor_passed,
         ),
         user_retry_rate: blend(
             previous.as_ref().map_or(0.0, |stat| stat.user_retry_rate),
-            user_retried,
+            observation.user_retried,
         ),
         cost_per_run_micros: previous.as_ref().map_or(observation.cost_per_run_micros, |stat| {
             ((u128::from(stat.cost_per_run_micros) * u128::from(previous_runs)
