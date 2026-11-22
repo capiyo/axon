@@ -145,7 +145,7 @@ pub async fn list_runs(
         .filter(|run| run.workspace_id == workspace_id)
         .cloned()
         .collect();
-    runs.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
+    runs.sort_by_key(|run| std::cmp::Reverse(run.updated_at));
     Ok(Json(runs))
 }
 
