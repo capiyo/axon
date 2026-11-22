@@ -259,9 +259,11 @@ impl Storage for SqliteStorage {
 
             match &entity {
                 StoredEntity::Provider(item) => {
-                    sqlx::query("INSERT INTO model_providers (id, name, base_url, status, data_terms_json, terms_reviewed_at, reviewed_by, payload_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, base_url=excluded.base_url, status=excluded.status, data_terms_json=excluded.data_terms_json, terms_reviewed_at=excluded.terms_reviewed_at, reviewed_by=excluded.reviewed_by, payload_json=excluded.payload_json, updated_at=excluded.updated_at")
-                        .bind(item.id.to_string()).bind(&item.name).bind(&item.base_url).bind(&item.status)
-                        .bind(serde_json::to_string(&item.data_terms)?)
+                    sqlx::query("INSERT INTO model_providers (id, name, base_url, model_discovery_url, pricing_source_url, api_key_env, discovery_enabled, rate_limit_per_minute, status, data_terms_json, terms_reviewed_at, reviewed_by, payload_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, base_url=excluded.base_url, model_discovery_url=excluded.model_discovery_url, pricing_source_url=excluded.pricing_source_url, api_key_env=excluded.api_key_env, discovery_enabled=excluded.discovery_enabled, rate_limit_per_minute=excluded.rate_limit_per_minute, status=excluded.status, data_terms_json=excluded.data_terms_json, terms_reviewed_at=excluded.terms_reviewed_at, reviewed_by=excluded.reviewed_by, payload_json=excluded.payload_json, updated_at=excluded.updated_at")
+                        .bind(item.id.to_string()).bind(&item.name).bind(&item.base_url)
+                        .bind(&item.model_discovery_url).bind(&item.pricing_source_url).bind(&item.api_key_env)
+                        .bind(item.discovery_enabled).bind(i64::from(item.rate_limit_per_minute))
+                        .bind(&item.status).bind(serde_json::to_string(&item.data_terms)?)
                         .bind(item.terms_reviewed_at.map(|value| value.to_rfc3339()))
                         .bind(item.reviewed_by.map(|value| value.to_string()))
                         .bind(payload).bind(item.updated_at.to_rfc3339())
