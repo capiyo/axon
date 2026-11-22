@@ -24,7 +24,10 @@ mod tests {
     fn request(method: &str, path: &str, uid: Option<&str>, body: &str) -> Request<Body> {
         let mut builder = Request::builder().method(method).uri(path);
         if let Some(uid) = uid {
-            builder = builder.header(AUTHORIZATION, format!("Bearer {}", FirebaseVerifier::test_token(uid, false)));
+            builder = builder.header(
+                AUTHORIZATION,
+                format!("Bearer {}", FirebaseVerifier::test_token(uid, false)),
+            );
         }
         builder = builder.header(CONTENT_TYPE, "application/json");
         builder.body(Body::from(body.to_owned())).unwrap()
@@ -87,13 +90,37 @@ mod tests {
     async fn every_admin_endpoint_rejects_missing_and_expired_authentication() {
         let app = app().await;
         for (method, path, body) in admin_routes() {
-            let missing = app.clone().oneshot(request(method, &path, None, body)).await.unwrap();
-            assert_eq!(missing.status(), StatusCode::UNAUTHORIZED, "missing: {method} {path}");
-            let expired = app.clone().oneshot(Request::builder().method(method).uri(&path)
-                .header(AUTHORIZATION, format!("Bearer {}", FirebaseVerifier::test_token("platform-admin", true)))
-                .header(CONTENT_TYPE, "application/json").body(Body::from(body.to_owned())).unwrap())
-                .await.unwrap();
-            assert_eq!(expired.status(), StatusCode::UNAUTHORIZED, "expired: {method} {path}");
+            let missing = app
+                .clone()
+                .oneshot(request(method, &path, None, body))
+                .await
+                .unwrap();
+            assert_eq!(
+                missing.status(),
+                StatusCode::UNAUTHORIZED,
+                "missing: {method} {path}"
+            );
+            let expired = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(&path)
+                        .header(
+                            AUTHORIZATION,
+                            format!("Bearer {}", FirebaseVerifier::test_token("platform-admin", true)),
+                        )
+                        .header(CONTENT_TYPE, "application/json")
+                        .body(Body::from(body.to_owned()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                expired.status(),
+                StatusCode::UNAUTHORIZED,
+                "expired: {method} {path}"
+            );
         }
     }
 
