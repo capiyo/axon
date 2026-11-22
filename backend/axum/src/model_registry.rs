@@ -287,7 +287,10 @@ pub fn assign_models(
     loop {
         let (writers, workers, supervisors) = level_counts(&level);
         let mut decisions = Vec::new();
-        let mut used_models = Vec::new();
+        let mut writer_models = Vec::new();
+        let mut worker_models = Vec::new();
+        let mut supervisor_models = Vec::new();
+        let mut writer_providers = BTreeSet::new();
         let mut worker_providers = BTreeSet::new();
         let mut supervisor_providers = BTreeSet::new();
         let mut estimated_total = 0u64;
@@ -302,15 +305,16 @@ pub fn assign_models(
             if pool.is_empty() { failure = Some(AssignmentError::NoEligibleModels); break; }
             for slot in 0..count {
                 let chosen = if role == AssignmentRole::Worker {
-                    pool.iter().find(|candidate| !used_models.contains(&candidate.model.id)
+                    pool.iter().find(|candidate| !worker_models.contains(&candidate.model.id)
                         && !worker_providers.contains(&candidate.provider.id))
                 } else if role == AssignmentRole::Supervisor {
-                    pool.iter().find(|candidate| !used_models.contains(&candidate.model.id)
+                    pool.iter().find(|candidate| !supervisor_models.contains(&candidate.model.id)
                         && !worker_providers.contains(&candidate.provider.id)
                         && !supervisor_providers.contains(&candidate.provider.id))
                 } else {
-                    pool.iter().find(|candidate| !used_models.contains(&candidate.model.id))
-                        .or_else(|| pool.iter().find(|candidate| !used_models.contains(&candidate.model.id)))
+                    pool.iter().find(|candidate| !writer_models.contains(&candidate.model.id)
+                        && !writer_providers.contains(&candidate.provider.id))
+                        .or_else(|| pool.iter().find(|candidate| !writer_models.contains(&candidate.model.id)))
                 };
                 let Some(chosen) = chosen else {
                     if role == AssignmentRole::ChecklistWriter { diversity_degraded = true; continue; }
@@ -325,11 +329,19 @@ pub fn assign_models(
                     break;
                 }
                 let considered = pool.iter().map(|candidate| candidate.model.id).collect();
-                used_models.push(chosen.model.id);
                 match role {
-                    AssignmentRole::Worker => { worker_providers.insert(chosen.provider.id); }
-                    AssignmentRole::Supervisor => { supervisor_providers.insert(chosen.provider.id); }
-                    AssignmentRole::ChecklistWriter => {}
+                    AssignmentRole::ChecklistWriter => {
+                        writer_models.push(chosen.model.id);
+                        writer_providers.insert(chosen.provider.id);
+                    }
+                    AssignmentRole::Worker => {
+                        worker_models.push(chosen.model.id);
+                        worker_providers.insert(chosen.provider.id);
+                    }
+                    AssignmentRole::Supervisor => {
+                        supervisor_models.push(chosen.model.id);
+                        supervisor_providers.insert(chosen.provider.id);
+                    }
                 }
                 estimated_total = estimated_total.saturating_add(cost);
                 decisions.push(AssignmentDecision {
@@ -355,7 +367,7 @@ pub fn assign_models(
             let mut exploration_used = false;
             if level == TaskLevel::Quick && profile.low_risk {
                 let pool = candidates(profile, providers, models, stats, &level, &AssignmentRole::Worker);
-                if let Some(exploration) = exploration_candidate(&pool, &used_models, profile, &level) {
+                if let Some(exploration) = exploration_candidate(&pool, &worker_models, profile, &level) {
                     if let Some(decision) = decisions.iter_mut().find(|decision| decision.role == AssignmentRole::Worker) {
                         let revised_total = estimated_total
                             .saturating_sub(decision.estimated_cost_micros)
