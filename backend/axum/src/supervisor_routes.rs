@@ -1,7 +1,8 @@
 use crate::auth_middleware::AuthenticatedUser;
 use crate::{
     audit::AuditEvent,
-    storage::StoredEntity,
+    model_registry::{assign_models, AssignmentProfile, ModelProvider, ModelRecord, ModelStat, PrivacyRequirement, TaskLevel},
+    storage::{EntityKind, StoredEntity},
     supervisor::{
         ChecklistProposal, DeterministicCheck, SupervisorError, SupervisorReview, SupervisorRun,
         SupervisorRunStatus, WorkerResult,
@@ -29,6 +30,42 @@ pub struct ApiError {
 pub struct CreateSupervisorRun {
     pub title: String,
     pub objective: String,
+    #[serde(default = "default_category")]
+    pub category: String,
+    #[serde(default = "default_level")]
+    pub level: TaskLevel,
+    #[serde(default)]
+    pub required_abilities: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    pub required_context_tokens: u64,
+    #[serde(default)]
+    pub privacy: Option<PrivacyRequirement>,
+}
+fn default_category() -> String { "general".into() }
+fn default_level() -> TaskLevel { TaskLevel::Normal }
+
+async fn persist_created_run(
+    state: &AppState,
+    user: &AuthenticatedUser,
+    run: SupervisorRun,
+) -> ApiResult<SupervisorRun> {
+    let related_entities = run.assignment_decisions.iter().cloned()
+        .map(StoredEntity::AssignmentDecision).collect();
+    state.persist_entity(
+        StoredEntity::SupervisorRun(run.clone()),
+        related_entities,
+        AuditEvent::attributed(
+            format!("human:{}", user.user_id), Some(run.workspace_id),
+            "supervisor_run.created", "supervisor_run", run.id.to_string(),
+            json!({
+                "status": run.status, "assignment_level": run.assignment_level,
+                "assignment_decisions": run.assignment_decisions.len(),
+                "assignment_notice": run.assignment_notice
+            }),
+        ),
+    ).await.map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Supervisor run could not be persisted."))?;
+    state.supervisor_runs.write().await.insert(run.id, run.clone());
+    Ok(run)
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,9 +161,53 @@ pub async fn create_run(
     if !state.workspaces.read().await.contains_key(&workspace_id) {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
-    let run =
+    let mut run =
         SupervisorRun::new(workspace_id, input.title, input.objective).map_err(supervisor_error)?;
-    let run = persist_run(&state, &user, run, "supervisor_run.created").await?;
+
+    let providers: Vec<ModelProvider> = state.list_entities(EntityKind::Provider, None).await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Model providers could not be loaded."))?
+        .into_iter().filter_map(|entity| if let StoredEntity::Provider(item) = entity { Some(item) } else { None }).collect();
+    let models: Vec<ModelRecord> = state.list_entities(EntityKind::Model, None).await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Model registry could not be loaded."))?
+        .into_iter().filter_map(|entity| if let StoredEntity::Model(item) = entity { Some(item) } else { None }).collect();
+    let stats: Vec<ModelStat> = state.list_entities(EntityKind::ModelStat, None).await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Model statistics could not be loaded."))?
+        .into_iter().filter_map(|entity| if let StoredEntity::ModelStat(item) = entity { Some(item) } else { None }).collect();
+
+    let mut required_abilities = input.required_abilities;
+    if required_abilities.is_empty() { required_abilities.insert("text".into()); }
+    let objective_tokens = (run.objective.len() as u64 / 4).max(1);
+    let privacy = input.privacy.unwrap_or(PrivacyRequirement {
+        forbid_training: true, forbid_retention: true, allowed_regions: Default::default(),
+    });
+    let profile = AssignmentProfile {
+        run_id: run.id,
+        category: if input.category.trim().is_empty() { "general".into() } else { input.category.trim().to_ascii_lowercase() },
+        level: input.level,
+        low_risk: false,
+        required_abilities,
+        required_context_tokens: input.required_context_tokens.max(objective_tokens + 4096),
+        privacy,
+        estimated_input_tokens: objective_tokens + 4096,
+        estimated_output_tokens: 2048,
+        per_task_budget_micros: std::env::var("AXON_TASK_BUDGET_MICROS").ok().and_then(|v| v.parse().ok()).unwrap_or(2_000_000),
+        daily_budget_remaining_micros: std::env::var("AXON_DAILY_BUDGET_MICROS").ok().and_then(|v| v.parse().ok()).unwrap_or(10_000_000),
+        exploration_percent: std::env::var("AXON_EXPLORATION_PERCENT").ok().and_then(|v| v.parse().ok()).unwrap_or(5),
+        minimum_history_runs: std::env::var("AXON_MIN_MODEL_HISTORY_RUNS").ok().and_then(|v| v.parse().ok()).unwrap_or(10),
+        curated_model_ids: Vec::new(),
+    };
+    match assign_models(&profile, &providers, &models, &stats) {
+        Ok(plan) => {
+            run.assignment_level = Some(plan.level);
+            run.assignment_notice = if plan.notices.is_empty() { None } else { Some(plan.notices.join(" ")) };
+            run.assignment_decisions = plan.decisions;
+        }
+        Err(error) => {
+            run.assignment_level = None;
+            run.assignment_notice = Some(format!("No AI assignment was made: {error}. This run remains available for manual work."));
+        }
+    }
+    let run = persist_created_run(&state, &user, run).await?;
     Ok((StatusCode::CREATED, Json(run)))
 }
 
