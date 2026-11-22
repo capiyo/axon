@@ -357,17 +357,20 @@ impl SupervisorRun {
             });
         }
 
+        let required_supervisors = required_role_counts(self.assignment_level.as_ref()).2;
+        if required_supervisors == 0 { return Err(SupervisorError::InvalidRunState); }
         let mut reviews = self.reviews.clone();
         reviews.push(review);
-        if reviews.len() < REQUIRED_SUPERVISOR_COUNT {
+        if reviews.len() < required_supervisors {
             self.reviews = reviews;
             self.touch();
             return Ok(None);
         }
-        let decision = evaluate_supervision(
+        let decision = evaluate_supervision_with_count(
             &self.deterministic_checks,
             &reviews,
             self.repair_rounds_used,
+            required_supervisors,
         )?;
         self.reviews = reviews;
         self.status = match decision.outcome {
@@ -542,6 +545,15 @@ pub fn evaluate_supervision(
     reviews: &[SupervisorReview],
     repair_rounds_used: u8,
 ) -> Result<SupervisionDecision, SupervisorError> {
+    evaluate_supervision_with_count(checks, reviews, repair_rounds_used, REQUIRED_SUPERVISOR_COUNT)
+}
+
+fn evaluate_supervision_with_count(
+    checks: &[DeterministicCheck],
+    reviews: &[SupervisorReview],
+    repair_rounds_used: u8,
+    required_supervisors: usize,
+) -> Result<SupervisionDecision, SupervisorError> {
     if repair_rounds_used > MAX_REPAIR_ROUNDS {
         return Err(SupervisorError::InvalidRepairRound);
     }
@@ -553,7 +565,7 @@ pub fn evaluate_supervision(
     {
         return Err(SupervisorError::InvalidCheckSet);
     }
-    if reviews.len() != REQUIRED_SUPERVISOR_COUNT {
+    if reviews.len() != required_supervisors {
         return Err(SupervisorError::InvalidSupervisorCount);
     }
 
