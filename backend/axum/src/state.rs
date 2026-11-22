@@ -186,6 +186,20 @@ impl AppState {
         }
     }
 
+    pub async fn daily_model_spend(&self, user_id: Uuid, usage_date: &str) -> Result<u64, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.daily_model_spend(user_id, usage_date).await,
+            None => Ok(0),
+        }
+    }
+
+    pub async fn reserve_model_spend(&self, user_id: Uuid, usage_date: &str, amount_micros: u64, daily_limit_micros: u64) -> Result<bool, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.reserve_model_spend(user_id, usage_date, amount_micros, daily_limit_micros).await,
+            None => Ok(false),
+        }
+    }
+
     pub async fn list_entities(
         &self,
         kind: EntityKind,
