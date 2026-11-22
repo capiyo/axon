@@ -708,7 +708,7 @@ mod tests {
         let low_sample = ModelStat { runs: 4, ..high.clone() };
         assert_eq!(score_candidate(Some(&low_sample), &TaskLevel::Quick, 5, 2), 998.0);
         assert!(score_candidate(Some(&high), &TaskLevel::Quick, 5, 2) > 998.0);
-        assert_eq!(providers.len(), 4);
+        assert_eq!(providers.len(), 6);
     }
 
     #[test]
