@@ -14,7 +14,6 @@ mod model_registry_routes;
 #[cfg(test)]
 mod model_registry_routes_tests;
 pub mod provider_roles;
-pub mod provider_roles;
 pub mod robotics;
 mod robotics_routes;
 mod routes;
