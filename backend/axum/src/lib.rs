@@ -14,6 +14,7 @@ mod routes;
 mod state;
 pub mod storage;
 pub mod supervisor;
+pub mod supervisor_roles;
 mod supervisor_routes;
 #[cfg(test)]
 mod supervisor_run_tests;
