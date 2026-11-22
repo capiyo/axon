@@ -366,7 +366,7 @@ mod tests {
     #[test]
     fn failed_check_requests_two_repairs_then_fails_closed() {
         let checks = vec![DeterministicCheck {
-            id: "tests".into(),
+            id: "build".into(),
             passed: false,
             evidence_uri: Some("ci://run/456".into()),
         }];
