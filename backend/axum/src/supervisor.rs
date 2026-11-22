@@ -117,7 +117,7 @@ pub struct SupervisorRun {
     pub deterministic_checks: Vec<DeterministicCheck>,
     pub reviews: Vec<SupervisorReview>,
     pub decision: Option<SupervisionDecision>,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub assignment_decisions: Vec<AssignmentDecision>,
     #[serde(default)]
     pub assignment_level: Option<TaskLevel>,
