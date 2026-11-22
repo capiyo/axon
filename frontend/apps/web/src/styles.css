@@ -246,3 +246,13 @@ body {
 .candidate-review button.secondary, .model-admin button.secondary { border: 1px solid #e2e8ee; background: #fff; color: #647381; }
 .candidate-review button:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 700px) { .topbar-actions { flex-direction: column; align-items: flex-end; gap: 8px; }.admin-row { grid-template-columns: 1fr; }.model-admin-header { flex-direction: column; }.model-admin-header h2 { font-size: 23px; } }
+
+.admin-form { margin-top: 16px; padding: 15px; border: 1px solid #edf0f3; border-radius: 12px; display: flex; flex-direction: column; gap: 12px; }
+.admin-form h4 { color: #344656; font: 700 12px Manrope; margin: 0; }
+.admin-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.admin-form-grid label { display: flex; flex-direction: column; gap: 5px; color: #63717e; font-size: 10px; font-weight: 700; }
+.admin-form-grid input, .admin-form-grid select { width: 100%; min-width: 0; border: 1px solid #e8edf1; border-radius: 8px; padding: 9px; font: 11px "DM Sans", sans-serif; color: #344656; }
+.admin-form > button { align-self: flex-start; border: 0; border-radius: 9px; background: #1d6be5; color: #fff; padding: 9px 12px; font-size: 10px; font-weight: 700; cursor: pointer; }
+.admin-form > button.secondary { border: 1px solid #e2e8ee; background: #fff; color: #647381; }
+.admin-form > button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 600px) { .admin-form-grid { grid-template-columns: 1fr; } }
