@@ -219,7 +219,6 @@ fn privacy_allows(provider: &ModelProvider, requirement: &PrivacyRequirement) ->
 }
 
 fn score_candidate(
-    model: &ModelRecord,
     stat: Option<&ModelStat>,
     level: &TaskLevel,
     minimum_history_runs: u64,
@@ -628,8 +627,8 @@ mod tests {
             cost_per_run_micros: 100, latency_ms: 100, last_updated: Utc::now(),
         };
         let low_sample = ModelStat { runs: 4, ..high.clone() };
-        assert_eq!(score_candidate(&models[0], Some(&low_sample), &TaskLevel::Quick, 5, 2), 998.0);
-        assert!(score_candidate(&models[0], Some(&high), &TaskLevel::Quick, 5, 2) > 998.0);
+        assert_eq!(score_candidate(Some(&low_sample), &TaskLevel::Quick, 5, 2), 998.0);
+        assert!(score_candidate(Some(&high), &TaskLevel::Quick, 5, 2) > 998.0);
         assert_eq!(providers.len(), 4);
     }
 
