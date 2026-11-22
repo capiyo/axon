@@ -222,24 +222,39 @@ impl SupervisorRun {
         }
         index_proposal(&proposal)?;
         let required_writers = required_role_counts(self.assignment_level.as_ref()).0;
-        if required_writers == 0 { return Err(SupervisorError::InvalidRunState); }
+        if required_writers == 0 {
+            return Err(SupervisorError::InvalidRunState);
+        }
         let mut proposals = self.checklist_proposals.clone();
         proposals.push(proposal);
-        if proposals.len() > required_writers { return Err(SupervisorError::DuplicateSubmission); }
+        if proposals.len() > required_writers {
+            return Err(SupervisorError::DuplicateSubmission);
+        }
         let merged = if proposals.len() == required_writers {
             if required_writers == 1 {
                 let indexed = index_proposal(&proposals[0])?;
-                Some(indexed.into_iter().map(|(key, item)| MergedChecklistItem {
-                    key,
-                    summary: item.summary,
-                    acceptance_criteria: item.acceptance_criteria,
-                    priority: if item.required { ChecklistPriority::Required } else { ChecklistPriority::Optional },
-                    proposed_by: vec![proposals[0].writer_id.clone()],
-                }).collect())
+                Some(
+                    indexed
+                        .into_iter()
+                        .map(|(key, item)| MergedChecklistItem {
+                            key,
+                            summary: item.summary,
+                            acceptance_criteria: item.acceptance_criteria,
+                            priority: if item.required {
+                                ChecklistPriority::Required
+                            } else {
+                                ChecklistPriority::Optional
+                            },
+                            proposed_by: vec![proposals[0].writer_id.clone()],
+                        })
+                        .collect(),
+                )
             } else {
                 Some(merge_checklists(&proposals[0], &proposals[1])?)
             }
-        } else { None };
+        } else {
+            None
+        };
         self.checklist_proposals = proposals;
         if let Some(merged) = merged {
             self.merged_checklist = merged;
@@ -299,8 +314,12 @@ impl SupervisorRun {
         }
         self.deterministic_checks = checks;
         if required_role_counts(self.assignment_level.as_ref()).2 == 0 {
-            let failed: Vec<_> = self.deterministic_checks.iter().filter(|check| !check.passed)
-                .map(|check| format!("Deterministic check failed: {}", check.id)).collect();
+            let failed: Vec<_> = self
+                .deterministic_checks
+                .iter()
+                .filter(|check| !check.passed)
+                .map(|check| format!("Deterministic check failed: {}", check.id))
+                .collect();
             let outcome = if failed.is_empty() {
                 SupervisionOutcome::Accepted
             } else if self.repair_rounds_used < MAX_REPAIR_ROUNDS {
@@ -318,7 +337,9 @@ impl SupervisorRun {
                 repair_rounds_used: self.repair_rounds_used,
                 reasons: if failed.is_empty() {
                     vec!["Quick task passed all deterministic checks.".into()]
-                } else { failed },
+                } else {
+                    failed
+                },
             });
         } else {
             self.status = SupervisorRunStatus::AwaitingReviews;
@@ -358,7 +379,9 @@ impl SupervisorRun {
         }
 
         let required_supervisors = required_role_counts(self.assignment_level.as_ref()).2;
-        if required_supervisors == 0 { return Err(SupervisorError::InvalidRunState); }
+        if required_supervisors == 0 {
+            return Err(SupervisorError::InvalidRunState);
+        }
         let mut reviews = self.reviews.clone();
         reviews.push(review);
         if reviews.len() < required_supervisors {
@@ -545,7 +568,12 @@ pub fn evaluate_supervision(
     reviews: &[SupervisorReview],
     repair_rounds_used: u8,
 ) -> Result<SupervisionDecision, SupervisorError> {
-    evaluate_supervision_with_count(checks, reviews, repair_rounds_used, REQUIRED_SUPERVISOR_COUNT)
+    evaluate_supervision_with_count(
+        checks,
+        reviews,
+        repair_rounds_used,
+        REQUIRED_SUPERVISOR_COUNT,
+    )
 }
 
 fn evaluate_supervision_with_count(
@@ -656,12 +684,19 @@ mod tests {
 
     #[test]
     fn normal_run_serialization_never_exposes_model_assignment_details() {
-        let mut run = SupervisorRun::new(Uuid::new_v4(), "Task".into(), "Objective".into()).unwrap();
+        let mut run =
+            SupervisorRun::new(Uuid::new_v4(), "Task".into(), "Objective".into()).unwrap();
         run.assignment_decisions.push(AssignmentDecision {
-            id: Uuid::new_v4(), run_id: run.id, role: crate::model_registry::AssignmentRole::Worker,
-            slot: 0, candidates_considered: vec![Uuid::new_v4()], filters_applied: vec!["approved_only".into()],
-            chosen_model_id: Uuid::new_v4(), reason: "internal model choice".into(),
-            estimated_cost_micros: 100, created_at: Utc::now(),
+            id: Uuid::new_v4(),
+            run_id: run.id,
+            role: crate::model_registry::AssignmentRole::Worker,
+            slot: 0,
+            candidates_considered: vec![Uuid::new_v4()],
+            filters_applied: vec!["approved_only".into()],
+            chosen_model_id: Uuid::new_v4(),
+            reason: "internal model choice".into(),
+            estimated_cost_micros: 100,
+            created_at: Utc::now(),
         });
         let value = serde_json::to_value(run).unwrap();
         assert!(value.get("assignment_decisions").is_none());
@@ -670,37 +705,77 @@ mod tests {
 
     #[test]
     fn normal_level_uses_one_writer_one_worker_and_one_supervisor() {
-        let mut run = SupervisorRun::new(Uuid::new_v4(), "Normal".into(), "Complete task".into()).unwrap();
+        let mut run =
+            SupervisorRun::new(Uuid::new_v4(), "Normal".into(), "Complete task".into()).unwrap();
         run.assignment_level = Some(TaskLevel::Normal);
-        run.submit_checklist(ChecklistProposal { writer_id: "writer-a".into(), items: vec![item("build", true)] }).unwrap();
+        run.submit_checklist(ChecklistProposal {
+            writer_id: "writer-a".into(),
+            items: vec![item("build", true)],
+        })
+        .unwrap();
         assert_eq!(run.status, SupervisorRunStatus::ReadyForWorkers);
         assert_eq!(run.merged_checklist.len(), 1);
-        run.submit_worker_result(WorkerResult { worker_id: "worker-a".into(), summary: "Done".into(), artifact_ids: vec!["artifact-1".into()] }).unwrap();
+        run.submit_worker_result(WorkerResult {
+            worker_id: "worker-a".into(),
+            summary: "Done".into(),
+            artifact_ids: vec!["artifact-1".into()],
+        })
+        .unwrap();
         assert_eq!(run.status, SupervisorRunStatus::AwaitingChecks);
-        run.record_checks(vec![DeterministicCheck { id: "build".into(), passed: true, evidence_uri: Some("ci://build".into()) }]).unwrap();
+        run.record_checks(vec![DeterministicCheck {
+            id: "build".into(),
+            passed: true,
+            evidence_uri: Some("ci://build".into()),
+        }])
+        .unwrap();
         assert_eq!(run.status, SupervisorRunStatus::AwaitingReviews);
-        let decision = run.submit_review(review("supervisor-a", SupervisorVerdict::Approve)).unwrap().unwrap();
+        let decision = run
+            .submit_review(review("supervisor-a", SupervisorVerdict::Approve))
+            .unwrap()
+            .unwrap();
         assert_eq!(decision.outcome, SupervisionOutcome::Accepted);
     }
 
     #[test]
     fn quick_level_skips_checklist_and_supervisor_but_requires_deterministic_checks() {
-        let mut run = SupervisorRun::new(Uuid::new_v4(), "Quick".into(), "Simple task".into()).unwrap();
+        let mut run =
+            SupervisorRun::new(Uuid::new_v4(), "Quick".into(), "Simple task".into()).unwrap();
         run.assignment_level = Some(TaskLevel::Quick);
         run.status = SupervisorRunStatus::ReadyForWorkers;
-        run.submit_worker_result(WorkerResult { worker_id: "worker-a".into(), summary: "Done".into(), artifact_ids: vec!["artifact-1".into()] }).unwrap();
-        run.record_checks(vec![DeterministicCheck { id: "format".into(), passed: true, evidence_uri: Some("check://format".into()) }]).unwrap();
+        run.submit_worker_result(WorkerResult {
+            worker_id: "worker-a".into(),
+            summary: "Done".into(),
+            artifact_ids: vec!["artifact-1".into()],
+        })
+        .unwrap();
+        run.record_checks(vec![DeterministicCheck {
+            id: "format".into(),
+            passed: true,
+            evidence_uri: Some("check://format".into()),
+        }])
+        .unwrap();
         assert_eq!(run.status, SupervisorRunStatus::Accepted);
         assert_eq!(run.decision.unwrap().outcome, SupervisionOutcome::Accepted);
     }
 
     #[test]
     fn quick_level_requests_repair_when_a_deterministic_check_fails() {
-        let mut run = SupervisorRun::new(Uuid::new_v4(), "Quick".into(), "Simple task".into()).unwrap();
+        let mut run =
+            SupervisorRun::new(Uuid::new_v4(), "Quick".into(), "Simple task".into()).unwrap();
         run.assignment_level = Some(TaskLevel::Quick);
         run.status = SupervisorRunStatus::ReadyForWorkers;
-        run.submit_worker_result(WorkerResult { worker_id: "worker-a".into(), summary: "Done".into(), artifact_ids: vec!["artifact-1".into()] }).unwrap();
-        run.record_checks(vec![DeterministicCheck { id: "format".into(), passed: false, evidence_uri: None }]).unwrap();
+        run.submit_worker_result(WorkerResult {
+            worker_id: "worker-a".into(),
+            summary: "Done".into(),
+            artifact_ids: vec!["artifact-1".into()],
+        })
+        .unwrap();
+        run.record_checks(vec![DeterministicCheck {
+            id: "format".into(),
+            passed: false,
+            evidence_uri: None,
+        }])
+        .unwrap();
         assert_eq!(run.status, SupervisorRunStatus::RepairRequired);
     }
 
