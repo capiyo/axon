@@ -613,7 +613,7 @@ pub async fn record_evaluation(
     if !evaluation.score.is_finite() || !(0.0..=1.0).contains(&evaluation.score)
         || evaluation.test_set_version.trim().is_empty() || !score_drop_threshold.is_finite()
         || !(0.0..=1.0).contains(&score_drop_threshold) {
-        return Err(StorageError::InvalidStoredEntityKind);
+        return Err(StorageError::InvalidModelEvaluation);
     }
     let previous: Vec<ModelEvaluation> = storage.list_entities(EntityKind::ModelEvaluation, None).await?
         .into_iter().filter_map(|entity| if let StoredEntity::ModelEvaluation(item) = entity { Some(item) } else { None })
