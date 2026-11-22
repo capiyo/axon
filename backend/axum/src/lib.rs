@@ -12,6 +12,7 @@ mod robotics_routes;
 mod routes;
 mod state;
 pub mod storage;
+pub mod supervisor;
 mod task_routes;
 
 pub use state::AppState;
