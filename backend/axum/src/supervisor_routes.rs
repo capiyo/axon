@@ -3,8 +3,8 @@ use crate::{
     audit::AuditEvent,
     storage::StoredEntity,
     supervisor::{
-        ChecklistProposal, DeterministicCheck, SupervisorReview, SupervisorRun, SupervisorRunStatus,
-        SupervisorError, WorkerResult,
+        ChecklistProposal, DeterministicCheck, SupervisorError, SupervisorReview, SupervisorRun,
+        SupervisorRunStatus, WorkerResult,
     },
     AppState,
 };
@@ -37,7 +37,12 @@ pub struct RecordChecks {
 }
 
 fn api_error(status: StatusCode, message: impl Into<String>) -> (StatusCode, Json<ApiError>) {
-    (status, Json(ApiError { error: message.into() }))
+    (
+        status,
+        Json(ApiError {
+            error: message.into(),
+        }),
+    )
 }
 
 fn supervisor_error(error: SupervisorError) -> (StatusCode, Json<ApiError>) {
@@ -74,8 +79,17 @@ async fn persist_run(
             ),
         )
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Supervisor run could not be persisted."))?;
-    state.supervisor_runs.write().await.insert(run.id, run.clone());
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Supervisor run could not be persisted.",
+            )
+        })?;
+    state
+        .supervisor_runs
+        .write()
+        .await
+        .insert(run.id, run.clone());
     Ok(run)
 }
 
@@ -110,8 +124,8 @@ pub async fn create_run(
     if !state.workspaces.read().await.contains_key(&workspace_id) {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
-    let run = SupervisorRun::new(workspace_id, input.title, input.objective)
-        .map_err(supervisor_error)?;
+    let run =
+        SupervisorRun::new(workspace_id, input.title, input.objective).map_err(supervisor_error)?;
     let run = persist_run(&state, &user, run, "supervisor_run.created").await?;
     Ok((StatusCode::CREATED, Json(run)))
 }
@@ -191,7 +205,9 @@ pub async fn record_checks(
     let _guard = state.supervisor_run_lock.lock().await;
     let mut run = find_run(&state, workspace_id, run_id).await?;
     run.record_checks(input.checks).map_err(supervisor_error)?;
-    Ok(Json(persist_run(&state, &user, run, "supervisor_run.checks_recorded").await?))
+    Ok(Json(
+        persist_run(&state, &user, run, "supervisor_run.checks_recorded").await?,
+    ))
 }
 
 pub async fn submit_review(
@@ -205,7 +221,9 @@ pub async fn submit_review(
     let decision = run.submit_review(review).map_err(supervisor_error)?;
     let event = match decision.map(|item| item.outcome) {
         Some(crate::supervisor::SupervisionOutcome::Accepted) => "supervisor_run.accepted",
-        Some(crate::supervisor::SupervisionOutcome::RepairRequired) => "supervisor_run.repair_required",
+        Some(crate::supervisor::SupervisionOutcome::RepairRequired) => {
+            "supervisor_run.repair_required"
+        }
         Some(crate::supervisor::SupervisionOutcome::Failed) => "supervisor_run.failed",
         None => "supervisor_run.review_submitted",
     };
@@ -220,5 +238,7 @@ pub async fn start_repair(
     let _guard = state.supervisor_run_lock.lock().await;
     let mut run = find_run(&state, workspace_id, run_id).await?;
     run.start_repair().map_err(supervisor_error)?;
-    Ok(Json(persist_run(&state, &user, run, "supervisor_run.repair_started").await?))
+    Ok(Json(
+        persist_run(&state, &user, run, "supervisor_run.repair_started").await?,
+    ))
 }
