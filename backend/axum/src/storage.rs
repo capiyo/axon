@@ -1,8 +1,10 @@
 use crate::{
     audit::AuditEvent,
-    model_registry::{AssignmentDecision, ModelChangeFlag, ModelEvaluation, ModelProvider, ModelRecord, ModelStat},
     chat_memory::ChatMemoryStore,
     model::{Agent, Artifact, Task, Workspace},
+    model_registry::{
+        AssignmentDecision, ModelChangeFlag, ModelEvaluation, ModelProvider, ModelRecord, ModelStat,
+    },
     supervisor::SupervisorRun,
 };
 use async_trait::async_trait;
@@ -129,7 +131,12 @@ impl StoredEntity {
             Self::Artifact(record) => Some(record.workspace_id),
             Self::Task(record) => Some(record.workspace_id),
             Self::SupervisorRun(record) => Some(record.workspace_id),
-            Self::Provider(_) | Self::Model(_) | Self::ModelEvaluation(_) | Self::ModelStat(_) | Self::AssignmentDecision(_) | Self::ModelChangeFlag(_) => None,
+            Self::Provider(_)
+            | Self::Model(_)
+            | Self::ModelEvaluation(_)
+            | Self::ModelStat(_)
+            | Self::AssignmentDecision(_)
+            | Self::ModelChangeFlag(_) => None,
         }
     }
 
@@ -199,10 +206,21 @@ pub trait Storage: Send + Sync {
         actor: String,
     ) -> Result<Workspace, StorageError>;
 
-    async fn grant_platform_admin(&self, user_id: Uuid, firebase_uid: &str) -> Result<(), StorageError>;
+    async fn grant_platform_admin(
+        &self,
+        user_id: Uuid,
+        firebase_uid: &str,
+    ) -> Result<(), StorageError>;
     async fn is_platform_admin(&self, user_id: Uuid) -> Result<bool, StorageError>;
-    async fn daily_model_spend(&self, user_id: Uuid, usage_date: &str) -> Result<u64, StorageError>;
-    async fn reserve_model_spend(&self, user_id: Uuid, usage_date: &str, amount_micros: u64, daily_limit_micros: u64) -> Result<bool, StorageError>;
+    async fn daily_model_spend(&self, user_id: Uuid, usage_date: &str)
+        -> Result<u64, StorageError>;
+    async fn reserve_model_spend(
+        &self,
+        user_id: Uuid,
+        usage_date: &str,
+        amount_micros: u64,
+        daily_limit_micros: u64,
+    ) -> Result<bool, StorageError>;
 }
 
 #[derive(Clone)]
@@ -280,7 +298,11 @@ impl Storage for SqliteStorage {
                         .execute(&mut *transaction).await?;
                 }
                 StoredEntity::Model(item) => {
-                    let status = match &item.status { crate::model_registry::RegistryStatus::Candidate => "candidate", crate::model_registry::RegistryStatus::Approved => "approved", crate::model_registry::RegistryStatus::Disabled => "disabled" };
+                    let status = match &item.status {
+                        crate::model_registry::RegistryStatus::Candidate => "candidate",
+                        crate::model_registry::RegistryStatus::Approved => "approved",
+                        crate::model_registry::RegistryStatus::Disabled => "disabled",
+                    };
                     sqlx::query("INSERT INTO models (id, provider_id, model_name, status, categories_json, abilities_json, context_length, input_cost_per_million, output_cost_per_million, version, flagged_for_review, payload_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET provider_id=excluded.provider_id, model_name=excluded.model_name, status=excluded.status, categories_json=excluded.categories_json, abilities_json=excluded.abilities_json, context_length=excluded.context_length, input_cost_per_million=excluded.input_cost_per_million, output_cost_per_million=excluded.output_cost_per_million, version=excluded.version, flagged_for_review=excluded.flagged_for_review, payload_json=excluded.payload_json, updated_at=excluded.updated_at")
                         .bind(item.id.to_string()).bind(item.provider_id.to_string()).bind(&item.model_name).bind(status)
                         .bind(serde_json::to_string(&item.categories)?).bind(serde_json::to_string(&item.abilities)?)
@@ -295,7 +317,13 @@ impl Storage for SqliteStorage {
                         .execute(&mut *transaction).await?;
                 }
                 StoredEntity::ModelStat(item) => {
-                    let role = match &item.role { crate::model_registry::AssignmentRole::ChecklistWriter => "checklist_writer", crate::model_registry::AssignmentRole::Worker => "worker", crate::model_registry::AssignmentRole::Supervisor => "supervisor" };
+                    let role = match &item.role {
+                        crate::model_registry::AssignmentRole::ChecklistWriter => {
+                            "checklist_writer"
+                        }
+                        crate::model_registry::AssignmentRole::Worker => "worker",
+                        crate::model_registry::AssignmentRole::Supervisor => "supervisor",
+                    };
                     sqlx::query("INSERT INTO model_stats (id, model_id, category, role, runs, completion_rate, supervisor_pass_rate, user_retry_rate, cost_per_run_micros, latency_ms, last_updated, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(model_id, category, role) DO UPDATE SET runs=excluded.runs, completion_rate=excluded.completion_rate, supervisor_pass_rate=excluded.supervisor_pass_rate, user_retry_rate=excluded.user_retry_rate, cost_per_run_micros=excluded.cost_per_run_micros, latency_ms=excluded.latency_ms, last_updated=excluded.last_updated, payload_json=excluded.payload_json")
                         .bind(item.id.to_string()).bind(item.model_id.to_string()).bind(&item.category).bind(role)
                         .bind(item.runs as i64).bind(item.completion_rate).bind(item.supervisor_pass_rate).bind(item.user_retry_rate)
@@ -303,7 +331,13 @@ impl Storage for SqliteStorage {
                         .execute(&mut *transaction).await?;
                 }
                 StoredEntity::AssignmentDecision(item) => {
-                    let role = match &item.role { crate::model_registry::AssignmentRole::ChecklistWriter => "checklist_writer", crate::model_registry::AssignmentRole::Worker => "worker", crate::model_registry::AssignmentRole::Supervisor => "supervisor" };
+                    let role = match &item.role {
+                        crate::model_registry::AssignmentRole::ChecklistWriter => {
+                            "checklist_writer"
+                        }
+                        crate::model_registry::AssignmentRole::Worker => "worker",
+                        crate::model_registry::AssignmentRole::Supervisor => "supervisor",
+                    };
                     sqlx::query("INSERT INTO assignment_decisions (id, run_id, role, slot, candidates_json, filters_json, chosen_model_id, reason, estimated_cost_micros, created_at, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(run_id, role, slot) DO UPDATE SET candidates_json=excluded.candidates_json, filters_json=excluded.filters_json, chosen_model_id=excluded.chosen_model_id, reason=excluded.reason, estimated_cost_micros=excluded.estimated_cost_micros, created_at=excluded.created_at, payload_json=excluded.payload_json")
                         .bind(item.id.to_string()).bind(item.run_id.to_string()).bind(role).bind(item.slot as i64)
                         .bind(serde_json::to_string(&item.candidates_considered)?).bind(serde_json::to_string(&item.filters_applied)?)
@@ -581,7 +615,11 @@ impl Storage for SqliteStorage {
         Ok(workspace)
     }
 
-    async fn grant_platform_admin(&self, user_id: Uuid, firebase_uid: &str) -> Result<(), StorageError> {
+    async fn grant_platform_admin(
+        &self,
+        user_id: Uuid,
+        firebase_uid: &str,
+    ) -> Result<(), StorageError> {
         let mut tx = self.pool.begin().await?;
         let now = Utc::now();
         sqlx::query("INSERT INTO platform_admins (user_id, firebase_uid, granted_at, granted_by) VALUES (?, ?, ?, 'bootstrap:AXON_ADMIN_UIDS') ON CONFLICT(user_id) DO NOTHING")
@@ -590,8 +628,11 @@ impl Storage for SqliteStorage {
             .bind(now.to_rfc3339())
             .execute(&mut *tx).await?;
         let event = AuditEvent::attributed(
-            "system:admin_allowlist_bootstrap", None, "platform_admin.granted",
-            "platform_admin", user_id.to_string(),
+            "system:admin_allowlist_bootstrap",
+            None,
+            "platform_admin.granted",
+            "platform_admin",
+            user_id.to_string(),
             serde_json::json!({"firebase_uid": firebase_uid, "source": "AXON_ADMIN_UIDS"}),
         );
         sqlx::query("INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)")
@@ -604,18 +645,36 @@ impl Storage for SqliteStorage {
     }
 
     async fn is_platform_admin(&self, user_id: Uuid) -> Result<bool, StorageError> {
-        let exists: Option<i64> = sqlx::query_scalar("SELECT 1 FROM platform_admins WHERE user_id = ?")
-            .bind(user_id.to_string()).fetch_optional(&self.pool).await?;
+        let exists: Option<i64> =
+            sqlx::query_scalar("SELECT 1 FROM platform_admins WHERE user_id = ?")
+                .bind(user_id.to_string())
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(exists.is_some())
     }
 
-    async fn daily_model_spend(&self, user_id: Uuid, usage_date: &str) -> Result<u64, StorageError> {
-        let spent: Option<i64> = sqlx::query_scalar("SELECT spent_micros FROM model_daily_spend WHERE user_id = ? AND usage_date = ?")
-            .bind(user_id.to_string()).bind(usage_date).fetch_optional(&self.pool).await?;
+    async fn daily_model_spend(
+        &self,
+        user_id: Uuid,
+        usage_date: &str,
+    ) -> Result<u64, StorageError> {
+        let spent: Option<i64> = sqlx::query_scalar(
+            "SELECT spent_micros FROM model_daily_spend WHERE user_id = ? AND usage_date = ?",
+        )
+        .bind(user_id.to_string())
+        .bind(usage_date)
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(spent.unwrap_or(0).max(0) as u64)
     }
 
-    async fn reserve_model_spend(&self, user_id: Uuid, usage_date: &str, amount_micros: u64, daily_limit_micros: u64) -> Result<bool, StorageError> {
+    async fn reserve_model_spend(
+        &self,
+        user_id: Uuid,
+        usage_date: &str,
+        amount_micros: u64,
+        daily_limit_micros: u64,
+    ) -> Result<bool, StorageError> {
         let amount = i64::try_from(amount_micros).unwrap_or(i64::MAX);
         let limit = i64::try_from(daily_limit_micros).unwrap_or(i64::MAX);
         let mut tx = self.pool.begin().await?;
@@ -627,8 +686,11 @@ impl Storage for SqliteStorage {
             .execute(&mut *tx).await?;
         if result.rows_affected() == 1 {
             let event = AuditEvent::attributed(
-                format!("human:{user_id}"), None, "assignment_budget.reserved",
-                "daily_model_budget", format!("{user_id}:{usage_date}"),
+                format!("human:{user_id}"),
+                None,
+                "assignment_budget.reserved",
+                "daily_model_budget",
+                format!("{user_id}:{usage_date}"),
                 serde_json::json!({"reserved_micros": amount_micros, "daily_limit_micros": daily_limit_micros}),
             );
             sqlx::query("INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)")
@@ -751,10 +813,17 @@ mod tests {
     async fn platform_admin_grant_is_persisted_and_audited() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let user_id = Uuid::new_v4();
-        storage.grant_platform_admin(user_id, "configured-admin-uid").await.unwrap();
+        storage
+            .grant_platform_admin(user_id, "configured-admin-uid")
+            .await
+            .unwrap();
         assert!(storage.is_platform_admin(user_id).await.unwrap());
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_events WHERE event_type = 'platform_admin.granted'")
-            .fetch_one(&storage.pool).await.unwrap();
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM audit_events WHERE event_type = 'platform_admin.granted'",
+        )
+        .fetch_one(&storage.pool)
+        .await
+        .unwrap();
         assert_eq!(count, 1);
     }
 
@@ -767,9 +836,19 @@ mod tests {
             storage.reserve_model_spend(user_id, "2026-11-22", 600, 1_000),
         );
         assert_ne!(first.unwrap(), second.unwrap());
-        assert_eq!(storage.daily_model_spend(user_id, "2026-11-22").await.unwrap(), 600);
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_events WHERE event_type = 'assignment_budget.reserved'")
-            .fetch_one(&storage.pool).await.unwrap();
+        assert_eq!(
+            storage
+                .daily_model_spend(user_id, "2026-11-22")
+                .await
+                .unwrap(),
+            600
+        );
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM audit_events WHERE event_type = 'assignment_budget.reserved'",
+        )
+        .fetch_one(&storage.pool)
+        .await
+        .unwrap();
         assert_eq!(count, 1);
     }
 
