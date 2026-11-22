@@ -20,10 +20,10 @@ type Decision = { run_id: string; role: string; slot: number; candidates_conside
 
 async function adminApi<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await auth?.currentUser?.getIdToken();
-  const response = await fetch(path, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init?.headers }
-  });
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(path, { ...init, headers });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(payload.error ?? "Admin request failed");
