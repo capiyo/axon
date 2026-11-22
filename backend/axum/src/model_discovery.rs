@@ -193,6 +193,7 @@ pub async fn refresh_provider_catalog(
                     discovery_audit("model.catalog_refreshed", "model", current.id, serde_json::json!({"provider_id": provider.id}))).await?;
             }
         } else {
+            if item.retired { continue; }
             let price = price.cloned().unwrap_or(CatalogPrice {
                 model_name: item.model_name.clone(), input_cost_per_million: 0, output_cost_per_million: 0,
             });
@@ -257,7 +258,7 @@ mod tests {
     use super::*;
     use crate::{
         audit::AuditEvent,
-        model_registry::{ProviderDataTerms, ModelStat},
+        model_registry::ProviderDataTerms,
         storage::{SqliteStorage, StorageMutation},
     };
 
