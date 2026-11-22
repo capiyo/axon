@@ -16,6 +16,7 @@ pub mod supervisor;
 #[cfg(test)]
 mod supervisor_run_tests;
 mod task_routes;
+mod supervisor_routes;
 
 pub use state::AppState;
 
@@ -52,6 +53,34 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/v1/workspaces/:workspace_id/chats/:chat_id/memory/:entry_id/:action",
             post(chat_memory_routes::mutate_memory_entry),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs",
+            get(supervisor_routes::list_runs).post(supervisor_routes::create_run),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id",
+            get(supervisor_routes::get_run),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id/checklists",
+            post(supervisor_routes::submit_checklist),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id/workers",
+            post(supervisor_routes::submit_worker_result),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id/checks",
+            post(supervisor_routes::record_checks),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id/reviews",
+            post(supervisor_routes::submit_review),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id/repair",
+            post(supervisor_routes::start_repair),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/audit",
