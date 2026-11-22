@@ -253,9 +253,54 @@ impl Storage for SqliteStorage {
             .bind(entity.id().to_string())
             .bind(workspace_id)
             .bind(created_at)
-            .bind(payload)
+            .bind(payload.clone())
             .execute(&mut *transaction)
             .await?;
+
+            match &entity {
+                StoredEntity::Provider(item) => {
+                    sqlx::query("INSERT INTO model_providers (id, name, base_url, status, data_terms_json, terms_reviewed_at, reviewed_by, payload_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, base_url=excluded.base_url, status=excluded.status, data_terms_json=excluded.data_terms_json, terms_reviewed_at=excluded.terms_reviewed_at, reviewed_by=excluded.reviewed_by, payload_json=excluded.payload_json, updated_at=excluded.updated_at")
+                        .bind(item.id.to_string()).bind(&item.name).bind(&item.base_url).bind(&item.status)
+                        .bind(serde_json::to_string(&item.data_terms)?)
+                        .bind(item.terms_reviewed_at.map(|value| value.to_rfc3339()))
+                        .bind(item.reviewed_by.map(|value| value.to_string()))
+                        .bind(payload).bind(item.updated_at.to_rfc3339())
+                        .execute(&mut *transaction).await?;
+                }
+                StoredEntity::Model(item) => {
+                    let status = match item.status { crate::model_registry::RegistryStatus::Candidate => "candidate", crate::model_registry::RegistryStatus::Approved => "approved", crate::model_registry::RegistryStatus::Disabled => "disabled" };
+                    sqlx::query("INSERT INTO models (id, provider_id, model_name, status, categories_json, abilities_json, context_length, input_cost_per_million, output_cost_per_million, version, flagged_for_review, payload_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET provider_id=excluded.provider_id, model_name=excluded.model_name, status=excluded.status, categories_json=excluded.categories_json, abilities_json=excluded.abilities_json, context_length=excluded.context_length, input_cost_per_million=excluded.input_cost_per_million, output_cost_per_million=excluded.output_cost_per_million, version=excluded.version, flagged_for_review=excluded.flagged_for_review, payload_json=excluded.payload_json, updated_at=excluded.updated_at")
+                        .bind(item.id.to_string()).bind(item.provider_id.to_string()).bind(&item.model_name).bind(status)
+                        .bind(serde_json::to_string(&item.categories)?).bind(serde_json::to_string(&item.abilities)?)
+                        .bind(item.context_length as i64).bind(item.input_cost_per_million as i64).bind(item.output_cost_per_million as i64)
+                        .bind(&item.version).bind(item.flagged_for_review).bind(payload).bind(item.updated_at.to_rfc3339())
+                        .execute(&mut *transaction).await?;
+                }
+                StoredEntity::ModelEvaluation(item) => {
+                    sqlx::query("INSERT INTO model_evaluations (id, model_id, category, test_set_version, score, run_at, cost_micros, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET score=excluded.score, cost_micros=excluded.cost_micros, payload_json=excluded.payload_json")
+                        .bind(item.id.to_string()).bind(item.model_id.to_string()).bind(&item.category).bind(&item.test_set_version)
+                        .bind(item.score).bind(item.run_at.to_rfc3339()).bind(item.cost_micros as i64).bind(payload)
+                        .execute(&mut *transaction).await?;
+                }
+                StoredEntity::ModelStat(item) => {
+                    let role = match item.role { crate::model_registry::AssignmentRole::ChecklistWriter => "checklist_writer", crate::model_registry::AssignmentRole::Worker => "worker", crate::model_registry::AssignmentRole::Supervisor => "supervisor" };
+                    sqlx::query("INSERT INTO model_stats (id, model_id, category, role, runs, completion_rate, supervisor_pass_rate, user_retry_rate, cost_per_run_micros, latency_ms, last_updated, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(model_id, category, role) DO UPDATE SET runs=excluded.runs, completion_rate=excluded.completion_rate, supervisor_pass_rate=excluded.supervisor_pass_rate, user_retry_rate=excluded.user_retry_rate, cost_per_run_micros=excluded.cost_per_run_micros, latency_ms=excluded.latency_ms, last_updated=excluded.last_updated, payload_json=excluded.payload_json")
+                        .bind(item.id.to_string()).bind(item.model_id.to_string()).bind(&item.category).bind(role)
+                        .bind(item.runs as i64).bind(item.completion_rate).bind(item.supervisor_pass_rate).bind(item.user_retry_rate)
+                        .bind(item.cost_per_run_micros as i64).bind(item.latency_ms as i64).bind(item.last_updated.to_rfc3339()).bind(payload)
+                        .execute(&mut *transaction).await?;
+                }
+                StoredEntity::AssignmentDecision(item) => {
+                    let role = match item.role { crate::model_registry::AssignmentRole::ChecklistWriter => "checklist_writer", crate::model_registry::AssignmentRole::Worker => "worker", crate::model_registry::AssignmentRole::Supervisor => "supervisor" };
+                    sqlx::query("INSERT INTO assignment_decisions (id, run_id, role, slot, candidates_json, filters_json, chosen_model_id, reason, estimated_cost_micros, created_at, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(run_id, role, slot) DO UPDATE SET candidates_json=excluded.candidates_json, filters_json=excluded.filters_json, chosen_model_id=excluded.chosen_model_id, reason=excluded.reason, estimated_cost_micros=excluded.estimated_cost_micros, created_at=excluded.created_at, payload_json=excluded.payload_json")
+                        .bind(item.id.to_string()).bind(item.run_id.to_string()).bind(role).bind(item.slot as i64)
+                        .bind(serde_json::to_string(&item.candidates_considered)?).bind(serde_json::to_string(&item.filters_applied)?)
+                        .bind(item.chosen_model_id.to_string()).bind(&item.reason).bind(item.estimated_cost_micros as i64)
+                        .bind(item.created_at.to_rfc3339()).bind(payload)
+                        .execute(&mut *transaction).await?;
+                }
+                _ => {}
+            }
         }
 
         let audit = mutation.audit;
