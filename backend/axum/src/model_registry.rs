@@ -285,8 +285,11 @@ fn candidates<'a>(
         let Some(provider) = provider_map.get(&model.provider_id).copied() else { continue; };
         if provider.status != "active" || !privacy_allows(provider, &profile.privacy) { continue; }
         let stat = stats.iter().find(|item| item.model_id == model.id && item.category == profile.category && item.role == *role);
-        let rank = curated.get(&model.id).copied().or_else(|| model.curated_rank.get(&profile.category).copied()).unwrap_or(u16::MAX / 2);
-        let score = score_candidate(model, stat, level, profile.minimum_history_runs, rank);
+        let configured_rank = curated.get(&model.id).copied().or_else(|| model.curated_rank.get(&profile.category).copied());
+        let history_qualified = stat.is_some_and(|item| item.runs >= profile.minimum_history_runs);
+        if configured_rank.is_none() && !history_qualified { continue; }
+        let rank = configured_rank.unwrap_or(0);
+        let score = score_candidate(stat, level, minimum_history_runs, rank);
         result.push(Candidate {
             model, provider, stat,
             estimated_cost: estimate_cost(model, profile.estimated_input_tokens, profile.estimated_output_tokens),
@@ -680,16 +683,16 @@ mod tests {
         let provider_f = ModelProvider { id: Uuid::new_v4(), name: "Provider F".into(), ..provider_a.clone() };
         let mut abilities = BTreeSet::new(); abilities.insert("text".into()); abilities.insert("code".into());
         let mut categories = BTreeSet::new(); categories.insert("coding".into());
-        let model = |provider_id| ModelRecord {
+        let model = |provider_id, rank| ModelRecord {
             id: Uuid::new_v4(), provider_id, model_name: "approved-model".into(), status: RegistryStatus::Approved,
             abilities: abilities.clone(), categories: categories.clone(), context_length: 32_000,
             input_cost_per_million: 1_000_000, output_cost_per_million: 1_000_000, typical_latency_ms: 500,
             regions: ["eu".to_string()].into_iter().collect(), version: Some("v1".into()), last_seen_at: Utc::now(),
-            notes: String::new(), curated_rank: BTreeMap::new(), healthy: true, flagged_for_review: false,
+            notes: String::new(), curated_rank: [("coding".to_string(), rank)].into_iter().collect(), healthy: true, flagged_for_review: false,
             created_at: Utc::now(), updated_at: Utc::now(),
         };
         (vec![provider_a.clone(), provider_b.clone(), provider_c.clone(), provider_d.clone(), provider_e.clone(), provider_f.clone()],
-         vec![model(provider_a.id), model(provider_b.id), model(provider_c.id), model(provider_d.id), model(provider_e.id), model(provider_f.id)])
+         vec![model(provider_a.id, 0), model(provider_b.id, 1), model(provider_c.id, 2), model(provider_d.id, 3), model(provider_e.id, 4), model(provider_f.id, 5)])
     }
 
     fn profile(level: TaskLevel) -> AssignmentProfile {
