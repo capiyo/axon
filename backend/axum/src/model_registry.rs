@@ -242,19 +242,22 @@ fn score_candidate(
     minimum_history_runs: u64,
     curated_rank: u16,
 ) -> f64 {
+    let prior_score = 1000.0 - f64::from(curated_rank);
     let Some(stat) = stat.filter(|item| item.runs >= minimum_history_runs) else {
-        return 1000.0 - f64::from(curated_rank);
+        return prior_score;
     };
     let completion = stat.completion_rate.clamp(0.0, 1.0);
     let pass = stat.supervisor_pass_rate.clamp(0.0, 1.0);
     let retries = stat.user_retry_rate.clamp(0.0, 1.0);
     let speed = 1.0 / (1.0 + (stat.latency_ms.max(1) as f64 / 1000.0));
     let economy = 1.0 / (1.0 + stat.cost_per_run_micros as f64 / 1000.0);
-    match level {
+    let historical_score = 1000.0 + match level {
         TaskLevel::Quick => economy * 40.0 + speed * 35.0 + completion * 15.0 + pass * 10.0 - retries * 10.0,
         TaskLevel::Normal => completion * 30.0 + pass * 30.0 + speed * 20.0 + economy * 20.0 - retries * 15.0,
         TaskLevel::Important => completion * 40.0 + pass * 35.0 + (1.0 - retries) * 15.0 + speed * 5.0 + economy * 5.0,
-    } + 1000.0
+    };
+    let history_weight = stat.runs as f64 / (stat.runs as f64 + minimum_history_runs as f64);
+    prior_score * (1.0 - history_weight) + historical_score * history_weight
 }
 
 fn candidates<'a>(
@@ -318,7 +321,8 @@ pub fn assign_models(
     models: &[ModelRecord],
     stats: &[ModelStat],
 ) -> Result<AssignmentPlan, AssignmentError> {
-    if profile.exploration_percent > 100 || profile.minimum_history_runs == 0 {
+    if profile.exploration_percent > 100 || profile.minimum_history_runs == 0
+        || (!profile.curated_model_ids.is_empty() && !(4..=6).contains(&profile.curated_model_ids.len())) {
         return Err(AssignmentError::InvalidConfiguration);
     }
     let mut level = profile.level.clone();
