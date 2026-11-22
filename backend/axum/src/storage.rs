@@ -1,6 +1,6 @@
 use crate::{
     audit::AuditEvent,
-    model_registry::{AssignmentDecision, ModelEvaluation, ModelProvider, ModelRecord, ModelStat},
+    model_registry::{AssignmentDecision, ModelChangeFlag, ModelEvaluation, ModelProvider, ModelRecord, ModelStat},
     chat_memory::ChatMemoryStore,
     model::{Agent, Artifact, Task, Workspace},
     supervisor::SupervisorRun,
@@ -50,6 +50,7 @@ pub enum EntityKind {
     ModelEvaluation,
     ModelStat,
     AssignmentDecision,
+    ModelChangeFlag,
 }
 
 impl EntityKind {
@@ -65,6 +66,7 @@ impl EntityKind {
             Self::ModelEvaluation => "model_evaluation",
             Self::ModelStat => "model_stat",
             Self::AssignmentDecision => "assignment_decision",
+            Self::ModelChangeFlag => "model_change_flag",
         }
     }
 }
@@ -82,6 +84,7 @@ pub enum StoredEntity {
     ModelEvaluation(ModelEvaluation),
     ModelStat(ModelStat),
     AssignmentDecision(AssignmentDecision),
+    ModelChangeFlag(ModelChangeFlag),
 }
 
 impl StoredEntity {
@@ -97,6 +100,7 @@ impl StoredEntity {
             Self::ModelEvaluation(_) => EntityKind::ModelEvaluation,
             Self::ModelStat(_) => EntityKind::ModelStat,
             Self::AssignmentDecision(_) => EntityKind::AssignmentDecision,
+            Self::ModelChangeFlag(_) => EntityKind::ModelChangeFlag,
         }
     }
 
@@ -112,6 +116,7 @@ impl StoredEntity {
             Self::ModelEvaluation(record) => record.id,
             Self::ModelStat(record) => record.id,
             Self::AssignmentDecision(record) => record.id,
+            Self::ModelChangeFlag(record) => record.id,
         }
     }
 
@@ -122,7 +127,7 @@ impl StoredEntity {
             Self::Artifact(record) => Some(record.workspace_id),
             Self::Task(record) => Some(record.workspace_id),
             Self::SupervisorRun(record) => Some(record.workspace_id),
-            Self::Provider(_) | Self::Model(_) | Self::ModelEvaluation(_) | Self::ModelStat(_) | Self::AssignmentDecision(_) => None,
+            Self::Provider(_) | Self::Model(_) | Self::ModelEvaluation(_) | Self::ModelStat(_) | Self::AssignmentDecision(_) | Self::ModelChangeFlag(_) => None,
         }
     }
 
@@ -138,6 +143,7 @@ impl StoredEntity {
             Self::ModelEvaluation(record) => record.run_at,
             Self::ModelStat(record) => record.last_updated,
             Self::AssignmentDecision(record) => record.created_at,
+            Self::ModelChangeFlag(record) => record.detected_at,
         }
     }
 }
