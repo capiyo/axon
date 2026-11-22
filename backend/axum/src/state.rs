@@ -4,8 +4,8 @@ use crate::{
     firebase_auth::FirebaseVerifier,
     model::{Agent, Artifact, Task, Workspace},
     robotics::TelemetryEvent,
-    supervisor::SupervisorRun,
     storage::{EntityKind, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
+    supervisor::SupervisorRun,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -83,7 +83,10 @@ impl AppState {
             }
         }
 
-        for entity in storage.list_entities(EntityKind::SupervisorRun, None).await? {
+        for entity in storage
+            .list_entities(EntityKind::SupervisorRun, None)
+            .await?
+        {
             match entity {
                 StoredEntity::SupervisorRun(item) => {
                     state.supervisor_runs.write().await.insert(item.id, item);
