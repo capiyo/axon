@@ -135,13 +135,13 @@ pub enum SupervisorError {
     InvalidChecklistItem,
     #[error("a checklist proposal contains a duplicate item key: {0}")]
     DuplicateChecklistKey(String),
-    #[error("exactly two independent worker results are required")]
+    #[error("the configured number of independent worker results is required")]
     InvalidWorkerCount,
     #[error("worker identifiers must be non-empty and distinct")]
     InvalidWorkerIdentity,
     #[error("each worker result must include a summary and at least one artifact")]
     MissingWorkerEvidence,
-    #[error("exactly two distinct supervisor reviews are required")]
+    #[error("the configured number of distinct supervisor reviews is required")]
     InvalidSupervisorCount,
     #[error("supervisor identifiers must be non-empty and distinct")]
     InvalidSupervisorIdentity,
@@ -164,6 +164,14 @@ pub enum SupervisorError {
     DuplicateSubmission,
     #[error("a repair is not available after the configured repair limit")]
     RepairNotAvailable,
+}
+
+fn required_role_counts(level: Option<&TaskLevel>) -> (usize, usize, usize) {
+    match level {
+        Some(TaskLevel::Quick) => (0, 1, 0),
+        Some(TaskLevel::Normal) => (1, 1, 1),
+        Some(TaskLevel::Important) | None => (2, 2, 2),
+    }
 }
 
 impl SupervisorRun {
