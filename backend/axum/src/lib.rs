@@ -9,6 +9,7 @@ pub mod firebase_auth;
 pub mod identity;
 pub mod model_registry;
 mod model;
+mod model_registry_routes;
 pub mod robotics;
 mod robotics_routes;
 mod routes;
@@ -57,6 +58,13 @@ pub fn app(state: AppState) -> Router {
             "/api/v1/workspaces/:workspace_id/chats/:chat_id/memory/:entry_id/:action",
             post(chat_memory_routes::mutate_memory_entry),
         )
+        .route("/api/v1/admin/providers", get(model_registry_routes::list_providers).post(model_registry_routes::create_provider))
+        .route("/api/v1/admin/providers/:provider_id/terms-review", post(model_registry_routes::review_provider_terms))
+        .route("/api/v1/admin/models", get(model_registry_routes::list_models).post(model_registry_routes::create_model))
+        .route("/api/v1/admin/models/:model_id/review", post(model_registry_routes::review_candidate))
+        .route("/api/v1/admin/evaluations", get(model_registry_routes::list_evaluations))
+        .route("/api/v1/admin/stats", get(model_registry_routes::list_stats))
+        .route("/api/v1/admin/assignments", get(model_registry_routes::list_assignments))
         .route(
             "/api/v1/workspaces/:workspace_id/supervisor-runs",
             get(supervisor_routes::list_runs).post(supervisor_routes::create_run),
