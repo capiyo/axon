@@ -9,6 +9,7 @@ use crate::{
     },
     AppState,
 };
+use chrono::Utc;
 use axum::{
     extract::{Extension, Path, State},
     http::StatusCode,
@@ -180,7 +181,12 @@ pub async fn create_run(
     let privacy = input.privacy.unwrap_or(PrivacyRequirement {
         forbid_training: true, forbid_retention: true, allowed_regions: Default::default(),
     });
-    let profile = AssignmentProfile {
+    let usage_date = Utc::now().date_naive().to_string();
+    let daily_budget_limit = std::env::var("AXON_DAILY_BUDGET_MICROS").ok()
+        .and_then(|value| value.parse().ok()).unwrap_or(10_000_000u64);
+    let spent_today = state.daily_model_spend(user.user_id, &usage_date).await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Daily model budget could not be loaded."))?;
+    let mut profile = AssignmentProfile {
         run_id: run.id,
         category: if input.category.trim().is_empty() { "general".into() } else { input.category.trim().to_ascii_lowercase() },
         level: input.level,
@@ -191,13 +197,31 @@ pub async fn create_run(
         estimated_input_tokens: objective_tokens + 4096,
         estimated_output_tokens: 2048,
         per_task_budget_micros: std::env::var("AXON_TASK_BUDGET_MICROS").ok().and_then(|v| v.parse().ok()).unwrap_or(2_000_000),
-        daily_budget_remaining_micros: std::env::var("AXON_DAILY_BUDGET_MICROS").ok().and_then(|v| v.parse().ok()).unwrap_or(10_000_000),
+        daily_budget_remaining_micros: daily_budget_limit.saturating_sub(spent_today),
         exploration_percent: std::env::var("AXON_EXPLORATION_PERCENT").ok().and_then(|v| v.parse().ok()).unwrap_or(5),
         minimum_history_runs: std::env::var("AXON_MIN_MODEL_HISTORY_RUNS").ok().and_then(|v| v.parse().ok()).unwrap_or(10),
         curated_model_ids: Vec::new(),
     };
     let assignment_engine = state.assignment_engine();
-    match assignment_engine.assign(&profile, &providers, &models, &stats) {
+    let mut assignment = assignment_engine.assign(&profile, &providers, &models, &stats);
+    if let Ok(plan) = &assignment {
+        let reserved = state.reserve_model_spend(user.user_id, &usage_date, plan.estimated_cost_micros, daily_budget_limit).await
+            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Daily model budget could not be reserved."))?;
+        if !reserved {
+            let refreshed_spend = state.daily_model_spend(user.user_id, &usage_date).await
+                .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Daily model budget could not be refreshed."))?;
+            profile.daily_budget_remaining_micros = daily_budget_limit.saturating_sub(refreshed_spend);
+            assignment = assignment_engine.assign(&profile, &providers, &models, &stats);
+            if let Ok(retry_plan) = &assignment {
+                let retry_reserved = state.reserve_model_spend(user.user_id, &usage_date, retry_plan.estimated_cost_micros, daily_budget_limit).await
+                    .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Daily model budget could not be reserved."))?;
+                if !retry_reserved {
+                    assignment = Err(crate::model_registry::AssignmentError::BudgetExceeded);
+                }
+            }
+        }
+    }
+    match assignment {
         Ok(plan) => {
             run.assignment_level = Some(plan.level);
             run.assignment_notice = if plan.notices.is_empty() { None } else { Some(plan.notices.join(" ")) };
