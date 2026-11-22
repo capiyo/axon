@@ -29,8 +29,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let simulator_enabled = env::var("AXON_ENABLE_SIMULATOR")
         .map(|value| value.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
+    let admin_uids = env::var("AXON_ADMIN_UIDS")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|uid| !uid.is_empty())
+        .map(ToOwned::to_owned)
+        .collect();
     let state = AppState::with_storage(storage.shared())
         .await?
+        .with_platform_admin_uids(admin_uids)
         .with_firebase_verifier(verifier, simulator_enabled);
 
     let listener = TcpListener::bind(address).await?;
