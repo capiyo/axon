@@ -328,12 +328,30 @@ pub async fn clear_flag(
         .into_iter().filter_map(|entity| if let StoredEntity::Model(item) = entity { Some(item) } else { None }).collect();
     let model = models.iter_mut().find(|item| item.id == flag.model_id)
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Flagged model not found."))?;
-    let has_open_flags = flags.iter().any(|item| item.model_id == model.id && item.cleared_at.is_none());
-    if !has_open_flags {
-        model.flagged_for_review = false;
-        model.healthy = model.status == RegistryStatus::Approved;
-        model.updated_at = Utc::now();
+    match updated_flag.change_kind.as_str() {
+        "price_changed" => {
+            if let Some(value) = updated_flag.observed_value.as_deref() {
+                for part in value.split(',') {
+                    if let Some((key, raw)) = part.split_once('=') {
+                        if let Ok(amount) = raw.parse::<u64>() {
+                            match key {
+                                "input" => model.input_cost_per_million = amount,
+                                "output" => model.output_cost_per_million = amount,
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        "version_changed" => model.version = updated_flag.observed_value.clone(),
+        "retired" => model.status = RegistryStatus::Disabled,
+        _ => {}
     }
+    let has_open_flags = flags.iter().any(|item| item.model_id == model.id && item.cleared_at.is_none());
+    model.flagged_for_review = has_open_flags;
+    model.healthy = model.status == RegistryStatus::Approved && !has_open_flags;
+    model.updated_at = Utc::now();
     let updated_model = model.clone();
     state.persist_entity(
         StoredEntity::ModelChangeFlag(updated_flag.clone()),
