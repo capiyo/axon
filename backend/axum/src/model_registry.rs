@@ -467,6 +467,56 @@ pub fn fallback_model(
         .map(|candidate| candidate.model.id)
 }
 
+/// Replace a failed assignment with the next eligible model while preserving
+/// role/provider diversity. Call only after a provider timeout or hard failure.
+pub fn recover_assignment(
+    plan: &mut AssignmentPlan,
+    failed_model_id: Uuid,
+    profile: &AssignmentProfile,
+    providers: &[ModelProvider],
+    models: &[ModelRecord],
+    stats: &[ModelStat],
+) -> Result<Uuid, AssignmentError> {
+    let index = plan.decisions.iter().position(|decision| decision.chosen_model_id == failed_model_id)
+        .ok_or(AssignmentError::InvalidConfiguration)?;
+    let role = plan.decisions[index].role.clone();
+    let provider_for = |model_id: Uuid| models.iter().find(|model| model.id == model_id).map(|model| model.provider_id);
+    let mut excluded = BTreeSet::new();
+    let mut forbidden_providers = BTreeSet::new();
+    for (slot, decision) in plan.decisions.iter().enumerate() {
+        if slot == index { continue; }
+        if decision.role == role {
+            excluded.insert(decision.chosen_model_id);
+            if let Some(provider_id) = provider_for(decision.chosen_model_id) {
+                forbidden_providers.insert(provider_id);
+            }
+        }
+        if role == AssignmentRole::Supervisor && decision.role == AssignmentRole::Worker {
+            if let Some(provider_id) = provider_for(decision.chosen_model_id) {
+                forbidden_providers.insert(provider_id);
+            }
+        }
+        if role == AssignmentRole::Worker && decision.role == AssignmentRole::Supervisor {
+            if let Some(provider_id) = provider_for(decision.chosen_model_id) {
+                forbidden_providers.insert(provider_id);
+            }
+        }
+    }
+    excluded.insert(failed_model_id);
+    let next = fallback_model(profile, providers, models, stats, &role, &excluded, &forbidden_providers)
+        .ok_or(AssignmentError::DiversityUnavailable)?;
+    let next_model = models.iter().find(|model| model.id == next).ok_or(AssignmentError::NoEligibleModels)?;
+    let cost = estimate_cost(next_model, profile.estimated_input_tokens, profile.estimated_output_tokens);
+    let decision = &mut plan.decisions[index];
+    plan.estimated_cost_micros = plan.estimated_cost_micros
+        .saturating_sub(decision.estimated_cost_micros).saturating_add(cost);
+    decision.chosen_model_id = next;
+    decision.estimated_cost_micros = cost;
+    decision.reason = "Fallback selected after provider failure; role diversity constraints preserved.".into();
+    decision.filters_applied.push("provider_failure_fallback".into());
+    Ok(next)
+}
+
 /// Update rolling success/retry/cost/latency metrics with a single completed run.
 pub fn update_model_stat(
     previous: Option<ModelStat>,
