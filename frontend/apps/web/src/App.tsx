@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { auth } from "./firebase";
+import { ModelAdmin } from "./ModelAdmin";
 
 import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry } from "../../../packages/contracts/src";
 
@@ -46,6 +47,8 @@ function WorkspaceApp() {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [adminAvailable, setAdminAvailable] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   async function refreshWorkspaces() {
     const [items, status] = await Promise.all([
@@ -77,6 +80,7 @@ function WorkspaceApp() {
 
   useEffect(() => {
     void refreshWorkspaces().catch(cause => setError(cause instanceof Error ? cause.message : "Could not reach the Axon API."));
+    void api<unknown[]>("/api/v1/admin/models").then(() => setAdminAvailable(true)).catch(() => setAdminAvailable(false));
   }, []);
 
   useEffect(() => {
@@ -314,13 +318,16 @@ function WorkspaceApp() {
             <p className="eyebrow">THE AGENT COLLABORATION LAYER</p>
             <h1>Work, connected.</h1>
           </div>
-          <div className="status">
-            <span className={health?.status === "ok" ? "pulse online" : "pulse"} />
-            {health?.status === "ok" ? "API connected" : "API unavailable"}
+          <div className="topbar-actions">
+            <div className="status">
+              <span className={health?.status === "ok" ? "pulse online" : "pulse"} />
+              {health?.status === "ok" ? "API connected" : "API unavailable"}
+            </div>
+            {adminAvailable && <button type="button" className="admin-entry" onClick={() => setShowAdmin(true)}>Model administration</button>}
           </div>
         </header>
 
-        {!selected ? (
+        {showAdmin ? <ModelAdmin onClose={() => setShowAdmin(false)} /> : !selected ? (
           <>
             <section className="intro">
               <div>
