@@ -113,7 +113,15 @@ impl MemoryStore {
             .bind(record.version as i64)
             .bind(payload)
             .bind(actor)
-            .bind(if existing { "revised" } else { "proposed" })
+            .bind(if !existing {
+                "proposed"
+            } else {
+                match record.verification {
+                    crate::memory_system::Verification::Verified => "approved",
+                    crate::memory_system::Verification::Rejected => "rejected",
+                    _ => "revised",
+                }
+            })
             .bind(now)
             .execute(&mut *tx)
             .await?;
@@ -121,7 +129,15 @@ impl MemoryStore {
             .bind(Uuid::new_v4().to_string())
             .bind(record.workspace_id.to_string())
             .bind(actor)
-            .bind(if existing { "agent_memory.revised" } else { "agent_memory.proposed" })
+            .bind(if !existing {
+                "agent_memory.proposed"
+            } else {
+                match record.verification {
+                    crate::memory_system::Verification::Verified => "agent_memory.approved",
+                    crate::memory_system::Verification::Rejected => "agent_memory.rejected",
+                    _ => "agent_memory.revised",
+                }
+            })
             .bind(record.id.to_string())
             .bind(Utc::now().to_rfc3339())
             .bind(
