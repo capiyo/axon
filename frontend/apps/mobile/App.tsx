@@ -13,7 +13,7 @@ import { StatusBar } from "expo-status-bar";
 import { axonTheme } from "../../packages/theme/src";
 import { auth } from "./firebase";
 
-import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext, QoinMemoryIndexReceipt } from "../../packages/contracts/src";
+import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext, QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt } from "../../packages/contracts/src";
 
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_AXON_API_URL ?? "http://127.0.0.1:8080";
@@ -222,6 +222,25 @@ function WorkspaceApp() {
     });
   }
 
+  async function indexChatMessageWithQoin(message: ChatMessage) {
+    if (!selected || !activeChat || !qoinSymbol.trim()) return;
+    await perform(async () => {
+      const receipt = await request<QoinChatMessageIndexReceipt>(
+        `/api/v1/workspaces/${selected.id}/chats/${activeChat}/messages/${message.id}/qoin-index`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            symbol: qoinSymbol.trim(),
+            tags: [message.role, "source:chat_message", `symbol:${qoinSymbol.trim().toUpperCase()}`],
+            dependency_ids: [],
+            evidence_score: 0.5
+          })
+        }
+      );
+      setQoinNotice(`Indexed chat message ${receipt.message_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()}; available after the next hourly epoch.`);
+    });
+  }
+
   async function indexMemoryWithQoin(entry: ProjectMemoryEntry) {
     if (!selected || !activeChat || !qoinSymbol.trim()) return;
     await perform(async () => {
@@ -426,7 +445,7 @@ function WorkspaceApp() {
                 <Text style={styles.fieldLabel}>RESUME BRIEF · APPROVED MEMORY ONLY</Text>\n                <ActionButton label="Archive chat" onPress={archiveChat} disabled={busy} secondary />
                 <Text style={styles.rowMeta}>{chatDetail.resume_brief || "No context yet. Add messages and approve useful memory."}</Text>
                 <View style={styles.listRow}>
-                  {chatDetail.messages.map(message => <View key={message.id} style={styles.contextChoice}><Text style={styles.rowTitle}>{message.role}{message.answered_by ? ` · ${message.answered_by}` : ""}</Text><Text style={styles.rowMeta}>{message.content}</Text></View>)}
+                  {chatDetail.messages.map(message => <View key={message.id} style={styles.contextChoice}><Text style={styles.rowTitle}>{message.role}{message.answered_by ? ` · ${message.answered_by}` : ""}</Text><Text style={styles.rowMeta}>{message.content}</Text><ActionButton label="Index with Qoin" onPress={() => indexChatMessageWithQoin(message)} disabled={busy} secondary /></View>)}
                 </View>
                 <TextInput value={messageDraft} onChangeText={setMessageDraft} placeholder="Write a message…" style={[styles.input, styles.multiline]} multiline />
                 <ActionButton label="Send message" onPress={sendChatMessage} disabled={!messageDraft.trim() || busy} />
