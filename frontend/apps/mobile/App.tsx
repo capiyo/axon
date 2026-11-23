@@ -14,7 +14,7 @@ import { StatusBar } from "expo-status-bar";
 import { axonTheme } from "../../packages/theme/src";
 import { auth } from "./firebase";
 
-import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext, QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt, ExploreAgent, ExploreComment } from "../../packages/contracts/src";
+import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext, QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt, ExploreAgent, ExploreComment, Notification, NotificationPage } from "../../packages/contracts/src";
 
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_AXON_API_URL ?? "http://127.0.0.1:8080";
@@ -70,6 +70,9 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [publishAgentId, setPublishAgentId] = useState("");
   const [publishDescription, setPublishDescription] = useState("");
   const [publishCategory, setPublishCategory] = useState("Productivity");
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationUnread, setNotificationUnread] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [activeChat, setActiveChat] = useState("");
   const [chatDetail, setChatDetail] = useState<ChatDetail | null>(null);
   const [chatTitle, setChatTitle] = useState("");
@@ -132,6 +135,38 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   useEffect(() => {
     refreshHome().catch(cause => setError(cause instanceof Error ? cause.message : "API unavailable"));
   }, []);
+
+  async function refreshNotifications() {
+    const page = await request<NotificationPage>("/api/v1/notifications?limit=30&offset=0");
+    setNotifications(page.items);
+    setNotificationUnread(page.unread_count);
+  }
+
+  function openNotification(item: Notification) {
+    void perform(async () => {
+      await request(`/api/v1/notifications/${item.id}/read`, { method: "POST" });
+      setNotificationsOpen(false);
+      if (item.entity_type === "chat" && item.workspace_id) {
+        const workspace = workspaces.find(candidate => candidate.id === item.workspace_id);
+        if (workspace) {
+          setSelected(workspace);
+          setActiveChat(item.entity_id);
+          setActiveTab("chats");
+          setMobileChatOpen(true);
+        }
+      } else {
+        setActiveTab("explore");
+      }
+      await refreshNotifications();
+    });
+  }
+
+  function markAllNotificationsRead() {
+    void perform(async () => {
+      await request("/api/v1/notifications/read-all", { method: "POST" });
+      await refreshNotifications();
+    });
+  }
 
   async function refreshExplore() {
     const listings = await request<ExploreAgent[]>(`/api/v1/explore/agents?sort=${exploreSort}&limit=30&offset=0`);
@@ -212,6 +247,10 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setMobileChatOpen(true);
     });
   }
+
+  useEffect(() => {
+    refreshNotifications().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (activeTab === "explore") {
@@ -563,6 +602,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         <View style={styles.mobileHeader}>
           <View style={styles.mobileBrandMark}><Text style={styles.mobileBrandMarkText}>A</Text></View>
           <View style={styles.mobileHeaderCopy}><Text style={styles.mobileBrand}>AXON</Text><Text style={styles.mobileWorkspace}>{selected?.name ?? "Your workspace"}</Text></View>
+          <Pressable onPress={() => {setNotificationsOpen(true);void refreshNotifications();}} style={styles.mobileNotificationButton} accessibilityLabel="Notifications"><Text style={styles.mobileNotificationIcon}>♧</Text>{notificationUnread > 0 ? <Text style={styles.mobileNotificationBadge}>{notificationUnread}</Text> : null}</Pressable>
           <Pressable onPress={() => setProfileOpen(true)} style={styles.mobileProfileButton} accessibilityLabel="Open profile">
             {user.photoURL ? <Image source={{uri:user.photoURL}} style={styles.mobileProfileImage}/> : <Text style={styles.mobileProfileInitial}>{(user.displayName || user.email || "A").slice(0,1).toUpperCase()}</Text>}
           </Pressable>
@@ -695,6 +735,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         </ScrollView>
 
         {!profileOpen && <View style={styles.mobileBottomNav}><Pressable onPress={() => {setActiveTab("chats");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="chats" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>◌</Text><Text style={styles.mobileNavText}>Chats</Text>{chats.reduce((total,chat)=>total+chat.unread_count,0)>0 ? <Text style={styles.mobileNavBadge}>{chats.reduce((total,chat)=>total+chat.unread_count,0)}</Text> : null}</Pressable><Pressable onPress={() => {setActiveTab("explore");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="explore" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>⌕</Text><Text style={styles.mobileNavText}>Explore</Text></Pressable></View>}
+        {notificationsOpen && <View style={styles.notificationsOverlay}><View style={styles.notificationsHeader}><Text style={styles.screenTitle}>Notifications</Text><View style={styles.notificationsHeaderActions}><Pressable onPress={markAllNotificationsRead}><Text style={styles.exploreActionText}>Mark all read</Text></Pressable><Pressable onPress={() => setNotificationsOpen(false)}><Text style={styles.exploreActionText}>Close</Text></Pressable></View></View><ScrollView contentContainerStyle={styles.notificationsList}>{notifications.map(item => <Pressable key={item.id} onPress={() => openNotification(item)} style={[styles.notificationItemMobile,Boolean(item.read_at) && styles.notificationReadMobile]}><Text style={styles.rowTitle}>{item.title}</Text><Text style={styles.rowMeta}>{item.body}</Text><Text style={styles.notificationTime}>{new Date(item.created_at).toLocaleString()}</Text></Pressable>)}{notifications.length===0 ? <Text style={styles.muted}>You are all caught up.</Text> : null}</ScrollView></View>}
         {error ? <View style={styles.mobileError}><Text style={styles.errorText}>{error}</Text></View> : null}
       </View>
     </SafeAreaView>
@@ -754,6 +795,9 @@ const styles = StyleSheet.create({
   mobileBrand: { color: "#E7F6EB", fontSize: 11, fontWeight: "900", letterSpacing: 2 },
   mobileWorkspace: { color: "#9AAFA1", fontSize: 10 },
   mobileProfileButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#28583D", alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  mobileNotificationButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#17271D", alignItems: "center", justifyContent: "center" },
+  mobileNotificationIcon: { color: "#9DE4B0", fontSize: 17 },
+  mobileNotificationBadge: { position: "absolute", top: -4, right: -4, minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4, backgroundColor: "#28583D", color: "#E7F6EB", fontSize: 8, fontWeight: "900", textAlign: "center", textAlignVertical: "center" },
   mobileProfileImage: { width: 38, height: 38, borderRadius: 19 },
   mobileProfileInitial: { color: "#E7F6EB", fontSize: 14, fontWeight: "800" },
   mobileContent: { paddingHorizontal: 13, paddingTop: 10, paddingBottom: 112 },
@@ -790,6 +834,13 @@ const styles = StyleSheet.create({
   mobileNavText: { color: "#9AAFA1", fontSize: 11, fontWeight: "700" },
   mobileNavBadge: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, backgroundColor: "#28583D", color: "#E7F6EB", fontSize: 9, fontWeight: "900", textAlign: "center", textAlignVertical: "center" },
   mobileError: { marginHorizontal: 14, marginBottom: 72, padding: 10, borderRadius: 10, backgroundColor: "#43292d" },
+  notificationsOverlay: { position: "absolute", zIndex: 45, top: 64, left: 10, right: 10, bottom: 78, padding: 14, borderRadius: 18, backgroundColor: "#14231B", elevation: 16 },
+  notificationsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingBottom: 12 },
+  notificationsHeaderActions: { flexDirection: "row", alignItems: "center", gap: 12 },
+  notificationsList: { gap: 8, paddingBottom: 20 },
+  notificationItemMobile: { padding: 12, borderRadius: 12, backgroundColor: "#17271D", gap: 5 },
+  notificationReadMobile: { opacity: 0.65 },
+  notificationTime: { color: "#82998A", fontSize: 9 },
   exploreCardMobile: { width: "100%", padding: 16, borderRadius: 17, backgroundColor: "#14231B", marginBottom: 12, gap: 12 },
   exploreCardHeader: { flexDirection: "row", alignItems: "center", gap: 11 },
   exploreAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#28583D", alignItems: "center", justifyContent: "center" },
