@@ -177,6 +177,37 @@ export type AxonAuditEvent = {
 };
 
 
+export type ExploreAgent = {
+  id: string;
+  agent_id: string;
+  workspace_id: string;
+  owner_id: string;
+  title: string;
+  provider: string;
+  description: string;
+  category: string;
+  created_at: string;
+  updated_at: string;
+  like_count: number;
+  comment_count: number;
+  is_liked: boolean;
+  is_following: boolean;
+};
+
+export type ExploreComment = {
+  id: string;
+  listing_id: string;
+  parent_comment_id: string | null;
+  author_id: string;
+  author_label: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  like_count: number;
+  reply_count: number;
+  is_liked: boolean;
+};
+
 export type Chat = {
   id: string;
   workspace_id: string;
