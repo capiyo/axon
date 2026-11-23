@@ -56,6 +56,28 @@ All other registered routes require a valid Firebase bearer token.
 - POST /api/v1/tasks/{task_id}/submit
 - POST /api/v1/tasks/{task_id}/transitions
 
+## Qoin market-vector integration
+
+Axon can consume the current attended market-state vector from Qoin's authenticated-network/internal API. Configure the Axon backend with:
+
+    QOIN_API_URL=http://127.0.0.1:8081
+
+In a container deployment, use the Qoin service name and internal port, not localhost (for example, `http://qoin-api:8081`). Qoin must expose `GET /internal/vector?symbol=BTCUSDT` to the Axon backend over a private service network. Do not expose that internal route publicly.
+
+The Axon bridge requires six finite `attended_features` values and a non-empty `strategy_version`. The model version is pinned to each indexed memory; QKV refuses to compare different Qoin strategy versions. Re-index historical entries after a strategy-version change before using them in a new handover.
+
+Web and mobile users can load a Qoin symbol vector, index approved chat memories with that market state, initialize an agent's first context using the 20% budget / measured 80% contribution target, and progressively retrieve deferred memories. Memory indexing only adds to the live index; the hourly publisher remains the only path that creates a new immutable epoch. Newly indexed memories become available to handovers after the next hourly epoch publication.
+
+This integration maps historical decisions to similar Qoin market states. Qoin's six-dimensional market vector is **not** a semantic text embedding. It does not infer meaning from arbitrary chat prose; use a separate versioned text-embedding provider if semantic chat retrieval is required.
+
+## Qoin memory routes
+
+- GET `/api/v1/workspaces/{workspace_id}/memory/qoin-vector?symbol=BTCUSDT`
+- POST `/api/v1/workspaces/{workspace_id}/chats/{chat_id}/memory-index/{memory_id}/qoin`
+- GET `/api/v1/workspaces/{workspace_id}/memory/epoch`
+- POST `/api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-context`
+- POST `/api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-sessions/{session_id}/retrieve`
+
 ## Simulator routes
 
 - GET /api/v1/sim/devices/{device_id}/telemetry
