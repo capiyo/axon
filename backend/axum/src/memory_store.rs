@@ -376,6 +376,25 @@ mod tests {
         assert!(visible.tokens_allocated <= visible.token_budget);
     }
 
+
+    #[tokio::test]
+    async fn review_promotes_a_proposal_as_a_new_immutable_version() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let account = storage.ensure_firebase_user("memory-test", "memory-store-review-user").await.unwrap();
+        let store = MemoryStore::new(storage.chat_memory_store().sqlite_pool());
+        let mut record = agent_memory(account.workspace.id, Uuid::new_v4());
+        record.verification = Verification::Proposed;
+        store.put(record.clone(), "human:proposer").await.unwrap();
+
+        let reviewed = store.review(account.workspace.id, record.id, true, "human:reviewer").await.unwrap();
+        assert_eq!(reviewed.version, 2);
+        assert_eq!(reviewed.verification, Verification::Verified);
+        assert!(matches!(
+            store.review(account.workspace.id, record.id, false, "human:reviewer").await,
+            Err(MemoryStoreError::Policy(_))
+        ));
+    }
+
     #[tokio::test]
     async fn memory_grants_cannot_cross_workspace_boundaries() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
