@@ -271,6 +271,14 @@ impl MemoryStore {
             }
         }
         let allocation = allocate_context(&records, &scoped_context, relevance, token_budget)?;
+        let selected_audit = allocation.selected.iter().map(|item| {
+            json!({
+                "memory_id": item.memory_id,
+                "token_cost": item.token_cost,
+                "utility": item.utility,
+                "rank": item.rank
+            })
+        }).collect::<Vec<_>>();
         sqlx::query("INSERT INTO agent_memory_allocations (id, workspace_id, task_id, agent_id, token_budget, tokens_allocated, selected_json, excluded_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(Uuid::new_v4().to_string())
             .bind(allocation.workspace_id.to_string())
@@ -278,7 +286,7 @@ impl MemoryStore {
             .bind(allocation.agent_id.to_string())
             .bind(allocation.token_budget as i64)
             .bind(allocation.tokens_allocated as i64)
-            .bind(serde_json::to_string(&allocation.selected)?)
+            .bind(serde_json::to_string(&selected_audit)?)
             .bind(serde_json::to_string(&allocation.excluded)?)
             .bind(Utc::now().to_rfc3339())
             .execute(&self.pool)
