@@ -54,17 +54,21 @@ Vector embeddings can leak semantic information. They must be treated as sensiti
 
 ## Current implementation boundary
 
-The Rust module `backend/axum/src/memory_intelligence.rs` provides:
+The memory architecture now includes:
 
-- Validated vector and query types.
-- Explainable weighted scoring.
-- Workspace, agent, task, and project visibility checks.
-- Approved/non-superseded filtering.
-- Deterministic ranking and relevance classification.
-- Append-only event replay and expected-state comparison.
-- Unit tests for ranking, scope enforcement, invalid vectors, and reconstruction.
+- A deterministic Rust retrieval and historical reconstruction engine.
+- Multi-head scaled dot-product QKV attention over versioned Qoin vectors.
+- SQLite persistence for Qoin vector indexes, immutable hourly epochs, frozen epoch items, agent sessions, and progressive retrieval references.
+- Workspace, agent-private, task-shared, and project-shared visibility filtering.
+- A supervised hourly epoch publisher started by the Axum service.
+- Pareto-based initial context selection with a 20% budget, 80% contribution target, and explicit achieved-coverage reporting.
+- APIs for indexing approved curated memories and original chat messages, preparing agent handovers, and retrieving deferred context.
+- Source event/message pointers and immediate live-index invalidation when curated memories are edited, rejected, or deleted.
+- Tests for QKV ranking, Pareto selection, durable epoch publication, handover, progressive retrieval, and rejection of unapproved memories.
 
-This first code slice is a pure domain engine. It does not yet persist vector embeddings, call an embedding provider, add public retrieval endpoints, encrypt data, or automatically generate a handover bundle. Those integrations must be added against Axon's existing SQLite memory event log and approved authentication model; they must not be simulated with hard-coded embeddings or custom encryption.
+Qoin remains responsible for producing embeddings and sending the vector with a model version. Axon does not fabricate vectors or call an unconfigured embedding provider. The SQLite implementation performs an exact JSON-backed scan and is a correctness baseline, not a billion-record ANN index. A production billion-record deployment must replace the scan with a Qoin-compatible ANN/vector index while preserving epoch snapshots, source provenance, authorization filters, and reconstruction semantics.
+
+The implementation does not provide KMS-backed encryption, distributed multi-replica epoch leadership, a production ANN index, or automatic LLM synthesis of retrieved context. These must not be simulated with custom cryptography, fake embeddings, or mutable summaries.
 
 ## Evaluation requirements before production
 
