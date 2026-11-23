@@ -579,3 +579,76 @@ pub async fn report_content(
         Err(error(StatusCode::NOT_FOUND, "Reported content not found."))
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::{SqliteStorage, Storage};
+
+    #[tokio::test]
+    async fn published_agents_support_public_comments_replies_and_reactions() {
+        let storage = SqliteStorage::connect_in_memory().await.expect("in-memory storage");
+        let store = storage.explore_store();
+        let owner_id = Uuid::new_v4();
+        let visitor_id = Uuid::new_v4();
+        let workspace_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+
+        let listing_id = store.publish(
+            agent_id,
+            workspace_id,
+            owner_id,
+            "Memory Architect",
+            "manual",
+            "Organises project context and retrieves historical decisions.",
+            "Productivity",
+        ).await.expect("publish").expect("listing id");
+
+        let listings = store.list_agents(visitor_id, "recent", 20, 0).await.expect("list public agents");
+        assert_eq!(listings.len(), 1);
+        assert_eq!(listings[0].id, listing_id);
+        assert_eq!(listings[0].comment_count, 0);
+        assert!(!listings[0].is_liked);
+
+        let root = store.create_comment(
+            listing_id,
+            visitor_id,
+            None,
+            "The context retrieval is useful.",
+        ).await.expect("create comment").expect("root comment");
+        let reply = store.create_comment(
+            listing_id,
+            owner_id,
+            Some(root.id),
+            "Thanks for sharing your feedback.",
+        ).await.expect("create reply").expect("reply comment");
+        assert_eq!(reply.parent_comment_id, Some(root.id));
+
+        assert!(store.toggle_listing_like(listing_id, visitor_id).await.expect("like listing"));
+        assert!(store.toggle_comment_like(root.id, visitor_id).await.expect("like comment"));
+        let comments = store.list_comments(listing_id, visitor_id, 50, 0).await.expect("list comments");
+        assert_eq!(comments.len(), 2);
+        assert_eq!(comments[0].reply_count, 1);
+        assert!(comments[0].is_liked);
+
+        let updated = store.list_agents(visitor_id, "popular", 20, 0).await.expect("updated listing");
+        assert_eq!(updated[0].like_count, 1);
+        assert!(updated[0].is_liked);
+        assert!(store.toggle_follow(listing_id, visitor_id).await.expect("follow listing"));
+    }
+
+    #[tokio::test]
+    async fn listing_unpublish_removes_public_discovery_record() {
+        let storage = SqliteStorage::connect_in_memory().await.expect("in-memory storage");
+        let store = storage.explore_store();
+        let owner_id = Uuid::new_v4();
+        let workspace_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+        store.publish(agent_id, workspace_id, owner_id, "Agent", "manual", "Description", "General")
+            .await.expect("publish");
+        assert!(!store.unpublish(agent_id, workspace_id, Uuid::new_v4()).await.expect("wrong owner cannot unpublish"));
+        assert!(store.unpublish(agent_id, workspace_id, owner_id).await.expect("owner unpublishes"));
+        assert!(store.list_agents(Uuid::new_v4(), "recent", 20, 0).await.expect("list").is_empty());
+    }
+}
