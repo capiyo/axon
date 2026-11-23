@@ -66,6 +66,10 @@ pub fn app(state: AppState) -> Router {
             post(memory_routes::prepare_handover),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-sessions/:session_id/retrieve",
+            post(memory_routes::progressive_retrieval),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/audit",
             get(routes::list_audit_events),
         )
