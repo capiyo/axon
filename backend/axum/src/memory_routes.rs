@@ -1,6 +1,6 @@
 use crate::{
     auth_middleware::AuthenticatedUser,
-    memory_store::{MemoryStoreError},
+    memory_store::MemoryStoreError,
     memory_system::{
         MemoryRecord, MemoryScope, MemorySensitivity, RetrievalContext, Verification,
     },
