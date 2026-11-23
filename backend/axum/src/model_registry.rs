@@ -255,7 +255,7 @@ fn privacy_allows(provider: &ModelProvider, requirement: &PrivacyRequirement) ->
     true
 }
 
-fn score_candidate(
+pub fn score_candidate(
     stat: Option<&ModelStat>,
     level: &TaskLevel,
     minimum_history_runs: u64,
