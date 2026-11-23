@@ -152,7 +152,10 @@ mod tests {
         .unwrap();
         assert_eq!(decision.symbol, "BTCUSDT");
         assert_eq!(decision.strategy_version.as_deref(), Some("edge-map-v1"));
-        assert_eq!(decision.attended_features.unwrap().len(), QOIN_VECTOR_DIMENSION);
+        assert_eq!(
+            decision.attended_features.unwrap().len(),
+            QOIN_VECTOR_DIMENSION
+        );
     }
 
     #[test]
