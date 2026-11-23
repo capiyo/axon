@@ -239,3 +239,5 @@ body {
 .handover-memory code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; margin-top: 8px; color: var(--axon-color-text-muted); font: 10px/1.5 "DM Mono", monospace; }
 .progressive-result { margin-top: 14px; color: var(--axon-color-text); font-size: 10px; }
 @media (max-width: 560px) { .qoin-bridge-controls, .handover-controls { grid-template-columns: 1fr; }.handover-controls button { grid-column: auto; width: 100%; } }
+
+.qoin-notice { color: var(--axon-color-accent); font-size: 10px; margin: 10px 0 0; }
