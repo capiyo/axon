@@ -407,7 +407,11 @@ impl ChatMemoryStore {
         )
         .await?;
         if entry.status != "approved" {
-            let index_status = if entry.status == "superseded" { "superseded" } else { "deleted" };
+            let index_status = if entry.status == "superseded" {
+                "superseded"
+            } else {
+                "deleted"
+            };
             sqlx::query("UPDATE memory_vector_index SET status = ? WHERE memory_id = ?")
                 .bind(index_status)
                 .bind(entry.id.to_string())

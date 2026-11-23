@@ -1,8 +1,8 @@
 use crate::{
     audit::{AuditEvent, AuditStore},
     chat_memory::ChatMemoryStore,
-    memory_architecture::MemoryEpochCoordinator,
     firebase_auth::FirebaseVerifier,
+    memory_architecture::MemoryEpochCoordinator,
     model::{Agent, Artifact, Task, Workspace},
     robotics::TelemetryEvent,
     storage::{EntityKind, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
