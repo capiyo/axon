@@ -10,8 +10,10 @@ pub mod identity;
 mod model;
 pub mod model_discovery;
 pub mod model_registry;
+pub mod memory_store;
 pub mod memory_system;
 mod model_registry_routes;
+mod memory_routes;
 #[cfg(test)]
 mod model_registry_routes_tests;
 pub mod provider_roles;
