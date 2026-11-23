@@ -464,7 +464,7 @@ function WorkspaceApp() {
           <strong>{profileName}</strong><small>{currentUser?.email ?? "Personal workspace"}</small>
           <button type="button" onClick={() => { setActiveTab("explore"); setMenuOpen(false); }}>Explore workspace</button>
           <button type="button" onClick={() => { setSelected(null); setMenuOpen(false); }}>Switch workspace</button>
-          <button type="button" onClick={() => { if (auth) void import("firebase/auth").then(({signOut}) => signOut(auth)); setMenuOpen(false); }}>Sign out</button>
+          <button type="button" onClick={() => { const firebaseAuth = auth; if (firebaseAuth) void import("firebase/auth").then(({signOut}) => signOut(firebaseAuth)); setMenuOpen(false); }}>Sign out</button>
         </div>}
       </header>
 
@@ -524,7 +524,97 @@ function WorkspaceApp() {
             <form onSubmit={createWorkspace}><input id="workspace-name" value={name} onChange={event => setName(event.target.value)} placeholder="New workspace name" maxLength={120} required /><button disabled={!name.trim() || busy}>＋</button></form>
             <div className="axon-workspace-list">{workspaces.map(workspace => <button type="button" key={workspace.id} className={selected?.id === workspace.id ? "active" : ""} onClick={() => { setSelected(workspace); setActiveTab("explore"); }}><span className="axon-workspace-glyph">{workspace.name.slice(0,1).toUpperCase()}</span><span><strong>{workspace.name}</strong><small>{new Date(workspace.created_at).toLocaleDateString()}</small></span><span>›</span></button>)}</div>
           </div>
-          {selected ? <div className="axon-explore-tools">{explore}</div> : <div className="axon-empty-explore">Select a workspace to manage its agents, artifacts, Qoin context and task handoffs.</div>}
+          {selected ? <div className="axon-explore-tools">            <section className="panel qoin-memory-panel">
+              <div className="panel-heading">
+                <div><span className="kicker">05 · QOIN × AXON</span><h3>Market-aware historical memory</h3></div>
+                <span className="count">QKV + QOIN VECTOR</span>
+              </div>
+              <p className="muted">Qoin supplies its six-dimensional attended market-state vector. Axon uses it as the query/key context for historical decisions; it is a market-state vector, not a text embedding.</p>
+              <div className="qoin-bridge-controls">
+                <label>Market symbol<input value={qoinSymbol} onChange={event => { setQoinSymbol(event.target.value.toUpperCase()); setQoinVector(null); setHandover(null); setProgressiveContext(null); }} maxLength={32} placeholder="BTCUSDT" /></label>
+                <button type="button" disabled={busy || !qoinSymbol.trim()} onClick={() => void loadQoinVector()}>{busy ? "Loading…" : "Load latest Qoin vector"}</button>
+              </div>
+              {qoinNotice && <p className="qoin-notice" role="status">{qoinNotice}</p>}
+              {qoinVector && <div className="qoin-snapshot">
+                <div className="qoin-snapshot-head"><strong>{qoinVector.symbol}</strong><span>Model {qoinVector.vector.model_version}</span><span>Signal {qoinVector.action.toUpperCase()}</span></div>
+                <div className="qoin-features">{Object.entries(qoinVector.features).map(([name, value]) => <span key={name}>{name.replaceAll("_", " ")} <strong>{value.toFixed(3)}</strong></span>)}</div>
+                <p>{qoinVector.reason}</p>
+              </div>}
+              <div className="handover-controls">
+                <label>Receiving agent<select value={handoverAgentId} onChange={event => { setHandoverAgentId(event.target.value); setHandover(null); setProgressiveContext(null); }}><option value="">Choose an agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.display_name} · {agent.provider}</option>)}</select></label>
+                <label>Optional task scope<select value={handoverTaskId} onChange={event => setHandoverTaskId(event.target.value)}><option value="">Workspace-wide context</option>{tasks.filter(task => task.assignee_agent_id === handoverAgentId).map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
+                <button type="button" disabled={busy || !qoinVector || !handoverAgentId} onClick={() => void prepareAgentHandover()}>Prepare agent's first 20% context</button>
+              </div>
+              {handover && <div className="handover-result">
+                <div className="panel-heading"><div><span className="kicker">PINNED MEMORY EPOCH {handover.epoch.epoch_number}</span><h4>Initial context loaded</h4></div><span className="count">{handover.initial.length} MEMORIES</span></div>
+                <div className="qoin-coverage"><strong>{(handover.achieved_coverage * 100).toFixed(1)}%</strong><span>measured contribution coverage · {handover.deferred_count} deferred</span>{handover.budget_exhausted && <small>20% context budget reached before the 80% target.</small>}</div>
+                {handover.initial.map(item => <details className="handover-memory" key={item.memory_id}><summary><strong>{item.source_kind}</strong><span>Attention {(item.attention_score * 100).toFixed(1)}%</span></summary><code>{item.payload_json}</code></details>)}
+                <button type="button" className="secondary" disabled={busy || handover.deferred_count === 0} onClick={() => void retrieveMoreContext()}>Retrieve next 10 historical memories</button>
+                {progressiveContext && <div className="progressive-result"><strong>Progressive retrieval · {progressiveContext.memories.length} added · {progressiveContext.remaining_candidates} remaining</strong>{progressiveContext.memories.map(item => <details className="handover-memory" key={item.memory_id}><summary>{item.source_kind} · {(item.attention_score * 100).toFixed(1)}% attention</summary><code>{item.payload_json}</code></details>)}</div>}
+              </div>}
+            </section>
+
+            <div className="workspace-columns">
+              <section className="panel">
+                <div className="panel-heading"><div><span className="kicker">01 · PARTICIPANTS</span><h3>Agents</h3></div><span className="count">{agents.length}</span></div>
+                <form className="stack-form" onSubmit={createAgent}>
+                  <label htmlFor="agent-name">Agent name</label>
+                  <input id="agent-name" value={agentName} onChange={event => setAgentName(event.target.value)} placeholder="e.g. Architecture reviewer" maxLength={100} required />
+                  <label htmlFor="provider">Provider label</label>
+                  <select id="provider" value={provider} onChange={event => setProvider(event.target.value)}>
+                    <option value="claude">Claude</option><option value="chatgpt">ChatGPT</option><option value="gemini">Gemini</option><option value="local">Local model</option><option value="other">Other / manual</option>
+                  </select>
+                  <button disabled={!agentName.trim() || busy}>{busy ? "Saving…" : "Register agent"}</button>
+                </form>
+                <div className="item-list">
+                  {agents.map(agent => <div className="agent-item" key={agent.id}><span className="agent-avatar">{agent.display_name.slice(0,1).toUpperCase()}</span><div><strong>{agent.display_name}</strong><small>{agent.provider} · manual connection</small></div></div>)}
+                  {agents.length === 0 && <p className="muted">No agents yet. Register the first participant above.</p>}
+                </div>
+              </section>
+
+              <section className="panel">
+                <div className="panel-heading"><div><span className="kicker">02 · SHARED KNOWLEDGE</span><h3>Artifacts</h3></div><span className="count">{artifacts.length}</span></div>
+                <form className="stack-form" onSubmit={createArtifact}>
+                  <label htmlFor="artifact-title">Artifact title</label>
+                  <input id="artifact-title" value={artifactTitle} onChange={event => setArtifactTitle(event.target.value)} placeholder="e.g. Bug investigation notes" maxLength={200} required />
+                  <label htmlFor="artifact-content">Captured content</label>
+                  <textarea id="artifact-content" value={artifactContent} onChange={event => setArtifactContent(event.target.value)} placeholder="Paste the relevant response, findings, or project context…" maxLength={512000} rows={4} required />
+                  <button disabled={!artifactTitle.trim() || !artifactContent.trim() || busy}>{busy ? "Saving…" : "Capture artifact"}</button>
+                </form>
+                <div className="item-list">
+                  {artifacts.map(artifact => <details className="artifact-item" key={artifact.id}><summary><strong>{artifact.title}</strong><small>{new Date(artifact.captured_at).toLocaleString()}</small></summary><p>{artifact.content}</p></details>)}
+                  {artifacts.length === 0 && <p className="muted">Captured outputs and evidence will appear here.</p>}
+                </div>
+              </section>
+            </div>
+
+            <section className="panel task-panel">
+              <div className="panel-heading"><div><span className="kicker">03 · COORDINATION</span><h3>Task handoffs</h3></div><span className="count">{tasks.length} TASKS</span></div>
+              <form className="task-form" onSubmit={createTask}>
+                <div><label htmlFor="task-title">Task title</label><input id="task-title" value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder="e.g. Review the API design" maxLength={160} required /></div>
+                <div><label htmlFor="assignee">Assign to agent</label><select id="assignee" value={assignee} onChange={event => setAssignee(event.target.value)} required><option value="">Choose an agent</option>{agents.map(agent => <option value={agent.id} key={agent.id}>{agent.display_name} ({agent.provider})</option>)}</select></div>
+                <div className="task-objective"><label htmlFor="task-objective">Expected outcome / instructions</label><textarea id="task-objective" value={taskObjective} onChange={event => setTaskObjective(event.target.value)} placeholder="Describe what the receiving agent should do and what evidence it should return…" maxLength={10000} rows={3} required /></div>
+                <div className="context-picker"><span className="field-label">Attach context artifacts</span>{artifacts.length === 0 ? <small>No artifacts captured yet.</small> : artifacts.map(artifact => <label className="context-option" key={artifact.id}><input type="checkbox" checked={selectedArtifactIds.includes(artifact.id)} onChange={event => setSelectedArtifactIds(current => event.target.checked ? [...current, artifact.id] : current.filter(id => id !== artifact.id))} /><span>{artifact.title}</span></label>)}</div>
+                <button disabled={!taskTitle.trim() || !taskObjective.trim() || !assignee || busy || agents.length === 0}>{busy ? "Creating…" : "Create handoff"}</button>
+              </form>
+              <div className="task-list">
+                {tasks.map(task => {
+                  const assigneeAgent = agents.find(agent => agent.id === task.assignee_agent_id);
+                  const next = nextStatus[task.status];
+                  return <article className="task-card" key={task.id}>
+                    <div className="task-card-head"><div><span className="kicker">TASK · V{task.version}</span><h4>{task.title}</h4></div><span className={`task-status status-${task.status}`}>{task.status.replaceAll("_", " ")}</span></div>
+                    <p>{task.objective}</p>
+                    <div className="task-meta"><span>Assigned to <strong>{assigneeAgent?.display_name ?? "Unknown agent"}</strong></span><span>{task.transitions.length} events</span></div>
+                    {task.status === "in_progress" && <div className="response-capture"><label htmlFor={`response-${task.id}`}>Capture the agent's response</label><textarea id={`response-${task.id}`} rows={4} value={responseDrafts[task.id] ?? ""} onChange={event => setResponseDrafts(current => ({ ...current, [task.id]: event.target.value }))} placeholder="Paste the response returned by the assigned assistant…" /><button className="advance-button" disabled={busy || !(responseDrafts[task.id] ?? "").trim()} onClick={() => void submitTaskResponse(task)}>Submit response as artifact →</button></div>}
+                    {next && task.status !== "in_progress" && <button className="advance-button" disabled={busy} onClick={() => void advanceTask(task, next)}>Advance to {next.replaceAll("_", " ")} →</button>}
+                    {task.status === "review_required" && <button className="request-changes-button" disabled={busy} onClick={() => void advanceTask(task, "changes_requested")}>Request changes</button>}
+                    {task.response_artifact_id && <p className="response-linked">Response artifact linked · {task.response_artifact_id.slice(0, 8)}</p>}
+                    <details className="history"><summary>View handoff history</summary>{task.transitions.map((transition, index) => <div className="history-row" key={index}><strong>{transition.to.replaceAll("_", " ")}</strong><span>{transition.note}</span><small>{new Date(transition.occurred_at).toLocaleString()}</small></div>)}</details>
+                  </article>;
+                })}
+                {tasks.length === 0 && <div className="empty-state compact"><h3>No handoffs yet.</h3><p>Register an agent and create the first task above.</p></div>}
+              </div>
+            </section></div> : <div className="axon-empty-explore">Select a workspace to manage its agents, artifacts, Qoin context and task handoffs.</div>}
         </section>
       </section>
       {error && <div className="axon-error" role="alert">{error}<button type="button" onClick={() => selected ? void refreshWorkspace(selected) : void refreshWorkspaces()}>Retry</button></div>}
