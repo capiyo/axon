@@ -178,6 +178,16 @@ export type AxonAuditEvent = {
 };
 
 
+export type ModerationReport = {
+  id: string;
+  listing_id: string;
+  comment_id: string | null;
+  reporter_id: string;
+  reason: string;
+  status: string;
+  created_at: string;
+};
+
 export type Notification = {
   id: string;
   workspace_id: string | null;
