@@ -557,7 +557,7 @@ impl MemoryEpochCoordinator {
 mod persistence_tests {
     use super::*;
     use crate::{
-        chat_memory::{CreateMemoryEntry, CreateMessage, ChatMemoryStore},
+        chat_memory::{CreateMemoryEntry, ChatMemoryStore},
         storage::{SqliteStorage, Storage},
     };
 
@@ -590,7 +590,8 @@ mod persistence_tests {
                 visibility: "workspace_shared".into(),
                 vector: QoinVector { values: vector, model_version: "qoin-v1".into() },
                 tags: BTreeSet::new(), dependency_ids: BTreeSet::new(),
-                outcome_score: 0.9, evidence_score: 0.9,
+                outcome_score: if entry.id == first.id { 0.9 } else { 0.0 },
+                evidence_score: if entry.id == first.id { 0.9 } else { 0.0 },
             }).await.unwrap();
         }
         assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
