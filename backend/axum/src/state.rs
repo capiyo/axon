@@ -44,7 +44,7 @@ pub struct AppState {
 
 impl AppState {
     pub async fn with_storage(storage: Arc<dyn Storage>) -> Result<Self, StorageError> {
-        let chat_memory = Some(storage.chat_memory_store());
+        let chat_memory = Some(storage.chat_memory_store());\n        let memory_store = chat_memory.as_ref().map(|store| crate::memory_store::MemoryStore::new(store.sqlite_pool()));
         let state = Self {
             storage: Some(storage.clone()),
             chat_memory,
