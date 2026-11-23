@@ -125,6 +125,83 @@ fn qoin_error(error_value: QoinVectorError) -> (StatusCode, Json<ApiError>) {
     }
 }
 
+
+#[derive(Debug, Deserialize)]
+pub struct IndexQoinChatMessageRequest {
+    pub symbol: String,
+    #[serde(default)]
+    pub tags: BTreeSet<String>,
+    #[serde(default)]
+    pub dependency_ids: BTreeSet<Uuid>,
+    #[serde(default = "default_evidence_score")]
+    pub evidence_score: f32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct QoinChatMessageIndexReceipt {
+    pub message_id: Uuid,
+    pub symbol: String,
+    pub model_version: String,
+    pub context_timestamp_ms: i64,
+    pub qoin_event_ts_ms: i64,
+    pub indexed: bool,
+}
+
+pub async fn index_chat_message_with_qoin(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, chat_id, message_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(input): Json<IndexQoinChatMessageRequest>,
+) -> ApiResult<Json<QoinChatMessageIndexReceipt>> {
+    require_member(&state, user.user_id, workspace_id).await?;
+    let client = state.qoin_vectors.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Qoin integration is not configured. Set QOIN_API_URL on the Axon backend.",
+        )
+    })?;
+    let context_timestamp_ms = coordinator(&state)?
+        .chat_message_context_timestamp_ms(workspace_id, chat_id, message_id)
+        .await
+        .map_err(|_| error(StatusCode::NOT_FOUND, "Source chat message was not found."))?;
+    let snapshot = client
+        .at(&input.symbol, context_timestamp_ms)
+        .await
+        .map_err(qoin_error)?;
+    let model_version = snapshot.vector.model_version.clone();
+    let qoin_event_ts_ms = snapshot.event_ts_ms.ok_or_else(|| {
+        error(
+            StatusCode::BAD_GATEWAY,
+            "Qoin historical response did not include its source event timestamp.",
+        )
+    })?;
+    coordinator(&state)?
+        .index_chat_message(IndexChatMessageInput {
+            workspace_id,
+            chat_id,
+            message_id,
+            vector: snapshot.vector,
+            tags: input.tags,
+            dependency_ids: input.dependency_ids,
+            evidence_score: input.evidence_score,
+        })
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Chat message could not be indexed with the historical Qoin vector.",
+            )
+        })?;
+    Ok(Json(QoinChatMessageIndexReceipt {
+        message_id,
+        symbol: snapshot.symbol,
+        model_version,
+        context_timestamp_ms,
+        qoin_event_ts_ms,
+        indexed: true,
+    }))
+}
+
 pub async fn latest_qoin_vector(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,
