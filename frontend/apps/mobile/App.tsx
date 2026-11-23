@@ -113,6 +113,10 @@ function WorkspaceApp() {
 
   useEffect(() => {
     if (selected) {
+      setQoinVector(null);
+      setHandover(null);
+      setProgressiveContext(null);
+      setQoinNotice("");
       setSelectedArtifactIds([]);
       setResponseDrafts({});
       refreshWorkspace(selected).catch(cause => setError(cause instanceof Error ? cause.message : "Could not load workspace"));
@@ -206,6 +210,7 @@ function WorkspaceApp() {
 
   async function loadQoinVector() {
     if (!selected || !qoinSymbol.trim()) return;
+    setQoinNotice("");
     await perform(async () => {
       const snapshot = await request<QoinVectorSnapshot>(
         `/api/v1/workspaces/${selected.id}/memory/qoin-vector?symbol=${encodeURIComponent(qoinSymbol.trim())}`
@@ -439,7 +444,7 @@ function WorkspaceApp() {
             <View style={styles.panel}>
               <Text style={styles.panelTitle}>05 · Qoin × Axon · Market-aware memory</Text>
               <Text style={styles.muted}>Qoin supplies its six-dimensional attended market-state vector. Axon uses it to rank historical memories; this is a market-state vector, not a text embedding.</Text>
-              <TextInput value={qoinSymbol} onChangeText={setQoinSymbol} placeholder="Market symbol (BTCUSDT)" autoCapitalize="characters" style={styles.input} />
+              <TextInput value={qoinSymbol} onChangeText={value => { setQoinSymbol(value.toUpperCase()); setQoinVector(null); setHandover(null); setProgressiveContext(null); }} placeholder="Market symbol (BTCUSDT)" autoCapitalize="characters" style={styles.input} />
               <ActionButton label="Load latest Qoin vector" onPress={loadQoinVector} disabled={busy || !qoinSymbol.trim()} />
               {qoinNotice ? <Text style={styles.responseNote}>{qoinNotice}</Text> : null}
               {qoinVector ? <>
