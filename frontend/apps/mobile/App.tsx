@@ -77,6 +77,7 @@ function WorkspaceApp() {
   const [handoverAgentId, setHandoverAgentId] = useState("");
   const [handover, setHandover] = useState<HandoverContext | null>(null);
   const [progressiveContext, setProgressiveContext] = useState<ProgressiveMemoryContext | null>(null);
+  const [qoinNotice, setQoinNotice] = useState("");
 
   async function refreshHome() {
     const [status, items] = await Promise.all([
@@ -210,6 +211,7 @@ function WorkspaceApp() {
         `/api/v1/workspaces/${selected.id}/memory/qoin-vector?symbol=${encodeURIComponent(qoinSymbol.trim())}`
       );
       setQoinVector(snapshot);
+      setQoinNotice(`Loaded ${snapshot.symbol} · ${snapshot.vector.model_version}`);
       setHandover(null);
       setProgressiveContext(null);
     });
@@ -218,7 +220,7 @@ function WorkspaceApp() {
   async function indexMemoryWithQoin(entry: ProjectMemoryEntry) {
     if (!selected || !activeChat || !qoinSymbol.trim()) return;
     await perform(async () => {
-      await request<QoinMemoryIndexReceipt>(
+      const receipt = await request<QoinMemoryIndexReceipt>(
         `/api/v1/workspaces/${selected.id}/chats/${activeChat}/memory-index/${entry.id}/qoin`,
         {
           method: "POST",
@@ -232,6 +234,7 @@ function WorkspaceApp() {
           })
         }
       );
+      setQoinNotice(`Indexed ${receipt.memory_id.slice(0, 8)} with ${receipt.symbol}; available after the next hourly epoch.`);
     });
   }
 
@@ -438,6 +441,7 @@ function WorkspaceApp() {
               <Text style={styles.muted}>Qoin supplies its six-dimensional attended market-state vector. Axon uses it to rank historical memories; this is a market-state vector, not a text embedding.</Text>
               <TextInput value={qoinSymbol} onChangeText={setQoinSymbol} placeholder="Market symbol (BTCUSDT)" autoCapitalize="characters" style={styles.input} />
               <ActionButton label="Load latest Qoin vector" onPress={loadQoinVector} disabled={busy || !qoinSymbol.trim()} />
+              {qoinNotice ? <Text style={styles.responseNote}>{qoinNotice}</Text> : null}
               {qoinVector ? <>
                 <Text style={styles.rowTitle}>{qoinVector.symbol} · {qoinVector.vector.model_version} · {qoinVector.action.toUpperCase()}</Text>
                 {Object.entries(qoinVector.features).map(([name, value]) => <Text key={name} style={styles.rowMeta}>{name.replaceAll("_", " ")}: {value.toFixed(3)}</Text>)}
