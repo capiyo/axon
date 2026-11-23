@@ -1235,7 +1235,6 @@ pub async fn mark_all_notifications_read(
     Ok(Json(serde_json::json!({ "updated": updated })))
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
