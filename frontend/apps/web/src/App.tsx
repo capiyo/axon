@@ -461,7 +461,11 @@ function WorkspaceApp() {
           <button type="button" className="axon-profile-button" aria-label="Profile menu" onClick={() => setMenuOpen(value => !value)}>{currentUser?.photoURL ? <img src={currentUser.photoURL} alt="" /> : avatarLetter}</button>
         </div>
         {menuOpen && <div className="axon-menu">
-          <strong>{profileName}</strong><small>{currentUser?.email ?? "Personal workspace"}</small>
+          <div className="axon-menu-profile">
+            <div className="axon-menu-avatar">{currentUser?.photoURL ? <img src={currentUser.photoURL} alt="" /> : avatarLetter}</div>
+            <div><strong>{profileName}</strong><small>{currentUser?.email ?? "Axon member"}</small><span><i /> Available</span></div>
+          </div>
+          <div className="axon-menu-workspace"><span className="axon-section-label">CURRENT WORKSPACE</span><strong>{selected?.name ?? "No workspace selected"}</strong></div>
           <button type="button" onClick={() => { setActiveTab("explore"); setMenuOpen(false); }}>Explore workspace</button>
           <button type="button" onClick={() => { setSelected(null); setMenuOpen(false); }}>Switch workspace</button>
           <button type="button" onClick={() => { const firebaseAuth = auth; if (firebaseAuth) void import("firebase/auth").then(({signOut}) => signOut(firebaseAuth)); setMenuOpen(false); }}>Sign out</button>
