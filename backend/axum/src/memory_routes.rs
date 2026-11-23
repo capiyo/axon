@@ -99,6 +99,8 @@ pub struct QoinMemoryIndexReceipt {
     pub memory_id: Uuid,
     pub symbol: String,
     pub model_version: String,
+    pub memory_created_at_ms: i64,
+    pub qoin_event_ts_ms: i64,
     pub indexed: bool,
 }
 
@@ -106,7 +108,7 @@ fn qoin_error(error_value: QoinVectorError) -> (StatusCode, Json<ApiError>) {
     match error_value {
         QoinVectorError::MissingVector => error(
             StatusCode::NOT_FOUND,
-            "Qoin has no current vector for this symbol.",
+            "Qoin has no historical vector at or before this memory timestamp.",
         ),
         QoinVectorError::InvalidVector | QoinVectorError::MissingModelVersion => error(
             StatusCode::BAD_GATEWAY,
@@ -186,8 +188,26 @@ pub async fn index_memory_with_qoin(
             "Qoin integration is not configured. Set QOIN_API_URL on the Axon backend.",
         )
     })?;
-    let snapshot = client.latest(&input.symbol).await.map_err(qoin_error)?;
+    let memory_created_at_ms = coordinator(&state)?
+        .approved_memory_created_at_ms(workspace_id, chat_id, memory_id)
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Only an approved memory with an original creation timestamp can be indexed.",
+            )
+        })?;
+    let snapshot = client
+        .at(&input.symbol, memory_created_at_ms)
+        .await
+        .map_err(qoin_error)?;
     let model_version = snapshot.vector.model_version.clone();
+    let qoin_event_ts_ms = snapshot.event_ts_ms.ok_or_else(|| {
+        error(
+            StatusCode::BAD_GATEWAY,
+            "Qoin historical response did not include its source event timestamp.",
+        )
+    })?;
     coordinator(&state)?
         .index_approved_memory(IndexMemoryInput {
             workspace_id,
@@ -214,6 +234,8 @@ pub async fn index_memory_with_qoin(
         memory_id,
         symbol: snapshot.symbol,
         model_version,
+        memory_created_at_ms,
+        qoin_event_ts_ms,
         indexed: true,
     }))
 }
