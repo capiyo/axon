@@ -656,3 +656,12 @@ footer { color: #89968d; border-color: #ffffff14; }
   .floating-pill-item.active { background: #7df162; color: #061308; }
   .mobile-home-tabs { transition: opacity 260ms ease, transform 260ms ease; }
 }
+
+
+@media (max-width: 650px) {
+  .topbar { transition: transform 260ms ease, opacity 260ms ease; }
+  .topbar.mobile-header-hidden { transform: translateY(-100%); opacity: 0; pointer-events: none; }
+  .topbar.mobile-header-visible { transform: translateY(0); opacity: 1; }
+  .mobile-home-tabs.mobile-header-visible { opacity: 1; transform: translateY(0); }
+  .mobile-home-tabs.mobile-header-hidden { opacity: 0; transform: translateY(24px); pointer-events: none; }
+}
