@@ -491,7 +491,7 @@ pub async fn create_run(
                 notice.push(' ');
                 notice.push_str(&action_notice);
             }
-            if risk_escalated {
+            if policy_escalated {
                 notice.push_str(" Vector policy requires Important supervision for risk or ambiguity.");
             }
             run.assignment_notice = Some(notice);
