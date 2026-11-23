@@ -104,7 +104,10 @@ impl QoinVectorClient {
         if values.len() != QOIN_VECTOR_DIMENSION || values.iter().any(|value| !value.is_finite()) {
             return Err(QoinVectorError::InvalidVector);
         }
-        let values = values.into_iter().map(|value| value as f32).collect::<Vec<_>>();
+        let values = values
+            .into_iter()
+            .map(|value| value as f32)
+            .collect::<Vec<_>>();
         if values.iter().any(|value| !value.is_finite()) {
             return Err(QoinVectorError::InvalidVector);
         }
