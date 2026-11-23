@@ -28,13 +28,12 @@ pub struct MemoryVector {
     pub outcome: f32,
     pub failure: f32,
     pub evidence: f32,
-    pub recency: f32,
 }
 
 impl MemoryVector {
     pub fn validate(&self) -> Result<(), VectorError> {
         if self.semantic.iter().any(|v| !v.is_finite()) { return Err(VectorError::NonFiniteComponent); }
-        for value in [self.context, self.outcome, self.failure, self.evidence, self.recency] {
+        for value in [self.context, self.outcome, self.failure, self.evidence] {
             if !value.is_finite() || !(0.0..=1.0).contains(&value) {
                 return Err(VectorError::DimensionOutOfRange);
             }
@@ -228,7 +227,12 @@ pub fn reconstruct_history(events: &[HistoricalEvent], expected: Option<&BTreeMa
     let mut issues = Vec::new();
     let mut state = BTreeMap::new();
     let mut seen = BTreeSet::new();
+    let mut seen_event_ids = BTreeSet::new();
     for event in &ordered {
+        if !seen_event_ids.insert(event.event_id) {
+            issues.push(format!("duplicate event id {}", event.event_id));
+            continue;
+        }
         if !seen.insert(event.sequence) {
             issues.push(format!("duplicate event sequence {}", event.sequence));
             continue;
@@ -261,7 +265,7 @@ mod tests {
     use super::*;
 
     fn vector(semantic: Vec<f32>) -> MemoryVector {
-        MemoryVector { semantic, context: 0.9, outcome: 0.8, failure: 0.9, evidence: 0.95, recency: 0.8 }
+        MemoryVector { semantic, context: 0.9, outcome: 0.8, failure: 0.9, evidence: 0.95 }
     }
     fn query(workspace_id: Uuid, semantic: Vec<f32>) -> MemoryQuery {
         MemoryQuery { workspace_id, requester_agent_id: None, semantic, context: 0.9, outcome: 0.8,
