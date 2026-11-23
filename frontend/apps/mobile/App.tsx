@@ -748,7 +748,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                   <Text style={styles.chatCardMobileOpen}>OPEN CONVERSATION →</Text>
                 </Pressable>
                 <View style={styles.chatCardMobileFooter}><Text style={styles.chatCardMobileMeta}>{`${chat.message_count} messages`} · {linkedTasks.length} tasks · {last?.role === "assistant" ? "Agent replied" : last?.role === "user" ? "Your message" : "New conversation"}</Text><View style={styles.chatCardMobileActions}>{chat.unread_count > 0 ? <Text style={styles.chatUnreadCount}>{chat.unread_count}</Text> : null}<Pressable onPress={() => toggleChatLike(chat.id)}><Text style={styles.chatCardMobileLike}>{chat.is_liked ? "♥" : "♡"}</Text></Pressable><Pressable onPress={() => archiveChatById(chat.id)}><Text style={styles.chatCardMobileArchive}>Archive</Text></Pressable></View></View>
-              </View>; })
+              </View>; })}
               {chats.length === 0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No conversations yet</Text><Text style={styles.muted}>Create your first chat above.</Text></View> : null}
             </>
           )}
@@ -805,7 +805,7 @@ const styles = StyleSheet.create({
   error: { backgroundColor: "#43292d", borderRadius: 10, padding: 12, marginTop: 14 },
   errorText: { color: axonTheme.color.danger, fontSize: 11 },
   footer: { color: axonTheme.color.textSubtle, fontSize: 9, letterSpacing: 1.1, marginTop: 34, textAlign: "center" },
-  warning: { color: axonTheme.color.warning, fontSize: 10, lineHeight: 15, marginTop: 10, textAlign: "center" }
+  warning: { color: axonTheme.color.warning, fontSize: 10, lineHeight: 15, marginTop: 10, textAlign: "center" },
 
   mobileRoot: { flex:  1, backgroundColor: "#0E1612" },
   mobileHeader: { minHeight: 64, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 11, backgroundColor: "#0E1612" },
