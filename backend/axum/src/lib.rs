@@ -75,6 +75,14 @@ pub fn app(state: AppState) -> Router {
             post(explore::like_comment),
         )
         .route("/api/v1/explore/reports", post(explore::report_content))
+        .route(
+            "/api/v1/explore/agents/:listing_id/reports",
+            get(explore::list_reports),
+        )
+        .route(
+            "/api/v1/explore/reports/:report_id/resolve",
+            post(explore::resolve_report),
+        )
         .route("/api/v1/notifications", get(explore::list_notifications))
         .route("/api/v1/notifications/read-all", post(explore::mark_all_notifications_read))
         .route("/api/v1/notifications/:notification_id/read", post(explore::mark_notification_read))
