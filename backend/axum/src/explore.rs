@@ -533,16 +533,28 @@ impl ExploreStore {
         limit: i64,
         offset: i64,
     ) -> Result<Option<Vec<ModerationReport>>, sqlx::Error> {
-        let owned: Option<i64> = sqlx::query_scalar("SELECT 1 FROM agent_listings WHERE id = ? AND owner_id = ?")
-            .bind(listing_id.to_string()).bind(owner_id.to_string()).fetch_optional(&self.pool).await?;
-        if owned.is_none() { return Ok(None); }
+        let owned: Option<i64> =
+            sqlx::query_scalar("SELECT 1 FROM agent_listings WHERE id = ? AND owner_id = ?")
+                .bind(listing_id.to_string())
+                .bind(owner_id.to_string())
+                .fetch_optional(&self.pool)
+                .await?;
+        if owned.is_none() {
+            return Ok(None);
+        }
         let rows = sqlx::query(
             "SELECT id, listing_id, comment_id, reporter_id, reason, status, created_at
-             FROM agent_reports WHERE listing_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?"
+             FROM agent_reports WHERE listing_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
         )
-        .bind(listing_id.to_string()).bind(limit.clamp(1, 100)).bind(offset.max(0))
-        .fetch_all(&self.pool).await?;
-        let reports = rows.iter().map(parse_report).collect::<Result<Vec<_>, _>>()?;
+        .bind(listing_id.to_string())
+        .bind(limit.clamp(1, 100))
+        .bind(offset.max(0))
+        .fetch_all(&self.pool)
+        .await?;
+        let reports = rows
+            .iter()
+            .map(parse_report)
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Some(reports))
     }
 
@@ -558,24 +570,40 @@ impl ExploreStore {
         let row = sqlx::query(
             "SELECT r.listing_id, r.comment_id FROM agent_reports r
              JOIN agent_listings l ON l.id = r.listing_id
-             WHERE r.id = ? AND l.owner_id = ? AND r.status = 'pending'"
+             WHERE r.id = ? AND l.owner_id = ? AND r.status = 'pending'",
         )
-        .bind(report_id.to_string()).bind(owner_id.to_string()).fetch_optional(&self.pool).await?;
-        let Some(row) = row else { return Ok(None); };
-        let listing_id = Uuid::parse_str(&row.try_get::<String, _>("listing_id")?).unwrap_or_default();
-        let comment_id = row.try_get::<Option<String>, _>("comment_id")?
+        .bind(report_id.to_string())
+        .bind(owner_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let listing_id =
+            Uuid::parse_str(&row.try_get::<String, _>("listing_id")?).unwrap_or_default();
+        let comment_id = row
+            .try_get::<Option<String>, _>("comment_id")?
             .and_then(|value| Uuid::parse_str(&value).ok());
         if action == "hide_comment" {
-            let Some(comment_id) = comment_id else { return Ok(None); };
+            let Some(comment_id) = comment_id else {
+                return Ok(None);
+            };
             let now = Utc::now().to_rfc3339();
             sqlx::query("UPDATE agent_comments SET body = '[removed by listing owner]', status = 'deleted', updated_at = ? WHERE id = ? AND listing_id = ?")
                 .bind(&now).bind(comment_id.to_string()).bind(listing_id.to_string()).execute(&self.pool).await?;
             sqlx::query("UPDATE agent_comments SET body = '[removed by listing owner]', status = 'deleted', updated_at = ? WHERE parent_comment_id = ? AND status = 'visible'")
                 .bind(now).bind(comment_id.to_string()).execute(&self.pool).await?;
         }
-        let status = if action == "dismiss" { "dismissed" } else { "actioned" };
+        let status = if action == "dismiss" {
+            "dismissed"
+        } else {
+            "actioned"
+        };
         sqlx::query("UPDATE agent_reports SET status = ? WHERE id = ? AND status = 'pending'")
-            .bind(status).bind(report_id.to_string()).execute(&self.pool).await?;
+            .bind(status)
+            .bind(report_id.to_string())
+            .execute(&self.pool)
+            .await?;
         Ok(Some(status.to_owned()))
     }
 
@@ -667,7 +695,8 @@ impl ExploreStore {
             "explore.reported",
             "Your agent listing received a report",
             reason,
-        ).await?;
+        )
+        .await?;
         Ok(true)
     }
 }
@@ -771,7 +800,10 @@ fn parse_report(row: &sqlx::sqlite::SqliteRow) -> Result<ModerationReport, sqlx:
         status: row.try_get("status")?,
         created_at: DateTime::parse_from_rfc3339(&created_at)
             .map(|time| time.with_timezone(&Utc))
-            .map_err(|_| sqlx::Error::ColumnDecode { index: "created_at".into(), source: Box::new(std::io::Error::other("invalid timestamp")) })?,
+            .map_err(|_| sqlx::Error::ColumnDecode {
+                index: "created_at".into(),
+                source: Box::new(std::io::Error::other("invalid timestamp")),
+            })?,
     })
 }
 
@@ -1329,17 +1361,38 @@ pub async fn mark_all_notifications_read(
     Ok(Json(serde_json::json!({ "updated": updated })))
 }
 
-
 pub async fn list_reports(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path(listing_id): Path<Uuid>,
     Query(query): Query<ExploreQuery>,
 ) -> ApiResult<Json<Vec<ModerationReport>>> {
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Moderation storage is unavailable."))?;
-    let reports = store.list_reports(listing_id, user.user_id, query.limit.unwrap_or(50), query.offset.unwrap_or(0))
-        .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load moderation reports."))?
-        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Listing not found or caller is not its publisher."))?;
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Moderation storage is unavailable.",
+        )
+    })?;
+    let reports = store
+        .list_reports(
+            listing_id,
+            user.user_id,
+            query.limit.unwrap_or(50),
+            query.offset.unwrap_or(0),
+        )
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not load moderation reports.",
+            )
+        })?
+        .ok_or_else(|| {
+            error(
+                StatusCode::NOT_FOUND,
+                "Listing not found or caller is not its publisher.",
+            )
+        })?;
     Ok(Json(reports))
 }
 
@@ -1349,10 +1402,27 @@ pub async fn resolve_report(
     Path(report_id): Path<Uuid>,
     Json(input): Json<ResolveReportInput>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Moderation storage is unavailable."))?;
-    let status = store.resolve_report(report_id, user.user_id, input.action.trim())
-        .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not resolve report."))?
-        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Pending report not found or caller is not its publisher."))?;
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Moderation storage is unavailable.",
+        )
+    })?;
+    let status = store
+        .resolve_report(report_id, user.user_id, input.action.trim())
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not resolve report.",
+            )
+        })?
+        .ok_or_else(|| {
+            error(
+                StatusCode::NOT_FOUND,
+                "Pending report not found or caller is not its publisher.",
+            )
+        })?;
     Ok(Json(serde_json::json!({ "status": status })))
 }
 
@@ -1525,30 +1595,59 @@ mod tests {
     }
     #[tokio::test]
     async fn listing_owner_can_review_reports_and_hide_reported_comments() {
-        let storage = SqliteStorage::connect_in_memory().await.expect("in-memory storage");
+        let storage = SqliteStorage::connect_in_memory()
+            .await
+            .expect("in-memory storage");
         let store = storage.explore_store();
         let owner_id = Uuid::new_v4();
         let reporter_id = Uuid::new_v4();
         let workspace_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
-        let listing_id = store.publish(PublishAgentRecord {
-            agent_id,
-            workspace_id,
-            owner_id,
-            title: "Agent",
-            provider: "manual",
-            description: "Public description",
-            category: "General",
-        }).await.expect("publish").expect("listing");
-        let comment = store.create_comment(listing_id, reporter_id, None, "Spam comment.")
-            .await.expect("comment").expect("visible comment");
-        assert!(store.report(listing_id, Some(comment.id), reporter_id, "Spam or abuse.")
-            .await.expect("report"));
-        let reports = store.list_reports(listing_id, owner_id, 20, 0).await.expect("reports").expect("owner access");
+        let listing_id = store
+            .publish(PublishAgentRecord {
+                agent_id,
+                workspace_id,
+                owner_id,
+                title: "Agent",
+                provider: "manual",
+                description: "Public description",
+                category: "General",
+            })
+            .await
+            .expect("publish")
+            .expect("listing");
+        let comment = store
+            .create_comment(listing_id, reporter_id, None, "Spam comment.")
+            .await
+            .expect("comment")
+            .expect("visible comment");
+        assert!(store
+            .report(listing_id, Some(comment.id), reporter_id, "Spam or abuse.")
+            .await
+            .expect("report"));
+        let reports = store
+            .list_reports(listing_id, owner_id, 20, 0)
+            .await
+            .expect("reports")
+            .expect("owner access");
         assert_eq!(reports.len(), 1);
-        assert!(store.list_reports(listing_id, reporter_id, 20, 0).await.expect("non-owner reports").is_none());
-        assert_eq!(store.resolve_report(reports[0].id, owner_id, "hide_comment").await.expect("resolve").as_deref(), Some("actioned"));
-        let comments = store.list_comments(listing_id, owner_id, 50, 0).await.expect("comments");
+        assert!(store
+            .list_reports(listing_id, reporter_id, 20, 0)
+            .await
+            .expect("non-owner reports")
+            .is_none());
+        assert_eq!(
+            store
+                .resolve_report(reports[0].id, owner_id, "hide_comment")
+                .await
+                .expect("resolve")
+                .as_deref(),
+            Some("actioned")
+        );
+        let comments = store
+            .list_comments(listing_id, owner_id, 50, 0)
+            .await
+            .expect("comments");
         assert!(comments.is_empty());
     }
 }
