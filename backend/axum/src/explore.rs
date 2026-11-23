@@ -361,6 +361,13 @@ impl ExploreStore {
         .bind(author_id.to_string())
         .execute(&self.pool)
         .await?;
+        if result.rows_affected() == 1 {
+            sqlx::query("UPDATE agent_comments SET body = '[deleted]', status = 'deleted', updated_at = ? WHERE parent_comment_id = ? AND status = 'visible'")
+                .bind(Utc::now().to_rfc3339())
+                .bind(comment_id.to_string())
+                .execute(&self.pool)
+                .await?;
+        }
         Ok(result.rows_affected() == 1)
     }
 
