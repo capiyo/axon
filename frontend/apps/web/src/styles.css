@@ -591,3 +591,11 @@ footer { color: #89968d; border-color: #ffffff14; }
   .model-admin-header { flex-direction: column; }
   .admin-row { grid-template-columns: 1fr; }
 }
+
+
+.axon-navbar-brand { flex: 1; }
+.navbar-channels { min-width: 0; flex: 1; display: flex; align-items: center; gap: 7px; overflow-x: auto; scrollbar-width: none; }
+.navbar-channels::-webkit-scrollbar { display: none; }
+.channel-chip { flex: 0 0 auto; border: 1px solid transparent; border-radius: 9px; padding: 8px 10px; background: transparent; color: #89968d; font-size: 11px; white-space: nowrap; }
+.channel-chip:hover, .channel-chip.active { border-color: #ffffff20; background: #161f1a; color: #7df162; }
+@media (max-width: 900px) { .navbar-channels { display: none; } }
