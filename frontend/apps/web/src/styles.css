@@ -255,7 +255,7 @@ body { background:#0b1020; color:#edf3ff; }
 .axon-header-actions { display:flex; align-items:center; gap:14px; }
 .axon-connection { color:#788cac; font-size:11px; display:flex; align-items:center; gap:7px; }
 .axon-connection i,.axon-presence i,.axon-health-dot { width:7px; height:7px; border-radius:50%; background:#8a6c46; display:inline-block; }
-.axon-connection.online i,.axon-presence i,.axon-health-dot.online { background:#67d8f0; box-shadow:0 0 0 4px rgba(191,255,75,.09); }
+.axon-connection.online i,.axon-presence i,.axon-health-dot.online { background:#67d8f0; box-shadow:0 0 0 4px rgba(103,216,240,.10); }
 .axon-icon-button,.axon-profile-button,.axon-more-button { border:0; color:#dce5dc; background:transparent; cursor:pointer; }
 .axon-icon-button { font-size:20px; padding:7px; }
 .axon-profile-button,.axon-avatar { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; background:#29372b; color:#c5f58b; font-weight:800; overflow:hidden; }
@@ -272,7 +272,7 @@ body { background:#0b1020; color:#edf3ff; }
 .axon-pane-section { display:grid; gap:12px; }
 .axon-section-label { color:#788cac; font:500 9px "DM Mono",monospace; letter-spacing:.13em; }
 .axon-workspace-choice,.axon-workspace-list button { display:flex; align-items:center; gap:10px; width:100%; padding:10px; border:1px solid transparent; border-radius:12px; background:transparent; color:#edf3ff; text-align:left; cursor:pointer; }
-.axon-workspace-choice.active,.axon-workspace-list button.active { background:rgba(191,255,75,.07); border-color:rgba(191,255,75,.17); }
+.axon-workspace-choice.active,.axon-workspace-list button.active { background:rgba(103,216,240,.08); border-color:rgba(103,216,240,.18); }
 .axon-workspace-glyph,.axon-chat-avatar,.axon-conversation-avatar { flex:0 0 auto; width:34px; height:34px; display:grid; place-items:center; border-radius:12px; background:#22314c; color:#9ae9f7; font-weight:800; font-size:12px; }
 .axon-workspace-choice span:nth-child(2),.axon-workspace-list button span:nth-child(2) { min-width:0; display:grid; gap:3px; }
 .axon-workspace-choice strong,.axon-workspace-list strong { font-size:11px; }.axon-workspace-choice small,.axon-workspace-list small { color:#788cac; font-size:10px; }
@@ -285,7 +285,7 @@ body { background:#0b1020; color:#edf3ff; }
 .axon-new-chat button,.axon-workspace-switcher form button { width:38px; border:0; border-radius:11px; background:#67d8f0; color:#071a24; font-size:20px; font-weight:700; cursor:pointer; }
 .axon-chat-list,.axon-workspace-list { display:grid; gap:5px; }
 .axon-chat-item { display:flex; align-items:center; gap:10px; width:100%; border:1px solid transparent; border-radius:13px; padding:10px 8px; background:transparent; color:#edf3ff; text-align:left; cursor:pointer; }
-.axon-chat-item.active { background:#1a2945; border-color:rgba(191,255,75,.17); }
+.axon-chat-item.active { background:#1a2945; border-color:rgba(103,216,240,.18); }
 .axon-chat-copy { display:grid; gap:4px; min-width:0; flex:1; }.axon-chat-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }.axon-chat-copy small { color:#788cac; font-size:9px; }
 .axon-chat-chevron { color:#6e7e70; font-size:20px; }
 .axon-empty-list,.axon-empty-explore { display:grid; gap:8px; padding:28px 12px; color:#8295b5; text-align:center; font-size:11px; }.axon-empty-list span { font-size:25px; color:#67d8f0; }.axon-empty-list strong { color:#edf3ff; font-size:12px; }.axon-empty-list small { line-height:1.5; }
@@ -313,7 +313,7 @@ body { background:#0b1020; color:#edf3ff; }
   .axon-chats-pane.mobile-hidden,.axon-conversation-pane.mobile-hidden { display:none; }
   .axon-conversation-pane { height:calc(100dvh - 132px); min-height:0; padding:0 14px 90px; }
   .axon-explore-pane.active { display:block; }.axon-explore-pane:not(.active) { display:none; }
-  .axon-mobile-tabs { position:fixed; z-index:35; bottom:calc(12px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); display:flex; gap:4px; padding:5px; border:1px solid rgba(255,255,255,.1); border-radius:999px; background:rgba(25,37,27,.94); box-shadow:0 12px 35px #0008; backdrop-filter:blur(16px); }
+  .axon-mobile-tabs { position:fixed; z-index:35; bottom:calc(12px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); display:flex; gap:4px; padding:5px; border:1px solid rgba(255,255,255,.1); border-radius:999px; background:rgba(17,26,46,.96); box-shadow:0 12px 35px #0008; backdrop-filter:blur(16px); }
   .axon-mobile-tabs button { min-width:112px; display:flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:999px; padding:10px 17px; color:#a0b2d0; background:transparent; font-size:11px; font-weight:700; cursor:pointer; }.axon-mobile-tabs button span { font-size:15px; }.axon-mobile-tabs button.active { color:#071a24; background:#67d8f0; }
   .axon-explore-tools .workspace-columns { grid-template-columns:1fr; }.axon-explore-tools .task-form { grid-template-columns:1fr; }.axon-explore-tools .qoin-bridge-controls,.axon-explore-tools .handover-controls { grid-template-columns:1fr; }
   .axon-memory-form { flex-wrap:wrap; }.axon-memory-form input { flex-basis:100%; }.axon-composer-footer span { max-width:55%; line-height:1.4; }
@@ -334,3 +334,8 @@ body { background:#0b1020; color:#edf3ff; }
 .axon-menu button { background:#1b2942; }
 .axon-avatar,.axon-chat-avatar,.axon-workspace-glyph,.axon-conversation-avatar,.axon-message-avatar { background:#22314c; color:#9ae9f7; }
 .axon-presence i,.axon-health-dot.online,.axon-connection.online i { background:#63d7bd; box-shadow:0 0 0 4px rgba(99,215,189,.1); }
+
+.axon-mobile-tabs { background:rgba(17,26,46,.96); border-color:rgba(150,190,255,.15); }
+.axon-app .axon-chat-count { background:#1b2942; color:#9ae9f7; }
+.axon-app .axon-empty-list span,.axon-app .axon-empty-stream span,.axon-app .axon-empty-conversation span { color:#67d8f0; }
+.axon-app .axon-message-action,.axon-app .axon-resume-brief span { color:#67d8f0; }
