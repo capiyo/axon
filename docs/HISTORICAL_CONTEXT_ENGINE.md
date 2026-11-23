@@ -63,7 +63,8 @@ The current implementation uses SQLite as a single-node coordinator. Multiple se
 
 All routes are behind the existing Firebase authentication middleware and additionally verify workspace membership.
 
-- `POST /api/v1/workspaces/{workspace_id}/memory/index`: accepts a Qoin-produced, versioned vector for an existing approved chat memory. The source event is checked before indexing; proposed or rejected memories cannot be indexed.
+- `POST /api/v1/workspaces/{workspace_id}/memory/index`: accepts a Qoin-produced, versioned vector for an existing approved curated memory. The source event is checked before indexing; proposed or rejected memories cannot be indexed.
+- `POST /api/v1/workspaces/{workspace_id}/chats/{chat_id}/messages/{message_id}/memory-index`: indexes an original chat message while retaining the original message as the source of truth.
 - `GET /api/v1/workspaces/{workspace_id}/memory/epoch`: returns the latest published epoch.
 - `POST /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-context`: builds the initial Pareto context for a registered agent. If a task is supplied, it must belong to the workspace and be assigned to that agent.
 - `POST /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-sessions/{session_id}/retrieve`: retrieves additional context from the same pinned epoch and records each retrieved memory in an append-only session retrieval table.
@@ -78,8 +79,8 @@ Handover returns the epoch ID, initial memory payloads, deferred candidate count
 
 ## Operational limits
 
-- The hourly worker publishes metadata and freezes the vector index; it does not run an LLM summarizer or embedding model.
-- Qoin must call the memory index endpoint with a valid vector after the source memory is approved.
+- The hourly worker publishes metadata and freezes both curated memory entries and original chat-message vectors; it does not run an LLM summarizer or embedding model.
+- Qoin must call the curated-memory or chat-message index endpoint with a valid, versioned vector. Curated memories must be approved; original chat messages are indexed against their immutable message rows.
 - The current QKV engine performs ranking and source retrieval, not automatic free-form synthesis. Agent-side synthesis must preserve memory IDs and source event sequences.
 - The current SQLite vector index is a JSON-backed exact scan. It is suitable as a correct baseline, not a billion-record ANN index. At that scale, replace the index implementation with a Qoin-compatible ANN/vector store while retaining epoch IDs, source provenance, visibility filters, and immutable event replay.
 - The snapshot marker is a reproducibility marker, not a cryptographic digest. Integrity hashing and authenticated encryption belong in a separately reviewed storage/KMS layer.
