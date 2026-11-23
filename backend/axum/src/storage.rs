@@ -1,6 +1,7 @@
 use crate::{
     audit::AuditEvent,
     chat_memory::ChatMemoryStore,
+    memory_architecture::MemoryEpochCoordinator,
     model::{Agent, Artifact, Task, Workspace},
 };
 use async_trait::async_trait;
@@ -181,7 +182,7 @@ impl SqliteStorage {
         Ok(Self { pool })
     }
 
-    pub fn shared(self) -> Arc<dyn Storage> {
+    pub fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator {\n        MemoryEpochCoordinator::new(self.pool.clone())\n    }\n\n    pub fn shared(self) -> Arc<dyn Storage> {
         Arc::new(self)
     }
 }
