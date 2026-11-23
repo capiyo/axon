@@ -3,8 +3,8 @@ use crate::{
     chat_memory::ChatMemoryStore,
     firebase_auth::FirebaseVerifier,
     memory_architecture::MemoryEpochCoordinator,
-    qoin_vectors::QoinVectorClient,
     model::{Agent, Artifact, Task, Workspace},
+    qoin_vectors::QoinVectorClient,
     robotics::TelemetryEvent,
     storage::{EntityKind, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
 };
