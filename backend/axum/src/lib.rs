@@ -4,6 +4,7 @@ pub mod auth_middleware;
 mod auth_middleware_tests;
 pub mod chat_memory;
 mod chat_memory_routes;
+pub mod explore;
 pub mod firebase_auth;
 pub mod identity;
 pub mod memory_architecture;
@@ -17,7 +18,6 @@ mod routes;
 mod state;
 pub mod storage;
 mod task_routes;
-pub mod explore;
 
 pub use state::AppState;
 
