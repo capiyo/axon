@@ -139,6 +139,10 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         setActiveView("chats");
         setMobileConversationOpen(true);
       }
+    } else if (item.entity_type === "task" && item.workspace_id) {
+      const workspace = workspaces.find(candidate => candidate.id === item.workspace_id);
+      if (workspace) setSelected(workspace);
+      setActiveView("chats");
     } else {
       setActiveView("explore");
     }
