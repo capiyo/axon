@@ -241,3 +241,5 @@ body {
 @media (max-width: 560px) { .qoin-bridge-controls, .handover-controls { grid-template-columns: 1fr; }.handover-controls button { grid-column: auto; width: 100%; } }
 
 .qoin-notice { color: var(--axon-color-accent); font-size: 10px; margin: 10px 0 0; }
+
+.qoin-message-index { margin-top: 8px; }
