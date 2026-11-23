@@ -387,6 +387,7 @@ pub async fn create_run(
             .unwrap_or(10),
         curated_model_ids,
     };
+    run.assignment_category = Some(profile.category.clone());
     let risk = task_risk_score(&run.title, &run.objective);
     let ambiguity = task_ambiguity(&run.title, &run.objective);
     let policy_escalated = (risk >= 0.80 || ambiguity >= 0.75)
