@@ -220,6 +220,7 @@ impl ExploreStore {
         let rows = sqlx::query(&sql)
             .bind(user_id.to_string())
             .bind(user_id.to_string())
+            .bind(user_id.to_string())
             .bind(limit.clamp(1, 50))
             .bind(offset.max(0))
             .fetch_all(&self.pool)
