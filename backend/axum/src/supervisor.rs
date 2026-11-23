@@ -122,6 +122,8 @@ pub struct SupervisorRun {
     #[serde(default)]
     pub assignment_level: Option<TaskLevel>,
     #[serde(default)]
+    pub assignment_category: Option<String>,
+    #[serde(default)]
     pub assignment_notice: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -202,6 +204,7 @@ impl SupervisorRun {
             decision: None,
             assignment_decisions: Vec::new(),
             assignment_level: None,
+            assignment_category: None,
             assignment_notice: None,
             created_at: now,
             updated_at: now,
