@@ -521,6 +521,7 @@ impl MemoryEpochCoordinator {
         for row in rows {
             let id_text: String = row.try_get("memory_id")?;
             let id = Uuid::parse_str(&id_text).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let source_kind: String = row.try_get("source_kind")?;
             let vector_json: String = row.try_get("qoin_vector_json")?;
             let vector: QoinVector = serde_json::from_str(&vector_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
             if vector.model_version != request.query.model_version { continue; }
