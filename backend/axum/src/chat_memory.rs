@@ -87,6 +87,10 @@ impl ChatMemoryStore {
         Self { pool }
     }
 
+    pub(crate) fn sqlite_pool(&self) -> SqlitePool {
+        self.pool.clone()
+    }
+
     pub async fn list_chats(&self, workspace_id: Uuid) -> Result<Vec<Chat>, sqlx::Error> {
         let rows = sqlx::query("SELECT id, workspace_id, owner_id, title, created_at, updated_at, archived FROM chats WHERE workspace_id = ? AND archived = 0 ORDER BY updated_at DESC, id DESC")
             .bind(workspace_id.to_string()).fetch_all(&self.pool).await?;
