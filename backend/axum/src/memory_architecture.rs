@@ -298,6 +298,22 @@ mod tests {
         assert_eq!(ranked[0].memory_id, id);
     }
     #[test]
+    fn attention_rejects_vectors_from_different_qoin_model_versions() {
+        let mut historical = memory(Uuid::new_v4(), vec![1.0, 0.0, 1.0, 0.0], 0.8);
+        historical.key.model_version = "edge-map-v0".into();
+        let query = AttentionQuery {
+            query: q(vec![1.0, 0.0, 1.0, 0.0]),
+            heads: 2,
+            tags: BTreeSet::new(),
+            dependency_ids: BTreeSet::new(),
+        };
+        assert_eq!(
+            qkv_attention(&query, &[historical]).unwrap_err(),
+            AttentionError::InvalidVector
+        );
+    }
+
+    #[test]
     fn pareto_selection_respects_budget_and_reports_real_coverage() {
         let scores = (0..10)
             .map(|i| AttentionScore {
