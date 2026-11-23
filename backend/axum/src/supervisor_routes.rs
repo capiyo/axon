@@ -389,6 +389,12 @@ pub async fn create_run(
     }
     let assignment_engine = state.assignment_engine();
     let mut assignment = assignment_engine.assign(&profile, &providers, &models, &stats);
+    if policy_escalated
+        && assignment.as_ref().is_ok_and(|plan| plan.level != TaskLevel::Important)
+    {
+        // Do not silently trade away mandatory supervision to satisfy a budget.
+        assignment = Err(crate::model_registry::AssignmentError::BudgetExceeded);
+    }
     let has_alternative = assignment.as_ref().is_ok_and(|plan| {
         plan.decisions.iter().any(|decision| decision.candidates_considered.len() > 1)
     });
