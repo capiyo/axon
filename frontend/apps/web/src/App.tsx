@@ -9,9 +9,11 @@ import type {
 } from "../../../packages/contracts/src";
 
 
+const API_BASE_URL = (import.meta.env.VITE_AXON_API_URL ?? "").replace(/\\/$/, "");
+
 const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
   const token = await auth?.currentUser?.getIdToken();
-  const response = await fetch(path, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init?.headers }
   });
