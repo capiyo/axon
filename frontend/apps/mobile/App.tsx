@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -44,7 +45,7 @@ function ActionButton({ label, onPress, disabled = false, secondary = false }: {
   );
 }
 
-function WorkspaceApp() {
+function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [health, setHealth] = useState<Health | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selected, setSelected] = useState<Workspace | null>(null);
@@ -52,6 +53,10 @@ function WorkspaceApp() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
+  const [chatPreviews, setChatPreviews] = useState<Record<string, ChatDetail>>({});
+  const [activeTab, setActiveTab] = useState<"chats" | "explore">("chats");
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [activeChat, setActiveChat] = useState("");
   const [chatDetail, setChatDetail] = useState<ChatDetail | null>(null);
   const [chatTitle, setChatTitle] = useState("");
@@ -86,6 +91,7 @@ function WorkspaceApp() {
     ]);
     setHealth(status);
     setWorkspaces(items);
+    setSelected(current => current ?? items[0] ?? null);
   }
 
   async function refreshWorkspace(workspace: Workspace) {
@@ -99,10 +105,13 @@ function WorkspaceApp() {
     setTasks(taskItems);
     const chatItems = await request<Chat[]>(`/api/v1/workspaces/${workspace.id}/chats`);
     setChats(chatItems);
-    if (activeChat && !chatItems.some(chat => chat.id === activeChat)) {
-      setActiveChat("");
-      setChatDetail(null);
-    }
+    const previewEntries = await Promise.all(chatItems.map(async chat => {
+      try { return [chat.id, await request<ChatDetail>(`/api/v1/workspaces/${workspace.id}/chats/${chat.id}`)] as const; }
+      catch { return null; }
+    }));
+    setChatPreviews(Object.fromEntries(previewEntries.filter((entry): entry is readonly [string, ChatDetail] => entry !== null)));
+    setActiveChat(current => current && chatItems.some(chat => chat.id === current) ? current : chatItems[0]?.id ?? "");
+    if (activeChat && !chatItems.some(chat => chat.id === activeChat)) setChatDetail(null);
     if (!agentItems.some(agent => agent.id === assignee)) setAssignee(agentItems[0]?.id ?? "");
     if (!agentItems.some(agent => agent.id === handoverAgentId)) setHandoverAgentId(agentItems[0]?.id ?? "");
   }
@@ -146,9 +155,11 @@ function WorkspaceApp() {
     if (!selected || !activeChat) return;
     void perform(async () => {
       await request(`/api/v1/workspaces/${selected.id}/chats/${activeChat}/archive`, { method: "PATCH" });
-      setActiveChat("");
+      const remaining = await request<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`);
+      setChats(remaining);
       setChatDetail(null);
-      setChats(await request<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`));
+      setActiveChat(remaining[0]?.id ?? "");
+      setMobileChatOpen(false);
     });
   }
 
@@ -421,157 +432,105 @@ function WorkspaceApp() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-        <View style={styles.brandRow}>
-          <View style={styles.logo}><Text style={styles.logoText}>Q</Text></View>
-          <Text style={styles.brand}>AXON</Text>
-          <View style={styles.version}><Text style={styles.versionText}>0.1</Text></View>
+      <StatusBar style="light" />
+      <View style={styles.mobileRoot}>
+        <View style={styles.mobileHeader}>
+          <View style={styles.mobileBrandMark}><Text style={styles.mobileBrandMarkText}>A</Text></View>
+          <View style={styles.mobileHeaderCopy}><Text style={styles.mobileBrand}>AXON</Text><Text style={styles.mobileWorkspace}>{selected?.name ?? "Your workspace"}</Text></View>
+          <Pressable onPress={() => setProfileOpen(true)} style={styles.mobileProfileButton} accessibilityLabel="Open profile">
+            {user.photoURL ? <Image source={{uri:user.photoURL}} style={styles.mobileProfileImage}/> : <Text style={styles.mobileProfileInitial}>{(user.displayName || user.email || "A").slice(0,1).toUpperCase()}</Text>}
+          </Pressable>
         </View>
 
-        {selected ? (
-          <>
-            <Pressable onPress={() => setSelected(null)}><Text style={styles.back}>← All workspaces</Text></Pressable>
-            <Text style={styles.eyebrow}>PROJECT WORKSPACE</Text>
-            <Text style={styles.title}>{selected.name}</Text>
-            <Text style={styles.description}>Register participants, capture their work and create explicit handoffs.</Text>
-
+        <ScrollView contentContainerStyle={styles.mobileContent} keyboardShouldPersistTaps="handled">
+          {!selected ? (
             <View style={styles.panel}>
-              <Text style={styles.panelTitle}>04 · Chats & project memory</Text>
-              <TextInput value={chatTitle} onChangeText={setChatTitle} placeholder="New chat title" style={styles.input} maxLength={160} />
-              <ActionButton label="Create chat" onPress={createChat} disabled={!chatTitle.trim() || busy} />
-              {chats.map(chat => <Pressable key={chat.id} onPress={() => setActiveChat(chat.id)} style={[styles.agentChoice, activeChat === chat.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{chat.title}</Text><Text style={styles.rowMeta}>{new Date(chat.updated_at).toLocaleString()}</Text></Pressable>)}
-              {chatDetail ? <>
-                <Text style={styles.fieldLabel}>RESUME BRIEF · APPROVED MEMORY ONLY</Text>\n                <ActionButton label="Archive chat" onPress={archiveChat} disabled={busy} secondary />
-                <Text style={styles.rowMeta}>{chatDetail.resume_brief || "No context yet. Add messages and approve useful memory."}</Text>
-                <View style={styles.listRow}>
-                  {chatDetail.messages.map(message => <View key={message.id} style={styles.contextChoice}><Text style={styles.rowTitle}>{message.role}{message.answered_by ? ` · ${message.answered_by}` : ""}</Text><Text style={styles.rowMeta}>{message.content}</Text><ActionButton label="Index with Qoin" onPress={() => indexChatMessageWithQoin(message)} disabled={busy} secondary /></View>)}
+              <Text style={styles.panelTitle}>Create your workspace</Text>
+              <Text style={styles.muted}>Start a private workspace for your agents and conversations.</Text>
+              <TextInput value={workspaceName} onChangeText={setWorkspaceName} placeholder="Workspace name" style={styles.input}/>
+              <ActionButton label="Create workspace" onPress={createWorkspace} disabled={!workspaceName.trim() || busy}/>
+              {workspaces.map(workspace => <Pressable key={workspace.id} onPress={() => setSelected(workspace)} style={styles.workspaceRow}><Text style={styles.rowTitle}>{workspace.name}</Text></Pressable>)}
+            </View>
+          ) : profileOpen ? (
+            <>
+              <View style={styles.screenHeading}><Pressable onPress={() => setProfileOpen(false)}><Text style={styles.back}>← Back</Text></Pressable><Text style={styles.screenTitle}>Profile & workspace</Text><Text style={styles.description}>{user.email}</Text></View>
+              <View style={styles.panel}>
+                <View style={styles.profileIdentityMobile}>
+                  {user.photoURL ? <Image source={{uri:user.photoURL}} style={styles.profileAvatarMobile}/> : <View style={styles.profileAvatarFallback}><Text style={styles.profileAvatarFallbackText}>{(user.displayName || user.email || "A").slice(0,1).toUpperCase()}</Text></View>}
+                  <View style={{flex:1}}><Text style={styles.rowTitle}>{user.displayName || user.email || "Axon user"}</Text><Text style={styles.rowMeta}>{selected.name}</Text></View>
                 </View>
-                <TextInput value={messageDraft} onChangeText={setMessageDraft} placeholder="Write a message…" style={[styles.input, styles.multiline]} multiline />
-                <ActionButton label="Send message" onPress={sendChatMessage} disabled={!messageDraft.trim() || busy} />
-                <Text style={styles.fieldLabel}>PROPOSE PROJECT MEMORY</Text>
-                <TextInput value={memoryDraft} onChangeText={setMemoryDraft} placeholder="Capture a decision, fact, constraint or open task…" style={[styles.input, styles.multiline]} multiline maxLength={4000} />
-                <View style={{flexDirection:"row",flexWrap:"wrap",gap:6,marginBottom:8}}>
-                  {(["decision","fact","constraint","open_task","note"] as const).map(kind => <Pressable key={kind} onPress={() => setMemoryType(kind)} style={[styles.contextChoice, memoryType === kind && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{kind.replaceAll("_"," ")}</Text></Pressable>)}
+                <View style={styles.mobileStatsGrid}>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{agents.length}</Text><Text style={styles.mobileStatLabel}>Agents</Text></View>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{chats.length}</Text><Text style={styles.mobileStatLabel}>Chats</Text></View>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "in_progress").length}</Text><Text style={styles.mobileStatLabel}>Running</Text></View>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "completed").length}</Text><Text style={styles.mobileStatLabel}>Completed</Text></View>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "offered" || task.status === "acknowledged").length}</Text><Text style={styles.mobileStatLabel}>Queued</Text></View>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{artifacts.length}</Text><Text style={styles.mobileStatLabel}>Artifacts</Text></View>
                 </View>
-                <ActionButton label="Propose memory" onPress={proposeMemory} disabled={!memoryDraft.trim() || busy} />
-                {chatDetail.memory.map(entry => <View key={entry.id} style={styles.listRow}><Text style={styles.rowTitle}>{entry.type.replaceAll("_"," ")} · {entry.status}</Text>{editingMemoryId === entry.id ? <><TextInput value={editMemoryDraft} onChangeText={setEditMemoryDraft} style={styles.input} maxLength={4000} /><ActionButton label="Save edit" onPress={() => saveMemoryEdit(entry)} disabled={busy || !editMemoryDraft.trim()} /><ActionButton label="Cancel" onPress={() => setEditingMemoryId("")} secondary /></> : <Text style={styles.rowMeta}>{entry.text}</Text>}{entry.status === "proposed" ? <><ActionButton label="Approve memory" onPress={() => approveMemory(entry)} disabled={busy} secondary /><ActionButton label="Reject memory" onPress={() => changeMemory(entry, "reject")} disabled={busy} secondary /></> : null}<ActionButton label="Edit memory" onPress={() => { setEditingMemoryId(entry.id); setEditMemoryDraft(entry.text); }} disabled={busy} secondary /><ActionButton label="Index with Qoin" onPress={() => indexMemoryWithQoin(entry)} disabled={busy || entry.status !== "approved"} secondary /><ActionButton label="Delete memory" onPress={() => changeMemory(entry, "delete")} disabled={busy} secondary /></View>)}
-              </> : <Text style={styles.muted}>Choose a chat to see its messages and resume brief. Only approved memory informs future briefs.</Text>}
-            </View>
-
-
-            <View style={styles.panel}>
-              <Text style={styles.panelTitle}>05 · Qoin × Axon · Market-aware memory</Text>
-              <Text style={styles.muted}>Qoin supplies its six-dimensional attended market-state vector. Axon uses it to rank historical memories; this is a market-state vector, not a text embedding.</Text>
-              <TextInput value={qoinSymbol} onChangeText={value => { setQoinSymbol(value.toUpperCase()); setQoinVector(null); setHandover(null); setProgressiveContext(null); }} placeholder="Market symbol (BTCUSDT)" autoCapitalize="characters" style={styles.input} />
-              <ActionButton label="Load latest Qoin vector" onPress={loadQoinVector} disabled={busy || !qoinSymbol.trim()} />
-              {qoinNotice ? <Text style={styles.responseNote}>{qoinNotice}</Text> : null}
-              {qoinVector ? <>
-                <Text style={styles.rowTitle}>{qoinVector.symbol} · {qoinVector.vector.model_version} · {qoinVector.action.toUpperCase()}</Text>
-                {Object.entries(qoinVector.features).map(([name, value]) => <Text key={name} style={styles.rowMeta}>{name.replaceAll("_", " ")}: {value.toFixed(3)}</Text>)}
-                <Text style={styles.rowMeta}>{qoinVector.reason}</Text>
-              </> : <Text style={styles.muted}>Load a current Qoin vector to index approved memories and prepare agent context.</Text>}
-              <Text style={styles.fieldLabel}>RECEIVING AGENT</Text>
-              {agents.map(agent => <Pressable key={agent.id} onPress={() => { setHandoverAgentId(agent.id); setHandover(null); setProgressiveContext(null); }} style={[styles.agentChoice, handoverAgentId === agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text></Pressable>)}
-              <ActionButton label="Prepare first 20% context" onPress={prepareAgentHandover} disabled={busy || !qoinVector || !handoverAgentId || agents.length === 0} />
-              {handover ? <>
-                <Text style={styles.fieldLabel}>PINNED EPOCH {handover.epoch.epoch_number} · {handover.initial.length} INITIAL MEMORIES</Text>
-                <Text style={styles.rowTitle}>{(handover.achieved_coverage * 100).toFixed(1)}% measured contribution coverage</Text>
-                <Text style={styles.rowMeta}>{handover.deferred_count} memories deferred{handover.budget_exhausted ? " · 20% budget reached before 80% target" : ""}</Text>
-                {handover.initial.map(item => <View key={item.memory_id} style={styles.listRow}><Text style={styles.rowTitle}>{item.source_kind} · {(item.attention_score * 100).toFixed(1)}% attention</Text><Text style={styles.rowMeta}>{item.payload_json}</Text></View>)}
-                <ActionButton label="Retrieve next 10 historical memories" onPress={retrieveMoreContext} disabled={busy || handover.deferred_count === 0} secondary />
-                {progressiveContext ? <><Text style={styles.fieldLabel}>ADDITIONAL CONTEXT · {progressiveContext.memories.length} ADDED · {progressiveContext.remaining_candidates} LEFT</Text>{progressiveContext.memories.map(item => <View key={item.memory_id} style={styles.listRow}><Text style={styles.rowTitle}>{item.source_kind} · {(item.attention_score * 100).toFixed(1)}% attention</Text><Text style={styles.rowMeta}>{item.payload_json}</Text></View>)}</> : null}
-              </> : null}
-            </View>
-
-            <View style={styles.panel}>
-              <Text style={styles.panelTitle}>01 · Agents ({agents.length})</Text>
-              <TextInput value={agentName} onChangeText={setAgentName} placeholder="Agent name" style={styles.input} />
-              <TextInput value={provider} onChangeText={setProvider} placeholder="Provider (claude, chatgpt…)" style={styles.input} autoCapitalize="none" />
-              <ActionButton label="Register agent" onPress={registerAgent} disabled={!agentName.trim() || busy} />
-              {agents.map(agent => <View key={agent.id} style={styles.listRow}><Text style={styles.rowTitle}>{agent.display_name}</Text><Text style={styles.rowMeta}>{agent.provider} · manual</Text></View>)}
-              {agents.length === 0 && <Text style={styles.muted}>No agents registered yet.</Text>}
-            </View>
-
-            <View style={styles.panel}>
-              <Text style={styles.panelTitle}>02 · Capture context ({artifacts.length})</Text>
-              <TextInput value={artifactTitle} onChangeText={setArtifactTitle} placeholder="Artifact title" style={styles.input} />
-              <TextInput value={artifactContent} onChangeText={setArtifactContent} placeholder="Paste findings, responses or project context…" style={[styles.input, styles.multiline]} multiline textAlignVertical="top" />
-              <ActionButton label="Capture artifact" onPress={captureArtifact} disabled={!artifactTitle.trim() || !artifactContent.trim() || busy} />
-              {artifacts.map(artifact => <View key={artifact.id} style={styles.listRow}><Text style={styles.rowTitle}>{artifact.title}</Text><Text style={styles.rowMeta} numberOfLines={2}>{artifact.content}</Text></View>)}
-              {artifacts.length === 0 && <Text style={styles.muted}>No captured context yet.</Text>}
-            </View>
-
-            <View style={styles.panel}>
-              <Text style={styles.panelTitle}>03 · Create handoff</Text>
-              <TextInput value={taskTitle} onChangeText={setTaskTitle} placeholder="Task title" style={styles.input} />
-              <TextInput value={taskObjective} onChangeText={setTaskObjective} placeholder="Expected outcome and instructions…" style={[styles.input, styles.multiline]} multiline textAlignVertical="top" />
-              <Text style={styles.fieldLabel}>ASSIGN TO</Text>
-              {agents.map(agent => (
-                <Pressable key={agent.id} onPress={() => setAssignee(agent.id)} style={[styles.agentChoice, assignee === agent.id && styles.agentChoiceActive]}>
-                  <Text style={styles.rowTitle}>{agent.display_name}</Text><Text style={styles.rowMeta}>{agent.provider}</Text>
-                </Pressable>
-              ))}
-              <Text style={styles.fieldLabel}>ATTACH CONTEXT</Text>
-              {artifacts.map(artifact => (
-                <Pressable key={artifact.id} onPress={() => setSelectedArtifactIds(current => current.includes(artifact.id) ? current.filter(id => id !== artifact.id) : [...current, artifact.id])} style={styles.contextChoice}>
-                  <Text style={styles.rowTitle}>{selectedArtifactIds.includes(artifact.id) ? "☑" : "□"}  {artifact.title}</Text>
-                </Pressable>
-              ))}
-              <ActionButton label="Create handoff" onPress={createTask} disabled={!taskTitle.trim() || !taskObjective.trim() || !assignee || busy} />
-              {tasks.map(task => (
-                <View key={task.id} style={styles.listRow}>
-                  <Text style={styles.rowTitle}>{task.title}</Text>
-                  <Text style={styles.rowMeta}>{task.status.replaceAll("_", " ")} · version {task.version}</Text>
-                  <Text style={styles.rowMeta}>{task.objective}</Text>
-                  {task.status === "in_progress" ? (
-                    <>
-                      <TextInput value={responseDrafts[task.id] ?? ""} onChangeText={value => setResponseDrafts(current => ({ ...current, [task.id]: value }))} placeholder="Paste the assistant response…" style={[styles.input, styles.multiline]} multiline textAlignVertical="top" />
-                      <ActionButton label="Submit response" onPress={() => void submitTaskResponse(task)} disabled={!(responseDrafts[task.id] ?? "").trim() || busy} />
-                    </>
-                  ) : null}
-                  {task.status === "review_required" ? <ActionButton label="Request changes" onPress={() => void advanceTask(task, "changes_requested")} disabled={busy} secondary /> : null}
-                  {nextTaskStatus[task.status] ? <ActionButton label={`Advance to ${nextTaskStatus[task.status].replaceAll("_", " ")}`} onPress={() => void advanceTask(task, nextTaskStatus[task.status])} disabled={busy} secondary /> : null}
-                  {task.response_artifact_id ? <Text style={styles.responseNote}>Response artifact linked · {task.response_artifact_id.slice(0, 8)}</Text> : null}
-                </View>
-              ))}
-              {tasks.length === 0 && <Text style={styles.muted}>No handoffs yet.</Text>}
-            </View>
-          </>
-        ) : (
-          <>
-            <Text style={styles.eyebrow}>THE AGENT COLLABORATION LAYER</Text>
-            <Text style={styles.title}>Work, connected.</Text>
-            <Text style={styles.description}>A shared working layer for agents to exchange context, evidence, decisions and tasks—with you in control.</Text>
-            <View style={styles.panel}>
-              <Text style={styles.panelTitle}>SYSTEM STATUS</Text>
-              <View style={styles.statusRow}>
-                <View style={[styles.dot, health?.status === "ok" && styles.online]} />
-                <Text style={styles.statusText}>{health ? "API connected" : "Connecting…"}</Text>
-                {busy && <ActivityIndicator size="small" />}
+                <Text style={styles.fieldLabel}>AGENT REGISTRY</Text>
+                <TextInput value={agentName} onChangeText={setAgentName} placeholder="Agent name" style={styles.input}/>
+                <TextInput value={provider} onChangeText={setProvider} placeholder="Provider" style={styles.input}/>
+                <ActionButton label="Register agent" onPress={registerAgent} disabled={!agentName.trim() || busy}/>
+                {agents.map(agent => <View key={agent.id} style={styles.listRow}><Text style={styles.rowTitle}>{agent.display_name}</Text><Text style={styles.rowMeta}>{agent.provider} · manually registered</Text></View>)}
+                <Text style={styles.fieldLabel}>CAPTURED CONTEXT</Text>
+                <TextInput value={artifactTitle} onChangeText={setArtifactTitle} placeholder="Artifact title" style={styles.input}/>
+                <TextInput value={artifactContent} onChangeText={setArtifactContent} placeholder="Capture findings and evidence…" style={[styles.input,styles.multiline]} multiline/>
+                <ActionButton label="Capture artifact" onPress={captureArtifact} disabled={!artifactTitle.trim() || !artifactContent.trim() || busy}/>
+                {artifacts.map(artifact => <View key={artifact.id} style={styles.listRow}><Text style={styles.rowTitle}>{artifact.title}</Text><Text style={styles.rowMeta}>{artifact.content}</Text></View>)}
+                <Text style={styles.fieldLabel}>TASK HANDOFFS</Text>
+                <TextInput value={taskTitle} onChangeText={setTaskTitle} placeholder="Task title" style={styles.input}/>
+                <TextInput value={taskObjective} onChangeText={setTaskObjective} placeholder="Expected outcome and instructions…" style={[styles.input,styles.multiline]} multiline/>
+                {agents.map(agent => <Pressable key={agent.id} onPress={() => setAssignee(agent.id)} style={[styles.agentChoice,assignee===agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text></Pressable>)}
+                <ActionButton label="Create handoff" onPress={createTask} disabled={!taskTitle.trim() || !taskObjective.trim() || !assignee || busy}/>
+                {tasks.map(task => <View key={task.id} style={styles.listRow}><Text style={styles.rowTitle}>{task.title}</Text><Text style={styles.rowMeta}>{task.status.replaceAll("_"," ")} · {task.transitions.length} events</Text>{nextTaskStatus[task.status] ? <ActionButton label={`Advance to ${nextTaskStatus[task.status].replaceAll("_"," ")}`} onPress={() => advanceTask(task,nextTaskStatus[task.status])} disabled={busy} secondary/> : null}{task.status === "in_progress" ? <><TextInput value={responseDrafts[task.id] ?? ""} onChangeText={value => setResponseDrafts(current => ({...current,[task.id]:value}))} placeholder="Capture agent response…" style={[styles.input,styles.multiline]} multiline/><ActionButton label="Submit response" onPress={() => submitTaskResponse(task)} disabled={busy || !(responseDrafts[task.id] ?? "").trim()} secondary/></> : null}</View>)}
+                <ActionButton label="Sign out" onPress={() => { if (auth) void signOut(auth); }} secondary/>
               </View>
-              <Text style={styles.rowMeta}>{health?.storage.replaceAll("_", " ") ?? "Waiting for API"}</Text>
-            </View>
-            <View style={styles.panel}>
-              <Text style={styles.panelTitle}>YOUR WORKSPACES ({workspaces.length})</Text>
-              <TextInput value={workspaceName} onChangeText={setWorkspaceName} placeholder="New workspace name" style={styles.input} />
-              <ActionButton label="Create workspace" onPress={createWorkspace} disabled={!workspaceName.trim() || busy} />
-              {workspaces.map(workspace => (
-                <Pressable key={workspace.id} onPress={() => setSelected(workspace)} style={styles.workspaceRow}>
-                  <View style={styles.workspaceGlyph}><Text style={styles.glyphText}>{workspace.name.slice(0, 1).toUpperCase()}</Text></View>
-                  <View style={styles.workspaceCopy}><Text style={styles.rowTitle}>{workspace.name}</Text><Text style={styles.rowMeta}>Open project workspace</Text></View>
-                  <Text style={styles.chevron}>›</Text>
-                </Pressable>
-              ))}
-              {workspaces.length === 0 && <Text style={styles.muted}>Create a workspace for Funspot, Qoin, or a new project.</Text>}
-            </View>
-          </>
-        )}
+            </>
+          ) : activeTab === "explore" ? (
+            <>
+              <View style={styles.screenHeading}><Text style={styles.eyebrow}>DISCOVER</Text><Text style={styles.screenTitle}>Explore agents</Text><Text style={styles.description}>Browse agents registered in this private workspace. Public listings and community discussions require explicit publishing.</Text></View>
+              {agents.map(agent => <View key={agent.id} style={styles.exploreCardMobile}>
+                <View style={styles.exploreCardHeader}><View style={styles.exploreAvatar}><Text style={styles.exploreAvatarText}>{agent.display_name.slice(0,1).toUpperCase()}</Text></View><View style={{flex:1}}><Text style={styles.rowTitle}>{agent.display_name}</Text><Text style={styles.rowMeta}>{agent.provider} · Manually registered</Text></View><Text style={styles.exploreStatus}>Registered</Text></View>
+                <Text style={styles.exploreDescription}>Registered in {selected.name}. Registration does not imply a live provider connection or autonomous execution.</Text>
+                <View style={styles.exploreMeta}><Text style={styles.rowMeta}>Workspace-private</Text><Text style={styles.rowMeta}>{new Date(agent.created_at).toLocaleDateString()}</Text></View>
+                <ActionButton label="Start conversation" onPress={() => { setActiveTab("chats"); setChatTitle(agent.display_name); setMobileChatOpen(false); }} secondary/>
+              </View>)}
+              {agents.length === 0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No agents to explore yet</Text><Text style={styles.muted}>Register an agent from Profile to add it to this workspace.</Text></View> : null}
+            </>
+          ) : mobileChatOpen && chatDetail ? (
+            <>
+              <View style={styles.screenHeading}><Pressable onPress={() => setMobileChatOpen(false)}><Text style={styles.back}>← Chats</Text></Pressable><Text style={styles.screenTitle}>{chatDetail.chat.title}</Text><Text style={styles.description}>{chatDetail.messages.length} messages · Updated {new Date(chatDetail.chat.updated_at).toLocaleString()}</Text></View>
+              <View style={styles.panel}>
+                <View style={styles.chatAgentHeader}><View style={styles.exploreAvatar}><Text style={styles.exploreAvatarText}>A</Text></View><View style={{flex:1}}><Text style={styles.rowTitle}>{chatDetail.chat.title}</Text><Text style={styles.rowMeta}>Workspace conversation</Text></View><Pressable onPress={archiveChat}><Text style={styles.back}>Archive</Text></Pressable></View>
+                <View style={styles.resumeBriefMobile}><Text style={styles.fieldLabel}>APPROVED MEMORY · RESUME BRIEF</Text><Text style={styles.rowMeta}>{chatDetail.resume_brief || "No approved context yet."}</Text></View>
+                {chatDetail.messages.map(message => <View key={message.id} style={[styles.messageBubbleMobile,message.role==="user" && styles.userMessageBubble]}><Text style={styles.messageSenderMobile}>{message.role === "user" ? "You" : message.role === "assistant" ? (message.answered_by || "Agent") : "System"} · {new Date(message.created_at).toLocaleString()}</Text><Text style={styles.messageTextMobile}>{message.content}</Text><ActionButton label="Index with Qoin" onPress={() => indexChatMessageWithQoin(message)} disabled={busy} secondary/></View>)}
+                {chatDetail.messages.length === 0 ? <Text style={styles.muted}>No messages yet. Send the first message to begin.</Text> : null}
+                <TextInput value={messageDraft} onChangeText={setMessageDraft} placeholder="Write a message…" style={[styles.input,styles.multiline]} multiline/>
+                <ActionButton label="Send message" onPress={sendChatMessage} disabled={!messageDraft.trim() || busy}/>
+                <Text style={styles.fieldLabel}>PROJECT MEMORY</Text>
+                <TextInput value={memoryDraft} onChangeText={setMemoryDraft} placeholder="Propose a decision, fact or constraint…" style={[styles.input,styles.multiline]} multiline maxLength={4000}/>
+                <View style={styles.memoryTypeRow}>{(["decision","fact","constraint","open_task","note"] as const).map(kind => <Pressable key={kind} onPress={() => setMemoryType(kind)} style={[styles.memoryTypeChip,memoryType===kind && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{kind.replaceAll("_"," ")}</Text></Pressable>)}</View>
+                <ActionButton label="Propose memory" onPress={proposeMemory} disabled={!memoryDraft.trim() || busy} secondary/>
+                {chatDetail.memory.map(entry => <View key={entry.id} style={styles.listRow}><Text style={styles.rowTitle}>{entry.type.replaceAll("_"," ")} · {entry.status}</Text><Text style={styles.rowMeta}>{entry.text}</Text>{entry.status==="proposed" ? <><ActionButton label="Approve" onPress={() => approveMemory(entry)} disabled={busy} secondary/><ActionButton label="Reject" onPress={() => changeMemory(entry,"reject")} disabled={busy} secondary/></> : null}<ActionButton label="Edit" onPress={() => {setEditingMemoryId(entry.id);setEditMemoryDraft(entry.text);}} disabled={busy} secondary/>{editingMemoryId===entry.id ? <><TextInput value={editMemoryDraft} onChangeText={setEditMemoryDraft} style={styles.input}/><ActionButton label="Save edit" onPress={() => saveMemoryEdit(entry)} disabled={busy || !editMemoryDraft.trim()}/></> : null}<ActionButton label="Delete" onPress={() => changeMemory(entry,"delete")} disabled={busy} secondary/></View>)}
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.screenHeading}><Text style={styles.eyebrow}>PRIVATE WORKSPACE</Text><Text style={styles.screenTitle}>Chats</Text><Text style={styles.description}>Conversations, agent work and project context in one place.</Text></View>
+              <View style={styles.newChatRow}><TextInput value={chatTitle} onChangeText={setChatTitle} placeholder="Start a new conversation…" style={[styles.input,styles.newChatInput]} maxLength={160}/><ActionButton label="＋" onPress={createChat} disabled={!chatTitle.trim() || busy}/></View>
+              {chats.map(chat => { const preview = chatPreviews[chat.id]; const last = preview?.messages[preview.messages.length-1]; return <Pressable key={chat.id} onPress={() => {setActiveChat(chat.id);setMobileChatOpen(true);}} style={styles.chatCardMobile}>
+                <View style={styles.chatCardMobileHeader}><View style={styles.chatCardMobileAvatar}><Text style={styles.chatCardMobileAvatarText}>{(last?.answered_by || chat.title || "A").slice(0,1).toUpperCase()}</Text></View><View style={{flex:1}}><Text style={styles.chatCardMobileTitle}>{chat.title}</Text><Text style={styles.chatCardMobileAgent}>{last?.answered_by || "Workspace conversation"}</Text></View><Text style={styles.chatCardMobileTime}>{new Date(chat.updated_at).toLocaleString()}</Text></View>
+                <Text style={styles.chatCardMobilePreview}>{last?.content || "No messages yet. Open this conversation to begin."}</Text>
+                <View style={styles.chatCardMobileFooter}><Text style={styles.chatCardMobileMeta}>{preview ? `${preview.messages.length} messages` : "Loading conversation"} · {last?.role === "assistant" ? "Agent replied" : last?.role === "user" ? "Your message" : "New conversation"}</Text><Text style={styles.chatCardMobileOpen}>OPEN CONVERSATION →</Text></View>
+              </Pressable>; })}
+              {chats.length === 0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No conversations yet</Text><Text style={styles.muted}>Create your first chat above.</Text></View> : null}
+            </>
+          )}
+        </ScrollView>
 
-        {error ? <View style={styles.error}><Text style={styles.errorText}>{error}</Text></View> : null}
-        <Text style={styles.footer}>CONTEXT SHOULD TRAVEL WITH THE WORK.</Text>
-        <Text style={styles.warning}>Chats and approved project memory are stored in your authenticated workspace.</Text>
-      </ScrollView>
+        {!profileOpen && <View style={styles.mobileBottomNav}><Pressable onPress={() => {setActiveTab("chats");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="chats" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>◌</Text><Text style={styles.mobileNavText}>Chats</Text></Pressable><Pressable onPress={() => {setActiveTab("explore");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="explore" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>⌕</Text><Text style={styles.mobileNavText}>Explore</Text></Pressable></View>}
+        {error ? <View style={styles.mobileError}><Text style={styles.errorText}>{error}</Text></View> : null}
+      </View>
     </SafeAreaView>
   );
 }
@@ -651,7 +610,7 @@ function AuthGate() {
 
   if (!ready) return <SafeAreaView style={styles.safe}><View style={styles.page}><ActivityIndicator/><Text style={styles.muted}>Restoring your secure session…</Text></View></SafeAreaView>;
   if (!auth) return <SafeAreaView style={styles.safe}><View style={styles.page}><Text style={styles.title}>Firebase configuration required</Text><Text style={styles.description}>Set the EXPO_PUBLIC_FIREBASE_* variables and restart the app.</Text></View></SafeAreaView>;
-  if (user) return <><View style={{paddingTop:36,paddingHorizontal:18,backgroundColor:axonTheme.color.canvas,flexDirection:"row",justifyContent:"flex-end"}}><Text style={styles.rowMeta}>{user.email} </Text><Text onPress={()=>{if(auth)void signOut(auth);}} style={styles.back}>Sign out</Text></View><WorkspaceApp/></>;
+  if (user) return <WorkspaceApp user={user}/>;
   return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled"><View style={styles.brandRow}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.eyebrow}>SECURE ACCESS</Text><Text style={styles.title}>{createAccount ? "Create your account" : "Welcome back"}</Text><Text style={styles.description}>Sign in to access your personal workspace and its data.</Text><TextInput value={email} onChangeText={setEmail} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoComplete="email" style={styles.input}/><TextInput value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry autoCapitalize="none" autoComplete={createAccount ? "new-password" : "password"} style={styles.input}/><ActionButton label={working ? "Please wait…" : createAccount ? "Create account" : "Sign in"} onPress={()=>void submit()} disabled={working || !email.trim() || password.length<6}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}<Text onPress={()=>setCreateAccount(value=>!value)} style={styles.back}>{createAccount ? "Already registered? Sign in" : "New to Axon? Create an account"}</Text></ScrollView></SafeAreaView>;
 }
 
