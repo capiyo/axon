@@ -677,6 +677,15 @@ async fn update_model_outcomes(
                 "Model statistics could not be loaded.",
             )
         })?;
+    let models = state
+        .list_entities(EntityKind::Model, None)
+        .await
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Model registry could not be loaded.",
+            )
+        })?;
     let mut updated_keys = Vec::new();
     for entity in decisions {
         let StoredEntity::AssignmentDecision(decision) = entity else {
@@ -699,10 +708,32 @@ async fn update_model_outcomes(
             }
             _ => None,
         });
-        let Some(mut stat) = existing_stat else {
-            // Cold-start models retain their curated prior until an actual
-            // evaluation or enough observed history exists.
-            continue;
+        let mut stat = match existing_stat {
+            Some(stat) => stat,
+            None => {
+                let Some(model) = models.iter().find_map(|entity| match entity {
+                    StoredEntity::Model(item) if item.id == decision.chosen_model_id => {
+                        Some(item.clone())
+                    }
+                    _ => None,
+                }) else {
+                    continue;
+                };
+                ModelStat {
+                    id: Uuid::new_v4(),
+                    model_id: decision.chosen_model_id,
+                    category: category.to_string(),
+                    role: decision.role.clone(),
+                    runs: 0,
+                    completion_rate: 0.5,
+                    supervisor_pass_rate: 0.5,
+                    // Neutral until an actual user-retry signal is available.
+                    user_retry_rate: 0.5,
+                    cost_per_run_micros: decision.estimated_cost_micros,
+                    latency_ms: model.typical_latency_ms,
+                    last_updated: Utc::now(),
+                }
+            }
         };
         let next_runs = stat.runs.saturating_add(1);
         if next_runs == stat.runs {
@@ -734,7 +765,9 @@ async fn update_model_outcomes(
                         "model_id": stat.model_id,
                         "category": category,
                         "accepted": accepted,
-                        "runs": stat.runs
+                        "runs": stat.runs,
+                        "cost_latency_source": "registry_estimate",
+                        "user_retry_rate_observed": false
                     }),
                 ),
             )
