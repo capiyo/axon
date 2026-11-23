@@ -41,6 +41,8 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [exploreComments, setExploreComments] = useState<Record<string, ExploreComment[]>>({});
   const [exploreSort, setExploreSort] = useState<"recent" | "popular" | "discussed">("recent");
   const [exploreDrafts, setExploreDrafts] = useState<Record<string, string>>({});
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentDraft, setEditingCommentDraft] = useState("");
   const [replyTarget, setReplyTarget] = useState<{ listingId: string; parentId: string } | null>(null);
   const [publishAgentId, setPublishAgentId] = useState("");
   const [publishDescription, setPublishDescription] = useState("");
@@ -160,6 +162,27 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
 
   async function toggleCommentLike(commentId: string) {
     await toggleExploreAction(`/api/v1/explore/comments/${commentId}/like`);
+  }
+
+  async function saveExploreComment(commentId: string) {
+    if (!editingCommentDraft.trim()) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/explore/comments/${commentId}`, { method: "PATCH", body: JSON.stringify({ body: editingCommentDraft.trim() }) });
+      setEditingCommentId(null);
+      setEditingCommentDraft("");
+      await refreshExplore();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not edit comment."); }
+    finally { setBusy(false); }
+  }
+
+  async function deleteExploreComment(commentId: string) {
+    setBusy(true);
+    try {
+      await api(`/api/v1/explore/comments/${commentId}`, { method: "DELETE" });
+      await refreshExplore();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not delete comment."); }
+    finally { setBusy(false); }
   }
 
   async function startExploreConversation(listing: ExploreAgent) {
@@ -697,8 +720,8 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                     <div className="explore-social-actions"><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/like`)} disabled={busy}>{listing.is_liked ? "♥ Liked" : "♡ Like"}</button><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/follow`)} disabled={busy}>{listing.is_following ? "Following" : "Follow"}</button><button type="button" onClick={() => void startExploreConversation(listing)} disabled={busy}>Start workspace chat</button><span>Public listing</span></div>
                     <div className="explore-discussion"><strong>Community discussion</strong>
                       {roots.map(comment => <div className="explore-comment" key={comment.id}>
-                        <span className="explore-comment-avatar">A</span><div className="explore-comment-body"><div className="explore-comment-heading"><strong>{comment.author_label}</strong><small>{new Date(comment.created_at).toLocaleString()}</small></div><p>{comment.body}</p><div className="explore-comment-actions"><button type="button" onClick={() => void toggleCommentLike(comment.id)} disabled={busy}>{comment.is_liked ? "♥" : "♡"} {comment.like_count}</button><button type="button" onClick={() => setReplyTarget(replyTarget?.parentId === comment.id ? null : { listingId: listing.id, parentId: comment.id })}>Reply · {comment.reply_count}</button></div>
-                          {comments.filter(reply => reply.parent_comment_id === comment.id).map(reply => <div className="explore-reply" key={reply.id}><div className="explore-comment-heading"><strong>{reply.author_label}</strong><small>{new Date(reply.created_at).toLocaleString()}</small></div><p>{reply.body}</p><button type="button" onClick={() => void toggleCommentLike(reply.id)} disabled={busy}>{reply.is_liked ? "♥" : "♡"} {reply.like_count}</button></div>)}
+                        <span className="explore-comment-avatar">A</span><div className="explore-comment-body"><div className="explore-comment-heading"><strong>{comment.author_label}</strong><small>{new Date(comment.created_at).toLocaleString()}</small></div>{editingCommentId === comment.id ? <form className="explore-edit-form" onSubmit={event => {event.preventDefault();void saveExploreComment(comment.id);}}><textarea value={editingCommentDraft} onChange={event => setEditingCommentDraft(event.target.value)} rows={3}/><button disabled={busy || !editingCommentDraft.trim()}>Save</button><button type="button" onClick={() => setEditingCommentId(null)}>Cancel</button></form> : <p>{comment.body}</p>}<div className="explore-comment-actions"><button type="button" onClick={() => void toggleCommentLike(comment.id)} disabled={busy}>{comment.is_liked ? "♥" : "♡"} {comment.like_count}</button><button type="button" onClick={() => setReplyTarget(replyTarget?.parentId === comment.id ? null : { listingId: listing.id, parentId: comment.id })}>Reply · {comment.reply_count}</button>{comment.is_mine && <><button type="button" onClick={() => {setEditingCommentId(comment.id);setEditingCommentDraft(comment.body);}}>Edit</button><button type="button" onClick={() => void deleteExploreComment(comment.id)} disabled={busy}>Delete</button></>}</div>
+                          {comments.filter(reply => reply.parent_comment_id === comment.id).map(reply => <div className="explore-reply" key={reply.id}><div className="explore-comment-heading"><strong>{reply.author_label}</strong><small>{new Date(reply.created_at).toLocaleString()}</small></div>{editingCommentId === reply.id ? <form className="explore-edit-form" onSubmit={event => {event.preventDefault();void saveExploreComment(reply.id);}}><textarea value={editingCommentDraft} onChange={event => setEditingCommentDraft(event.target.value)} rows={2}/><button disabled={busy || !editingCommentDraft.trim()}>Save</button><button type="button" onClick={() => setEditingCommentId(null)}>Cancel</button></form> : <p>{reply.body}</p>}<button type="button" onClick={() => void toggleCommentLike(reply.id)} disabled={busy}>{reply.is_liked ? "♥" : "♡"} {reply.like_count}</button>{reply.is_mine && <span className="explore-own-actions"><button type="button" onClick={() => {setEditingCommentId(reply.id);setEditingCommentDraft(reply.body);}}>Edit</button><button type="button" onClick={() => void deleteExploreComment(reply.id)} disabled={busy}>Delete</button></span>}</div>)}
                           {replyTarget?.listingId === listing.id && replyTarget.parentId === comment.id && <form className="explore-reply-form" onSubmit={event => { event.preventDefault(); void submitExploreComment(listing.id, comment.id); }}><input value={exploreDrafts[listing.id] ?? ""} onChange={event => setExploreDrafts(current => ({...current,[listing.id]:event.target.value}))} placeholder="Write a reply…" maxLength={5000}/><button disabled={busy || !(exploreDrafts[listing.id] ?? "").trim()}>Reply</button></form>}
                         </div></div>)}
                       {roots.length === 0 && <p className="explore-no-comments">No community comments yet. Start the discussion.</p>}
