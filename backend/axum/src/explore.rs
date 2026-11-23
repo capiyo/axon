@@ -87,7 +87,12 @@ pub struct ExploreApiError {
 type ApiResult<T> = Result<T, (StatusCode, Json<ExploreApiError>)>;
 
 fn error(status: StatusCode, message: &str) -> (StatusCode, Json<ExploreApiError>) {
-    (status, Json(ExploreApiError { error: message.into() }))
+    (
+        status,
+        Json(ExploreApiError {
+            error: message.into(),
+        }),
+    )
 }
 
 impl ExploreStore {
@@ -143,7 +148,7 @@ impl ExploreStore {
         owner_id: Uuid,
     ) -> Result<bool, sqlx::Error> {
         let result = sqlx::query(
-            "DELETE FROM agent_listings WHERE agent_id = ? AND workspace_id = ? AND owner_id = ?"
+            "DELETE FROM agent_listings WHERE agent_id = ? AND workspace_id = ? AND owner_id = ?",
         )
         .bind(agent_id.to_string())
         .bind(workspace_id.to_string())
@@ -227,7 +232,7 @@ impl ExploreStore {
         }
         if let Some(parent_id) = parent_comment_id {
             let parent_listing: Option<String> = sqlx::query_scalar(
-                "SELECT listing_id FROM agent_comments WHERE id = ? AND status = 'visible'"
+                "SELECT listing_id FROM agent_comments WHERE id = ? AND status = 'visible'",
             )
             .bind(parent_id.to_string())
             .fetch_optional(&self.pool)
@@ -289,7 +294,9 @@ impl ExploreStore {
         .bind(author_id.to_string())
         .execute(&self.pool)
         .await?;
-        if result.rows_affected() == 0 { return Ok(None); }
+        if result.rows_affected() == 0 {
+            return Ok(None);
+        }
         self.get_comment(comment_id, author_id).await
     }
 
@@ -309,19 +316,57 @@ impl ExploreStore {
         Ok(result.rows_affected() == 1)
     }
 
-    pub async fn toggle_listing_like(&self, listing_id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
-        toggle_relation(&self.pool, "agent_listing_likes", "listing_id", listing_id, user_id).await
+    pub async fn toggle_listing_like(
+        &self,
+        listing_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        toggle_relation(
+            &self.pool,
+            "agent_listing_likes",
+            "listing_id",
+            listing_id,
+            user_id,
+        )
+        .await
     }
 
-    pub async fn toggle_follow(&self, listing_id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
-        toggle_relation(&self.pool, "agent_listing_follows", "listing_id", listing_id, user_id).await
+    pub async fn toggle_follow(
+        &self,
+        listing_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        toggle_relation(
+            &self.pool,
+            "agent_listing_follows",
+            "listing_id",
+            listing_id,
+            user_id,
+        )
+        .await
     }
 
-    pub async fn toggle_comment_like(&self, comment_id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
-        let exists: Option<i64> = sqlx::query_scalar("SELECT 1 FROM agent_comments WHERE id = ? AND status = 'visible'")
-            .bind(comment_id.to_string()).fetch_optional(&self.pool).await?;
-        if exists.is_none() { return Ok(false); }
-        toggle_relation(&self.pool, "agent_comment_likes", "comment_id", comment_id, user_id).await
+    pub async fn toggle_comment_like(
+        &self,
+        comment_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        let exists: Option<i64> =
+            sqlx::query_scalar("SELECT 1 FROM agent_comments WHERE id = ? AND status = 'visible'")
+                .bind(comment_id.to_string())
+                .fetch_optional(&self.pool)
+                .await?;
+        if exists.is_none() {
+            return Ok(false);
+        }
+        toggle_relation(
+            &self.pool,
+            "agent_comment_likes",
+            "comment_id",
+            comment_id,
+            user_id,
+        )
+        .await
     }
 
     pub async fn report(
@@ -331,11 +376,19 @@ impl ExploreStore {
         reporter_id: Uuid,
         reason: &str,
     ) -> Result<bool, sqlx::Error> {
-        if !self.listing_exists(listing_id).await? { return Ok(false); }
+        if !self.listing_exists(listing_id).await? {
+            return Ok(false);
+        }
         if let Some(comment_id) = comment_id {
-            let belongs: Option<i64> = sqlx::query_scalar("SELECT 1 FROM agent_comments WHERE id = ? AND listing_id = ?")
-                .bind(comment_id.to_string()).bind(listing_id.to_string()).fetch_optional(&self.pool).await?;
-            if belongs.is_none() { return Ok(false); }
+            let belongs: Option<i64> =
+                sqlx::query_scalar("SELECT 1 FROM agent_comments WHERE id = ? AND listing_id = ?")
+                    .bind(comment_id.to_string())
+                    .bind(listing_id.to_string())
+                    .fetch_optional(&self.pool)
+                    .await?;
+            if belongs.is_none() {
+                return Ok(false);
+            }
         }
         sqlx::query("INSERT INTO agent_reports (id, listing_id, comment_id, reporter_id, reason, status, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?)")
             .bind(Uuid::new_v4().to_string()).bind(listing_id.to_string())
@@ -353,16 +406,24 @@ async fn toggle_relation(
     user_id: Uuid,
 ) -> Result<bool, sqlx::Error> {
     // Table and column names are selected only by the fixed internal call sites above.
-    let sql = format!("INSERT OR IGNORE INTO {table} ({foreign_key}, user_id, created_at) VALUES (?, ?, ?)");
+    let sql = format!(
+        "INSERT OR IGNORE INTO {table} ({foreign_key}, user_id, created_at) VALUES (?, ?, ?)"
+    );
     let inserted = sqlx::query(&sql)
         .bind(target_id.to_string())
         .bind(user_id.to_string())
         .bind(Utc::now().to_rfc3339())
         .execute(pool)
         .await?;
-    if inserted.rows_affected() == 1 { return Ok(true); }
+    if inserted.rows_affected() == 1 {
+        return Ok(true);
+    }
     let sql = format!("DELETE FROM {table} WHERE {foreign_key} = ? AND user_id = ?");
-    sqlx::query(&sql).bind(target_id.to_string()).bind(user_id.to_string()).execute(pool).await?;
+    sqlx::query(&sql)
+        .bind(target_id.to_string())
+        .bind(user_id.to_string())
+        .execute(pool)
+        .await?;
     Ok(false)
 }
 
@@ -371,12 +432,16 @@ fn parse_agent(row: &sqlx::sqlite::SqliteRow) -> Result<ExploreAgent, sqlx::Erro
         let value: String = row.try_get(key)?;
         DateTime::parse_from_rfc3339(&value)
             .map(|time| time.with_timezone(&Utc))
-            .map_err(|_| sqlx::Error::ColumnDecode { index: key.into(), source: Box::new(std::io::Error::other("invalid timestamp")) })
+            .map_err(|_| sqlx::Error::ColumnDecode {
+                index: key.into(),
+                source: Box::new(std::io::Error::other("invalid timestamp")),
+            })
     };
     Ok(ExploreAgent {
         id: Uuid::parse_str(&row.try_get::<String, _>("id")?).unwrap_or_default(),
         agent_id: Uuid::parse_str(&row.try_get::<String, _>("agent_id")?).unwrap_or_default(),
-        workspace_id: Uuid::parse_str(&row.try_get::<String, _>("workspace_id")?).unwrap_or_default(),
+        workspace_id: Uuid::parse_str(&row.try_get::<String, _>("workspace_id")?)
+            .unwrap_or_default(),
         owner_id: Uuid::parse_str(&row.try_get::<String, _>("owner_id")?).unwrap_or_default(),
         title: row.try_get("title")?,
         provider: row.try_get("provider")?,
@@ -396,7 +461,10 @@ fn parse_comment(row: &sqlx::sqlite::SqliteRow) -> Result<ExploreComment, sqlx::
         let value: String = row.try_get(key)?;
         DateTime::parse_from_rfc3339(&value)
             .map(|time| time.with_timezone(&Utc))
-            .map_err(|_| sqlx::Error::ColumnDecode { index: key.into(), source: Box::new(std::io::Error::other("invalid timestamp")) })
+            .map_err(|_| sqlx::Error::ColumnDecode {
+                index: key.into(),
+                source: Box::new(std::io::Error::other("invalid timestamp")),
+            })
     };
     let parent: Option<String> = row.try_get("parent_comment_id")?;
     Ok(ExploreComment {
@@ -419,9 +487,26 @@ pub async fn list_agents(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Query(query): Query<ExploreQuery>,
 ) -> ApiResult<Json<Vec<ExploreAgent>>> {
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable."))?;
-    let items = store.list_agents(user.user_id, query.sort.as_deref().unwrap_or("recent"), query.limit.unwrap_or(20), query.offset.unwrap_or(0))
-        .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load Explore agents."))?;
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
+    })?;
+    let items = store
+        .list_agents(
+            user.user_id,
+            query.sort.as_deref().unwrap_or("recent"),
+            query.limit.unwrap_or(20),
+            query.offset.unwrap_or(0),
+        )
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not load Explore agents.",
+            )
+        })?;
     Ok(Json(items))
 }
 
@@ -431,21 +516,65 @@ pub async fn publish_agent(
     Path((workspace_id, agent_id)): Path<(Uuid, Uuid)>,
     Json(input): Json<PublishAgentInput>,
 ) -> ApiResult<(StatusCode, Json<Uuid>)> {
-    if !state.is_workspace_member(user.user_id, workspace_id).await.unwrap_or(false) {
-        return Err(error(StatusCode::NOT_FOUND, "Workspace or agent not found."));
+    if !state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .unwrap_or(false)
+    {
+        return Err(error(
+            StatusCode::NOT_FOUND,
+            "Workspace or agent not found.",
+        ));
     }
-    let agent = state.agents.read().await.get(&agent_id).cloned()
+    let agent = state
+        .agents
+        .read()
+        .await
+        .get(&agent_id)
+        .cloned()
         .filter(|agent| agent.workspace_id == workspace_id)
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Workspace or agent not found."))?;
     let description = input.description.trim();
     let category = input.category.trim();
-    if description.is_empty() || description.len() > 4000 || category.is_empty() || category.len() > 80 {
-        return Err(error(StatusCode::BAD_REQUEST, "Description must be 1–4000 characters and category 1–80 characters."));
+    if description.is_empty()
+        || description.len() > 4000
+        || category.is_empty()
+        || category.len() > 80
+    {
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "Description must be 1–4000 characters and category 1–80 characters.",
+        ));
     }
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable."))?;
-    let id = store.publish(agent.id, workspace_id, user.user_id, &agent.display_name, &agent.provider, description, category)
-        .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not publish this agent."))?
-        .ok_or_else(|| error(StatusCode::CONFLICT, "This agent is already published by another workspace owner."))?;
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
+    })?;
+    let id = store
+        .publish(
+            agent.id,
+            workspace_id,
+            user.user_id,
+            &agent.display_name,
+            &agent.provider,
+            description,
+            category,
+        )
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not publish this agent.",
+            )
+        })?
+        .ok_or_else(|| {
+            error(
+                StatusCode::CONFLICT,
+                "This agent is already published by another workspace owner.",
+            )
+        })?;
     Ok((StatusCode::CREATED, Json(id)))
 }
 
@@ -454,11 +583,32 @@ pub async fn unpublish_agent(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, agent_id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<StatusCode> {
-    if !state.is_workspace_member(user.user_id, workspace_id).await.unwrap_or(false) {
-        return Err(error(StatusCode::NOT_FOUND, "Workspace or agent not found."));
+    if !state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .unwrap_or(false)
+    {
+        return Err(error(
+            StatusCode::NOT_FOUND,
+            "Workspace or agent not found.",
+        ));
     }
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable."))?;
-    if store.unpublish(agent_id, workspace_id, user.user_id).await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not unpublish this agent."))? {
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
+    })?;
+    if store
+        .unpublish(agent_id, workspace_id, user.user_id)
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not unpublish this agent.",
+            )
+        })?
+    {
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(error(StatusCode::NOT_FOUND, "Published agent not found."))
@@ -471,12 +621,34 @@ pub async fn list_comments(
     Path(listing_id): Path<Uuid>,
     Query(query): Query<ExploreQuery>,
 ) -> ApiResult<Json<Vec<ExploreComment>>> {
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable."))?;
-    if !store.listing_exists(listing_id).await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load agent listing."))? {
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
+    })?;
+    if !store.listing_exists(listing_id).await.map_err(|_| {
+        error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Could not load agent listing.",
+        )
+    })? {
         return Err(error(StatusCode::NOT_FOUND, "Agent listing not found."));
     }
-    let comments = store.list_comments(listing_id, user.user_id, query.limit.unwrap_or(50), query.offset.unwrap_or(0))
-        .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load comments."))?;
+    let comments = store
+        .list_comments(
+            listing_id,
+            user.user_id,
+            query.limit.unwrap_or(50),
+            query.offset.unwrap_or(0),
+        )
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not load comments.",
+            )
+        })?;
     Ok(Json(comments))
 }
 
@@ -488,12 +660,32 @@ pub async fn create_comment(
 ) -> ApiResult<(StatusCode, Json<ExploreComment>)> {
     let body = input.body.trim();
     if body.is_empty() || body.len() > 5000 {
-        return Err(error(StatusCode::BAD_REQUEST, "Comment must contain 1–5000 characters."));
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "Comment must contain 1–5000 characters.",
+        ));
     }
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable."))?;
-    let comment = store.create_comment(listing_id, user.user_id, input.parent_comment_id, body)
-        .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not create comment."))?
-        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Agent listing or parent comment not found."))?;
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
+    })?;
+    let comment = store
+        .create_comment(listing_id, user.user_id, input.parent_comment_id, body)
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not create comment.",
+            )
+        })?
+        .ok_or_else(|| {
+            error(
+                StatusCode::NOT_FOUND,
+                "Agent listing or parent comment not found.",
+            )
+        })?;
     Ok((StatusCode::CREATED, Json(comment)))
 }
 
@@ -505,12 +697,28 @@ pub async fn edit_comment(
 ) -> ApiResult<Json<ExploreComment>> {
     let body = input.body.trim();
     if body.is_empty() || body.len() > 5000 {
-        return Err(error(StatusCode::BAD_REQUEST, "Comment must contain 1–5000 characters."));
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "Comment must contain 1–5000 characters.",
+        ));
     }
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable."))?;
-    store.edit_comment(comment_id, user.user_id, body).await
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
+    })?;
+    store
+        .edit_comment(comment_id, user.user_id, body)
+        .await
         .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not edit comment."))?
-        .map(Json).ok_or_else(|| error(StatusCode::NOT_FOUND, "Comment not found or not owned by caller."))
+        .map(Json)
+        .ok_or_else(|| {
+            error(
+                StatusCode::NOT_FOUND,
+                "Comment not found or not owned by caller.",
+            )
+        })
 }
 
 pub async fn delete_comment(
@@ -518,11 +726,28 @@ pub async fn delete_comment(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path(comment_id): Path<Uuid>,
 ) -> ApiResult<StatusCode> {
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable."))?;
-    if store.delete_comment(comment_id, user.user_id).await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not delete comment."))? {
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
+    })?;
+    if store
+        .delete_comment(comment_id, user.user_id)
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not delete comment.",
+            )
+        })?
+    {
         Ok(StatusCode::NO_CONTENT)
     } else {
-        Err(error(StatusCode::NOT_FOUND, "Comment not found or not owned by caller."))
+        Err(error(
+            StatusCode::NOT_FOUND,
+            "Comment not found or not owned by caller.",
+        ))
     }
 }
 
@@ -531,11 +756,28 @@ pub async fn like_listing(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path(listing_id): Path<Uuid>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable."))?;
-    if !store.listing_exists(listing_id).await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load listing."))? {
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
+    })?;
+    if !store
+        .listing_exists(listing_id)
+        .await
+        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load listing."))?
+    {
         return Err(error(StatusCode::NOT_FOUND, "Agent listing not found."));
     }
-    let liked = store.toggle_listing_like(listing_id, user.user_id).await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not update reaction."))?;
+    let liked = store
+        .toggle_listing_like(listing_id, user.user_id)
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not update reaction.",
+            )
+        })?;
     Ok(Json(serde_json::json!({ "liked": liked })))
 }
 
@@ -544,11 +786,28 @@ pub async fn follow_listing(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path(listing_id): Path<Uuid>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable."))?;
-    if !store.listing_exists(listing_id).await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load listing."))? {
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
+    })?;
+    if !store
+        .listing_exists(listing_id)
+        .await
+        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load listing."))?
+    {
         return Err(error(StatusCode::NOT_FOUND, "Agent listing not found."));
     }
-    let following = store.toggle_follow(listing_id, user.user_id).await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not update follow."))?;
+    let following = store
+        .toggle_follow(listing_id, user.user_id)
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not update follow.",
+            )
+        })?;
     Ok(Json(serde_json::json!({ "following": following })))
 }
 
@@ -557,8 +816,21 @@ pub async fn like_comment(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path(comment_id): Path<Uuid>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable."))?;
-    let liked = store.toggle_comment_like(comment_id, user.user_id).await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not update comment reaction."))?;
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
+    })?;
+    let liked = store
+        .toggle_comment_like(comment_id, user.user_id)
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not update comment reaction.",
+            )
+        })?;
     Ok(Json(serde_json::json!({ "liked": liked })))
 }
 
@@ -569,17 +841,32 @@ pub async fn report_content(
 ) -> ApiResult<StatusCode> {
     let reason = input.reason.trim();
     if reason.is_empty() || reason.len() > 1000 {
-        return Err(error(StatusCode::BAD_REQUEST, "Report reason must contain 1–1000 characters."));
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "Report reason must contain 1–1000 characters.",
+        ));
     }
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable."))?;
-    if store.report(input.listing_id, input.comment_id, user.user_id, reason).await
-        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not submit report."))? {
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
+    })?;
+    if store
+        .report(input.listing_id, input.comment_id, user.user_id, reason)
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not submit report.",
+            )
+        })?
+    {
         Ok(StatusCode::CREATED)
     } else {
         Err(error(StatusCode::NOT_FOUND, "Reported content not found."))
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -588,67 +875,121 @@ mod tests {
 
     #[tokio::test]
     async fn published_agents_support_public_comments_replies_and_reactions() {
-        let storage = SqliteStorage::connect_in_memory().await.expect("in-memory storage");
+        let storage = SqliteStorage::connect_in_memory()
+            .await
+            .expect("in-memory storage");
         let store = storage.explore_store();
         let owner_id = Uuid::new_v4();
         let visitor_id = Uuid::new_v4();
         let workspace_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
 
-        let listing_id = store.publish(
-            agent_id,
-            workspace_id,
-            owner_id,
-            "Memory Architect",
-            "manual",
-            "Organises project context and retrieves historical decisions.",
-            "Productivity",
-        ).await.expect("publish").expect("listing id");
+        let listing_id = store
+            .publish(
+                agent_id,
+                workspace_id,
+                owner_id,
+                "Memory Architect",
+                "manual",
+                "Organises project context and retrieves historical decisions.",
+                "Productivity",
+            )
+            .await
+            .expect("publish")
+            .expect("listing id");
 
-        let listings = store.list_agents(visitor_id, "recent", 20, 0).await.expect("list public agents");
+        let listings = store
+            .list_agents(visitor_id, "recent", 20, 0)
+            .await
+            .expect("list public agents");
         assert_eq!(listings.len(), 1);
         assert_eq!(listings[0].id, listing_id);
         assert_eq!(listings[0].comment_count, 0);
         assert!(!listings[0].is_liked);
 
-        let root = store.create_comment(
-            listing_id,
-            visitor_id,
-            None,
-            "The context retrieval is useful.",
-        ).await.expect("create comment").expect("root comment");
-        let reply = store.create_comment(
-            listing_id,
-            owner_id,
-            Some(root.id),
-            "Thanks for sharing your feedback.",
-        ).await.expect("create reply").expect("reply comment");
+        let root = store
+            .create_comment(
+                listing_id,
+                visitor_id,
+                None,
+                "The context retrieval is useful.",
+            )
+            .await
+            .expect("create comment")
+            .expect("root comment");
+        let reply = store
+            .create_comment(
+                listing_id,
+                owner_id,
+                Some(root.id),
+                "Thanks for sharing your feedback.",
+            )
+            .await
+            .expect("create reply")
+            .expect("reply comment");
         assert_eq!(reply.parent_comment_id, Some(root.id));
 
-        assert!(store.toggle_listing_like(listing_id, visitor_id).await.expect("like listing"));
-        assert!(store.toggle_comment_like(root.id, visitor_id).await.expect("like comment"));
-        let comments = store.list_comments(listing_id, visitor_id, 50, 0).await.expect("list comments");
+        assert!(store
+            .toggle_listing_like(listing_id, visitor_id)
+            .await
+            .expect("like listing"));
+        assert!(store
+            .toggle_comment_like(root.id, visitor_id)
+            .await
+            .expect("like comment"));
+        let comments = store
+            .list_comments(listing_id, visitor_id, 50, 0)
+            .await
+            .expect("list comments");
         assert_eq!(comments.len(), 2);
         assert_eq!(comments[0].reply_count, 1);
         assert!(comments[0].is_liked);
 
-        let updated = store.list_agents(visitor_id, "popular", 20, 0).await.expect("updated listing");
+        let updated = store
+            .list_agents(visitor_id, "popular", 20, 0)
+            .await
+            .expect("updated listing");
         assert_eq!(updated[0].like_count, 1);
         assert!(updated[0].is_liked);
-        assert!(store.toggle_follow(listing_id, visitor_id).await.expect("follow listing"));
+        assert!(store
+            .toggle_follow(listing_id, visitor_id)
+            .await
+            .expect("follow listing"));
     }
 
     #[tokio::test]
     async fn listing_unpublish_removes_public_discovery_record() {
-        let storage = SqliteStorage::connect_in_memory().await.expect("in-memory storage");
+        let storage = SqliteStorage::connect_in_memory()
+            .await
+            .expect("in-memory storage");
         let store = storage.explore_store();
         let owner_id = Uuid::new_v4();
         let workspace_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
-        store.publish(agent_id, workspace_id, owner_id, "Agent", "manual", "Description", "General")
-            .await.expect("publish");
-        assert!(!store.unpublish(agent_id, workspace_id, Uuid::new_v4()).await.expect("wrong owner cannot unpublish"));
-        assert!(store.unpublish(agent_id, workspace_id, owner_id).await.expect("owner unpublishes"));
-        assert!(store.list_agents(Uuid::new_v4(), "recent", 20, 0).await.expect("list").is_empty());
+        store
+            .publish(
+                agent_id,
+                workspace_id,
+                owner_id,
+                "Agent",
+                "manual",
+                "Description",
+                "General",
+            )
+            .await
+            .expect("publish");
+        assert!(!store
+            .unpublish(agent_id, workspace_id, Uuid::new_v4())
+            .await
+            .expect("wrong owner cannot unpublish"));
+        assert!(store
+            .unpublish(agent_id, workspace_id, owner_id)
+            .await
+            .expect("owner unpublishes"));
+        assert!(store
+            .list_agents(Uuid::new_v4(), "recent", 20, 0)
+            .await
+            .expect("list")
+            .is_empty());
     }
 }
