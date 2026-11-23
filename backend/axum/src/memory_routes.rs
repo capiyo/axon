@@ -58,7 +58,6 @@ fn coordinator(state: &AppState) -> ApiResult<&crate::memory_architecture::Memor
     })
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct QoinVectorQuery {
     pub symbol: String,
@@ -85,9 +84,15 @@ pub struct IndexQoinMemoryRequest {
     pub evidence_score: f32,
 }
 
-fn default_visibility() -> String { "workspace_shared".into() }
-fn default_outcome_score() -> f32 { 0.5 }
-fn default_evidence_score() -> f32 { 0.75 }
+fn default_visibility() -> String {
+    "workspace_shared".into()
+}
+fn default_outcome_score() -> f32 {
+    0.5
+}
+fn default_evidence_score() -> f32 {
+    0.75
+}
 
 #[derive(Debug, Serialize)]
 pub struct QoinMemoryIndexReceipt {
@@ -99,10 +104,22 @@ pub struct QoinMemoryIndexReceipt {
 
 fn qoin_error(error_value: QoinVectorError) -> (StatusCode, Json<ApiError>) {
     match error_value {
-        QoinVectorError::MissingVector => error(StatusCode::NOT_FOUND, "Qoin has no current vector for this symbol."),
-        QoinVectorError::InvalidVector | QoinVectorError::MissingModelVersion => error(StatusCode::BAD_GATEWAY, "Qoin returned an invalid or incompatible vector."),
-        QoinVectorError::HttpStatus(_) | QoinVectorError::Request(_) => error(StatusCode::BAD_GATEWAY, "Qoin vector service is unavailable."),
-        QoinVectorError::InvalidBaseUrl(_) => error(StatusCode::SERVICE_UNAVAILABLE, "Qoin vector service is not configured correctly."),
+        QoinVectorError::MissingVector => error(
+            StatusCode::NOT_FOUND,
+            "Qoin has no current vector for this symbol.",
+        ),
+        QoinVectorError::InvalidVector | QoinVectorError::MissingModelVersion => error(
+            StatusCode::BAD_GATEWAY,
+            "Qoin returned an invalid or incompatible vector.",
+        ),
+        QoinVectorError::HttpStatus(_) | QoinVectorError::Request(_) => error(
+            StatusCode::BAD_GATEWAY,
+            "Qoin vector service is unavailable.",
+        ),
+        QoinVectorError::InvalidBaseUrl(_) => error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Qoin vector service is not configured correctly.",
+        ),
     }
 }
 
@@ -114,7 +131,10 @@ pub async fn latest_qoin_vector(
 ) -> ApiResult<Json<QoinVectorSnapshot>> {
     require_member(&state, user.user_id, workspace_id).await?;
     let client = state.qoin_vectors.as_ref().ok_or_else(|| {
-        error(StatusCode::SERVICE_UNAVAILABLE, "Qoin integration is not configured. Set QOIN_API_URL on the Axon backend.")
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Qoin integration is not configured. Set QOIN_API_URL on the Axon backend.",
+        )
     })?;
     let snapshot = client.latest(&query.symbol).await.map_err(qoin_error)?;
     Ok(Json(snapshot))
@@ -127,28 +147,51 @@ pub async fn index_memory_with_qoin(
     Json(input): Json<IndexQoinMemoryRequest>,
 ) -> ApiResult<Json<QoinMemoryIndexReceipt>> {
     require_member(&state, user.user_id, workspace_id).await?;
-    if !["agent_private", "task_shared", "project_shared", "workspace_shared"]
-        .contains(&input.visibility.as_str())
+    if ![
+        "agent_private",
+        "task_shared",
+        "project_shared",
+        "workspace_shared",
+    ]
+    .contains(&input.visibility.as_str())
         || (input.visibility == "agent_private" && input.owner_agent_id.is_none())
         || (input.visibility == "task_shared" && input.task_id.is_none())
         || (input.visibility == "project_shared" && input.project_id.is_none())
     {
-        return Err(error(StatusCode::BAD_REQUEST, "Invalid memory visibility or missing scope identifier."));
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "Invalid memory visibility or missing scope identifier.",
+        ));
     }
     if let Some(agent_id) = input.owner_agent_id {
         let agents = state.agents.read().await;
-        if !agents.get(&agent_id).is_some_and(|agent| agent.workspace_id == workspace_id) {
-            return Err(error(StatusCode::BAD_REQUEST, "Private-memory owner is not registered in this workspace."));
+        if !agents
+            .get(&agent_id)
+            .is_some_and(|agent| agent.workspace_id == workspace_id)
+        {
+            return Err(error(
+                StatusCode::BAD_REQUEST,
+                "Private-memory owner is not registered in this workspace.",
+            ));
         }
     }
     if let Some(task_id) = input.task_id {
         let tasks = state.tasks.read().await;
-        if !tasks.get(&task_id).is_some_and(|task| task.workspace_id == workspace_id) {
-            return Err(error(StatusCode::BAD_REQUEST, "Task scope does not belong to this workspace."));
+        if !tasks
+            .get(&task_id)
+            .is_some_and(|task| task.workspace_id == workspace_id)
+        {
+            return Err(error(
+                StatusCode::BAD_REQUEST,
+                "Task scope does not belong to this workspace.",
+            ));
         }
     }
     let client = state.qoin_vectors.as_ref().ok_or_else(|| {
-        error(StatusCode::SERVICE_UNAVAILABLE, "Qoin integration is not configured. Set QOIN_API_URL on the Axon backend.")
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Qoin integration is not configured. Set QOIN_API_URL on the Axon backend.",
+        )
     })?;
     let snapshot = client.latest(&input.symbol).await.map_err(qoin_error)?;
     let model_version = snapshot.vector.model_version.clone();
@@ -168,7 +211,12 @@ pub async fn index_memory_with_qoin(
             evidence_score: input.evidence_score,
         })
         .await
-        .map_err(|_| error(StatusCode::UNPROCESSABLE_ENTITY, "Only an approved memory in this chat can be indexed. Check the memory state and Qoin vector metadata."))?;
+        .map_err(|_| {
+            error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Only an approved memory in this chat can be indexed. Check the memory state and Qoin vector metadata.",
+            )
+        })?;
     Ok(Json(QoinMemoryIndexReceipt {
         memory_id,
         symbol: snapshot.symbol,
