@@ -835,6 +835,8 @@ const styles = StyleSheet.create({
   chatCardMobileAgent: { color: "#9AAFA1", fontSize: 10, marginTop: 4 },
   chatCardMobileTime: { color: "#82998A", fontSize: 9, maxWidth: 86, textAlign: "right" },
   chatCardMobilePreview: { color: "#E7F6EB", fontSize: 12, lineHeight: 19 },
+  chatCardMobileProgress: { width: "100%", height: 4, overflow: "hidden", borderRadius: 999, backgroundColor: "#294A35" },
+  chatCardMobileProgressFill: { height: 4, borderRadius: 999, backgroundColor: "#9DE4B0" },
   chatCardMobileFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
   chatCardMobileActions: { flexDirection: "row", alignItems: "center", gap: 13 },
   chatUnreadCount: { minWidth: 19, height: 19, overflow: "hidden", borderRadius: 10, textAlign: "center", textAlignVertical: "center", paddingHorizontal: 5, backgroundColor: "#28583D", color: "#E7F6EB", fontSize: 9, fontWeight: "900" },
