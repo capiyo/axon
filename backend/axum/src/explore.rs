@@ -46,6 +46,7 @@ pub struct ExploreComment {
     pub like_count: i64,
     pub reply_count: i64,
     pub is_liked: bool,
+    pub is_mine: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -207,10 +208,12 @@ impl ExploreStore {
             "SELECT c.id, c.listing_id, c.parent_comment_id, c.author_id, c.body, c.created_at, c.updated_at,
              (SELECT COUNT(*) FROM agent_comment_likes l WHERE l.comment_id = c.id) AS like_count,
              (SELECT COUNT(*) FROM agent_comments r WHERE r.parent_comment_id = c.id AND r.status = 'visible') AS reply_count,
-             EXISTS(SELECT 1 FROM agent_comment_likes l WHERE l.comment_id = c.id AND l.user_id = ?) AS is_liked
+             EXISTS(SELECT 1 FROM agent_comment_likes l WHERE l.comment_id = c.id AND l.user_id = ?) AS is_liked,
+             c.author_id = ? AS is_mine
              FROM agent_comments c WHERE c.listing_id = ? AND c.status = 'visible'
              ORDER BY c.created_at ASC, c.id ASC LIMIT ? OFFSET ?"
         )
+        .bind(user_id.to_string())
         .bind(user_id.to_string())
         .bind(listing_id.to_string())
         .bind(limit.clamp(1, 100))
@@ -268,9 +271,11 @@ impl ExploreStore {
             "SELECT c.id, c.listing_id, c.parent_comment_id, c.author_id, c.body, c.created_at, c.updated_at,
              (SELECT COUNT(*) FROM agent_comment_likes l WHERE l.comment_id = c.id) AS like_count,
              (SELECT COUNT(*) FROM agent_comments r WHERE r.parent_comment_id = c.id AND r.status = 'visible') AS reply_count,
-             EXISTS(SELECT 1 FROM agent_comment_likes l WHERE l.comment_id = c.id AND l.user_id = ?) AS is_liked
+             EXISTS(SELECT 1 FROM agent_comment_likes l WHERE l.comment_id = c.id AND l.user_id = ?) AS is_liked,
+             c.author_id = ? AS is_mine
              FROM agent_comments c WHERE c.id = ? AND c.status = 'visible'"
         )
+        .bind(user_id.to_string())
         .bind(user_id.to_string())
         .bind(comment_id.to_string())
         .fetch_optional(&self.pool)
@@ -479,6 +484,7 @@ fn parse_comment(row: &sqlx::sqlite::SqliteRow) -> Result<ExploreComment, sqlx::
         like_count: row.try_get("like_count")?,
         reply_count: row.try_get("reply_count")?,
         is_liked: row.try_get::<i64, _>("is_liked")? != 0,
+        is_mine: row.try_get::<i64, _>("is_mine")? != 0,
     })
 }
 
