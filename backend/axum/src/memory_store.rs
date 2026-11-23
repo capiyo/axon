@@ -1,6 +1,6 @@
 //! SQLite persistence for scoped agent memory and allocation audit records.
 use crate::memory_system::{
-    allocate_context, MemoryAllocation, MemoryError, MemoryRecord, RetrievalContext,
+    allocate_context, lexical_relevance, MemoryAllocation, MemoryError, MemoryRecord, RetrievalContext,
 };
 use chrono::Utc;
 use serde_json::json;
@@ -123,7 +123,7 @@ impl MemoryStore {
             .bind(if existing { "agent_memory.revised" } else { "agent_memory.proposed" })
             .bind(record.id.to_string())
             .bind(Utc::now().to_rfc3339())
-            .bind(json!({"scope": record.scope, "version": record.version}).to_string())
+            .bind(json!({"scope": record.scope, "verification": record.verification, "version": record.version}).to_string())
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
@@ -246,7 +246,7 @@ impl MemoryStore {
     pub async fn allocate(
         &self,
         context: &RetrievalContext,
-        relevance: &[(Uuid, f64)],
+        query: &str,
         token_budget: usize,
     ) -> Result<MemoryAllocation, MemoryStoreError> {
         let rows = sqlx::query("SELECT v.payload_json FROM agent_memory_versions v JOIN (SELECT memory_id, MAX(version) AS version FROM agent_memory_versions GROUP BY memory_id) latest ON latest.memory_id=v.memory_id AND latest.version=v.version JOIN agent_memories m ON m.id=v.memory_id WHERE m.workspace_id = ? AND (m.expires_at IS NULL OR m.expires_at > ?)")
@@ -270,7 +270,10 @@ impl MemoryStore {
                 scoped_context.granted_memory_ids.insert(id);
             }
         }
-        let allocation = allocate_context(&records, &scoped_context, relevance, token_budget)?;
+        let relevance = records.iter().map(|record| {
+            (record.id, lexical_relevance(query, &record.content))
+        }).collect::<Vec<_>>();
+        let allocation = allocate_context(&records, &scoped_context, &relevance, token_budget)?;
         let selected_audit = allocation.selected.iter().map(|item| {
             json!({
                 "memory_id": item.memory_id,
@@ -344,11 +347,11 @@ mod tests {
             granted_memory_ids: BTreeSet::new(),
             now: Utc::now(),
         };
-        let hidden = store.allocate(&context, &[(record.id, 1.0)], 128).await.unwrap();
+        let hidden = store.allocate(&context, "deterministic evidence-first process", 128).await.unwrap();
         assert!(hidden.selected.is_empty());
 
         store.grant(account.workspace.id, record.id, recipient, "human:test").await.unwrap();
-        let visible = store.allocate(&context, &[(record.id, 1.0)], 128).await.unwrap();
+        let visible = store.allocate(&context, "deterministic evidence-first process", 128).await.unwrap();
         assert_eq!(visible.selected.len(), 1);
         assert_eq!(visible.selected[0].content, record.content);
         assert!(visible.tokens_allocated <= visible.token_budget);
