@@ -464,3 +464,8 @@ body {
 .chat-card-like { color: var(--axon-color-accent); font-size: 15px; cursor: pointer; line-height: 1; }
 .chat-card-archive { color: var(--axon-color-text-muted); font-size: 9px; cursor: pointer; }
 .chat-card-like:focus-visible, .chat-card-archive:focus-visible { outline: 2px solid var(--axon-color-accent); outline-offset: 3px; border-radius: 4px; }
+
+.app-menu-anchor { position: relative; }
+.app-menu { position: absolute; z-index: 40; top: calc(100% + 9px); right: 0; width: 190px; padding: 7px; display: grid; gap: 4px; border-radius: 14px; background: var(--axon-color-surface-raised); box-shadow: 0 14px 36px #0006; }
+.app-menu button { width: 100%; border: 0; border-radius: 9px; padding: 11px 12px; background: transparent; color: var(--axon-color-text); text-align: left; font-size: 11px; cursor: pointer; }
+.app-menu button:hover { background: var(--axon-color-selected); color: var(--axon-color-accent); }
