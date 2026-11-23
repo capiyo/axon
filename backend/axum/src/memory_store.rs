@@ -256,3 +256,77 @@ impl MemoryStore {
         Ok(allocation)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        chat_memory::ChatMemoryStore,
+        memory_system::{MemoryScope, MemorySensitivity, Verification},
+        storage::{SqliteStorage, Storage},
+    };
+    use chrono::Duration;
+    use std::collections::BTreeSet;
+
+    fn agent_memory(workspace_id: Uuid, owner_agent_id: Uuid) -> MemoryRecord {
+        MemoryRecord {
+            id: Uuid::new_v4(),
+            workspace_id,
+            scope: MemoryScope::Agent,
+            scope_id: None,
+            owner_agent_id: Some(owner_agent_id),
+            content: "The worker uses a deterministic evidence-first process.".into(),
+            source: "human:reviewed-note".into(),
+            confidence: 0.95,
+            authority: 0.9,
+            sensitivity: MemorySensitivity::Internal,
+            verification: Verification::Verified,
+            created_at: Utc::now(),
+            expires_at: Some(Utc::now() + Duration::days(30)),
+            version: 1,
+            token_cost: 64,
+        }
+    }
+
+    #[tokio::test]
+    async fn private_agent_memory_requires_an_explicit_grant_and_returns_context() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let account = storage.ensure_firebase_user("memory-test", "memory-store-user").await.unwrap();
+        let chat_store = storage.chat_memory_store();
+        let store = MemoryStore::new(chat_store.sqlite_pool());
+        let owner = Uuid::new_v4();
+        let recipient = Uuid::new_v4();
+        let record = agent_memory(account.workspace.id, owner);
+        store.put(record.clone(), "human:test").await.unwrap();
+
+        let context = RetrievalContext {
+            workspace_id: account.workspace.id,
+            task_id: None,
+            agent_id: recipient,
+            allowed_sensitivity: MemorySensitivity::Internal,
+            granted_memory_ids: BTreeSet::new(),
+            now: Utc::now(),
+        };
+        let hidden = store.allocate(&context, &[(record.id, 1.0)], 128).await.unwrap();
+        assert!(hidden.selected.is_empty());
+
+        store.grant(account.workspace.id, record.id, recipient, "human:test").await.unwrap();
+        let visible = store.allocate(&context, &[(record.id, 1.0)], 128).await.unwrap();
+        assert_eq!(visible.selected.len(), 1);
+        assert_eq!(visible.selected[0].content, record.content);
+        assert!(visible.tokens_allocated <= visible.token_budget);
+    }
+
+    #[tokio::test]
+    async fn memory_grants_cannot_cross_workspace_boundaries() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let account = storage.ensure_firebase_user("memory-test", "memory-store-user-2").await.unwrap();
+        let store = MemoryStore::new(storage.chat_memory_store().sqlite_pool());
+        let record = agent_memory(account.workspace.id, Uuid::new_v4());
+        store.put(record.clone(), "human:test").await.unwrap();
+        assert!(matches!(
+            store.grant(Uuid::new_v4(), record.id, Uuid::new_v4(), "human:test").await,
+            Err(MemoryStoreError::NotFound)
+        ));
+    }
+}
