@@ -343,7 +343,7 @@ pub async fn transition_task(
         .map_err(|_| storage_failure())?;
     if task.created_by != user.user_id {
         if let Some(notifications) = state.explore.as_ref() {
-            let (event_type, title) = match task.status {
+            let (event_type, title) = match &task.status {
                 TaskStatus::Completed => ("task.completed", "Task completed"),
                 TaskStatus::Rejected | TaskStatus::Cancelled => ("task.failed", "Task stopped"),
                 _ => ("task.updated", "Task status updated"),
