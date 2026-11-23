@@ -201,7 +201,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   }, [selected?.id]);
 
   useEffect(() => {
-    if (!selected || !activeChat) { setChatDetail(null); return; }
+    if (!selected || !activeChat || !mobileChatOpen) { setChatDetail(null); return; }
     const chatId = activeChat;
     request(`/api/v1/workspaces/${selected.id}/chats/${chatId}/read`, { method: "POST" })
       .then(() => Promise.all([
@@ -210,7 +210,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       ]))
       .then(([detail, items]) => { setChatDetail(detail); setChats(items); })
       .catch(cause => setError(cause instanceof Error ? cause.message : "Could not load chat"));
-  }, [selected?.id, activeChat]);
+  }, [selected?.id, activeChat, mobileChatOpen]);
 
   function createChat() {
     if (!selected || !chatTitle.trim()) return;
