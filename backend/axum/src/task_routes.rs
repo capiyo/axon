@@ -372,7 +372,9 @@ pub async fn transition_task(
                     body: &format!(
                         "{} is now {}.",
                         task.title,
-                        format!("{:?}", task.status).to_lowercase().replace('_', " ")
+                        format!("{:?}", task.status)
+                            .to_lowercase()
+                            .replace('_', " ")
                     ),
                 })
                 .await;
