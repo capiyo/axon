@@ -56,10 +56,7 @@ pub struct ProposeMemory {
     pub owner_agent_id: Option<Uuid>,
     pub content: String,
     pub source: String,
-    pub confidence: f64,
-    pub authority: f64,
     pub sensitivity: MemorySensitivity,
-    pub token_cost: usize,
     pub expires_at: Option<chrono::DateTime<Utc>>,
 }
 
@@ -72,7 +69,7 @@ pub async fn propose(
     require_member(&state, &user, workspace_id).await?;
     if input.content.trim().is_empty() || input.content.len() > 100_000
         || input.source.trim().is_empty() || input.source.len() > 2_000
-        || input.token_cost == 0 || input.token_cost > 1_000_000
+
     {
         return Err(error(StatusCode::BAD_REQUEST, "Memory content, provenance or token cost is invalid."));
     }
@@ -88,6 +85,7 @@ pub async fn propose(
             return Err(error(StatusCode::BAD_REQUEST, "Task scope must reference a task in this workspace."));
         }
     }
+    let token_cost = ((input.content.chars().count() + 3) / 4).max(1);
     let record = MemoryRecord {
         id: Uuid::new_v4(),
         workspace_id,
@@ -96,8 +94,8 @@ pub async fn propose(
         owner_agent_id: input.owner_agent_id,
         content: input.content,
         source: format!("human:{}; {}", user.user_id, input.source),
-        confidence: input.confidence,
-        authority: input.authority,
+        confidence: 0.5,
+        authority: 0.5,
         sensitivity: input.sensitivity,
         // Agent and user writes are proposals. Only a separate trusted review
         // operation may promote a record to Verified.
@@ -105,7 +103,7 @@ pub async fn propose(
         created_at: Utc::now(),
         expires_at: input.expires_at,
         version: 1,
-        token_cost: input.token_cost,
+        token_cost,
     };
     let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
     store.put(record.clone(), &format!("human:{}", user.user_id)).await.map_err(store_error)?;
