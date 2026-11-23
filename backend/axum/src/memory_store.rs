@@ -1,0 +1,221 @@
+//! SQLite persistence for scoped agent memory and allocation audit records.
+use crate::memory_system::{
+    allocate_context, MemoryAllocation, MemoryError, MemoryRecord, RetrievalContext,
+};
+use chrono::Utc;
+use serde_json::json;
+use sqlx::{Row, SqlitePool};
+use thiserror::Error;
+use uuid::Uuid;
+
+#[derive(Debug, Error)]
+pub enum MemoryStoreError {
+    #[error("database operation failed: {0}")]
+    Database(#[from] sqlx::Error),
+    #[error("memory serialization failed: {0}")]
+    Serialization(#[from] serde_json::Error),
+    #[error(transparent)]
+    Policy(#[from] MemoryError),
+    #[error("memory record was not found in this workspace")]
+    NotFound,
+}
+
+#[derive(Clone)]
+pub struct MemoryStore {
+    pool: SqlitePool,
+}
+
+impl MemoryStore {
+    pub fn new(pool: SqlitePool) -> Self {
+        Self { pool }
+    }
+
+    /// Save a new proposal or a verified memory revision. The complete
+    /// previous version is retained for provenance and conflict inspection.
+    pub async fn put(
+        &self,
+        record: MemoryRecord,
+        actor: &str,
+    ) -> Result<(), MemoryStoreError> {
+        record.validate()?;
+        let payload = serde_json::to_string(&record)?;
+        let now = Utc::now().to_rfc3339();
+        let mut tx = self.pool.begin().await?;
+        let existing: Option<i64> = sqlx::query_scalar(
+            "SELECT version FROM agent_memories WHERE id = ? AND workspace_id = ?",
+        )
+        .bind(record.id.to_string())
+        .bind(record.workspace_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if existing.is_some_and(|version| version as u64 >= record.version) {
+            return Err(MemoryStoreError::Policy(MemoryError::InvalidRecord));
+        }
+        sqlx::query("INSERT INTO agent_memories (id, workspace_id, scope, scope_id, owner_agent_id, sensitivity, verification, content, source, confidence, authority, created_at, expires_at, version, token_cost, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET scope=excluded.scope, scope_id=excluded.scope_id, owner_agent_id=excluded.owner_agent_id, sensitivity=excluded.sensitivity, verification=excluded.verification, content=excluded.content, source=excluded.source, confidence=excluded.confidence, authority=excluded.authority, expires_at=excluded.expires_at, version=excluded.version, token_cost=excluded.token_cost, updated_at=excluded.updated_at WHERE agent_memories.workspace_id=excluded.workspace_id")
+            .bind(record.id.to_string())
+            .bind(record.workspace_id.to_string())
+            .bind(serde_json::to_value(record.scope)?.as_str().unwrap_or("workspace"))
+            .bind(record.scope_id.map(|id| id.to_string()))
+            .bind(record.owner_agent_id.map(|id| id.to_string()))
+            .bind(serde_json::to_value(record.sensitivity)?.as_str().unwrap_or("internal"))
+            .bind(serde_json::to_value(record.verification)?.as_str().unwrap_or("unverified"))
+            .bind(&record.content)
+            .bind(&record.source)
+            .bind(record.confidence)
+            .bind(record.authority)
+            .bind(record.created_at.to_rfc3339())
+            .bind(record.expires_at.map(|value| value.to_rfc3339()))
+            .bind(record.version as i64)
+            .bind(record.token_cost as i64)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("INSERT INTO agent_memory_versions (memory_id, version, payload_json, actor, event_type, occurred_at) VALUES (?, ?, ?, ?, ?, ?)")
+            .bind(record.id.to_string())
+            .bind(record.version as i64)
+            .bind(payload)
+            .bind(actor)
+            .bind(if existing.is_some() { "revised" } else { "proposed" })
+            .bind(now)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, ?, ?, ?, 'agent_memory', ?, ?, ?)")
+            .bind(Uuid::new_v4().to_string())
+            .bind(record.workspace_id.to_string())
+            .bind(actor)
+            .bind(if existing.is_some() { "agent_memory.revised" } else { "agent_memory.proposed" })
+            .bind(record.id.to_string())
+            .bind(Utc::now().to_rfc3339())
+            .bind(json!({"scope": record.scope, "version": record.version}).to_string())
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Grant an agent read access to a private memory record. A grant is
+    /// workspace-bound and revocation is represented by a timestamp.
+    pub async fn grant(
+        &self,
+        workspace_id: Uuid,
+        memory_id: Uuid,
+        agent_id: Uuid,
+        actor: &str,
+    ) -> Result<(), MemoryStoreError> {
+        let now = Utc::now().to_rfc3339();
+        let mut tx = self.pool.begin().await?;
+        let exists: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM agent_memories WHERE id = ? AND workspace_id = ?",
+        )
+        .bind(memory_id.to_string())
+        .bind(workspace_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if exists.is_none() {
+            return Err(MemoryStoreError::NotFound);
+        }
+        sqlx::query("INSERT INTO agent_memory_grants (memory_id, agent_id, granted_by, granted_at, revoked_at) VALUES (?, ?, ?, ?, NULL) ON CONFLICT(memory_id, agent_id) DO UPDATE SET granted_by=excluded.granted_by, granted_at=excluded.granted_at, revoked_at=NULL")
+            .bind(memory_id.to_string())
+            .bind(agent_id.to_string())
+            .bind(actor)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, ?, ?, 'agent_memory.shared', 'agent_memory', ?, ?, ?)")
+            .bind(Uuid::new_v4().to_string())
+            .bind(workspace_id.to_string())
+            .bind(actor)
+            .bind(memory_id.to_string())
+            .bind(now)
+            .bind(json!({"agent_id": agent_id}).to_string())
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn revoke(
+        &self,
+        workspace_id: Uuid,
+        memory_id: Uuid,
+        agent_id: Uuid,
+        actor: &str,
+    ) -> Result<bool, MemoryStoreError> {
+        let now = Utc::now().to_rfc3339();
+        let mut tx = self.pool.begin().await?;
+        let exists: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM agent_memories WHERE id = ? AND workspace_id = ?",
+        )
+        .bind(memory_id.to_string())
+        .bind(workspace_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if exists.is_none() {
+            return Err(MemoryStoreError::NotFound);
+        }
+        let result = sqlx::query("UPDATE agent_memory_grants SET revoked_at = ? WHERE memory_id = ? AND agent_id = ? AND revoked_at IS NULL")
+            .bind(&now)
+            .bind(memory_id.to_string())
+            .bind(agent_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+        if result.rows_affected() > 0 {
+            sqlx::query("INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, ?, ?, 'agent_memory.share_revoked', 'agent_memory', ?, ?, ?)")
+                .bind(Uuid::new_v4().to_string())
+                .bind(workspace_id.to_string())
+                .bind(actor)
+                .bind(memory_id.to_string())
+                .bind(now)
+                .bind(json!({"agent_id": agent_id}).to_string())
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Retrieve and rank only records visible to the requesting agent, then
+    /// persist the exact context allocation for later inspection.
+    pub async fn allocate(
+        &self,
+        context: &RetrievalContext,
+        relevance: &[(Uuid, f64)],
+        token_budget: usize,
+    ) -> Result<MemoryAllocation, MemoryStoreError> {
+        let rows = sqlx::query("SELECT v.payload_json FROM agent_memory_versions v JOIN (SELECT memory_id, MAX(version) AS version FROM agent_memory_versions GROUP BY memory_id) latest ON latest.memory_id=v.memory_id AND latest.version=v.version JOIN agent_memories m ON m.id=v.memory_id WHERE m.workspace_id = ? AND (m.expires_at IS NULL OR m.expires_at > ?)")
+            .bind(context.workspace_id.to_string())
+            .bind(context.now.to_rfc3339())
+            .fetch_all(&self.pool)
+            .await?;
+        let mut records = Vec::with_capacity(rows.len());
+        for row in rows {
+            let payload: String = row.try_get("payload_json")?;
+            records.push(serde_json::from_str::<MemoryRecord>(&payload)?);
+        }
+        let grants = sqlx::query("SELECT memory_id FROM agent_memory_grants WHERE agent_id = ? AND revoked_at IS NULL")
+            .bind(context.agent_id.to_string())
+            .fetch_all(&self.pool)
+            .await?;
+        let mut scoped_context = context.clone();
+        for row in grants {
+            let id: String = row.try_get("memory_id")?;
+            if let Ok(id) = Uuid::parse_str(&id) {
+                scoped_context.granted_memory_ids.insert(id);
+            }
+        }
+        let allocation = allocate_context(&records, &scoped_context, relevance, token_budget)?;
+        sqlx::query("INSERT INTO agent_memory_allocations (id, workspace_id, task_id, agent_id, token_budget, tokens_allocated, selected_json, excluded_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            .bind(Uuid::new_v4().to_string())
+            .bind(allocation.workspace_id.to_string())
+            .bind(allocation.task_id.map(|id| id.to_string()))
+            .bind(allocation.agent_id.to_string())
+            .bind(allocation.token_budget as i64)
+            .bind(allocation.tokens_allocated as i64)
+            .bind(serde_json::to_string(&allocation.selected)?)
+            .bind(serde_json::to_string(&allocation.excluded)?)
+            .bind(Utc::now().to_rfc3339())
+            .execute(&self.pool)
+            .await?;
+        Ok(allocation)
+    }
+}
