@@ -44,7 +44,7 @@
 - Explore cards use the same full-width, dynamic-height visual treatment as ChatCards.
 - Added newest / most-liked / most-discussed discovery sorting.
 - Added comments, threaded replies, edit/delete ownership checks, likes, follows and reporting.
-- Added report records with a pending moderation status.
+- Added report records with a pending moderation status, publisher-only report queues, dismiss actions and reported-comment removal controls.
 - Added publisher ownership state and unpublish controls.
 - Added backend tests for publishing, public listing retrieval, threaded comments, reactions and notification read state.
 
@@ -84,9 +84,9 @@ No local build is claimed; these results are from the repository's GitHub Action
 
 - The current agent registry still represents manually registered agents. “Start workspace chat” creates a workspace conversation; it does not claim to connect a provider runtime that is not configured.
 - Chat progress appears only when tasks are explicitly linked to that conversation. Historical tasks without a source-chat link do not receive invented progress.
-- Explore reports are persisted as pending. A privileged, global admin moderation console is not present because the existing identity model does not expose a moderator role.
+- Publisher moderation is scoped to the owner of each public listing. A privileged, global admin moderation console is not present because the existing identity model does not expose a moderator role.
 - The in-app notification inbox is implemented; no external push-delivery provider was added in this work.
-- Explore currently loads the first page of comments for each visible listing. The API supports limit/offset, but the UI does not yet expose a dedicated load-more control.
+- Explore comment pagination is available through a load-more control; the first page is loaded for each visible listing.
 
 ## Delivery controls
 
