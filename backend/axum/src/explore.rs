@@ -407,6 +407,29 @@ impl ExploreStore {
         Ok(liked)
     }
 
+    pub async fn notify_task_event(
+        &self,
+        recipient_id: Uuid,
+        workspace_id: Uuid,
+        task_id: Uuid,
+        actor_id: Uuid,
+        event_type: &str,
+        title: &str,
+        body: &str,
+    ) -> Result<(), sqlx::Error> {
+        notify_user(
+            &self.pool,
+            recipient_id,
+            Some(workspace_id),
+            event_type,
+            "task",
+            task_id,
+            title,
+            body,
+            actor_id,
+        ).await
+    }
+
     pub async fn list_notifications(
         &self,
         user_id: Uuid,
