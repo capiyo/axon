@@ -515,6 +515,40 @@ pub struct HandoverRequest {
 }
 
 impl MemoryEpochCoordinator {
+    /// Read the original creation time from the immutable approved-memory event.
+    /// Qoin history lookup uses this timestamp so old memories are never mapped
+    /// to the market state that happens to be current when someone indexes them.
+    pub async fn approved_memory_created_at_ms(
+        &self,
+        workspace_id: Uuid,
+        chat_id: Uuid,
+        memory_id: Uuid,
+    ) -> Result<i64, sqlx::Error> {
+        let payload: Option<String> = sqlx::query_scalar(
+            "SELECT payload_json FROM memory_events WHERE workspace_id = ? AND chat_id = ? AND memory_entry_id = ? ORDER BY sequence DESC LIMIT 1",
+        )
+        .bind(workspace_id.to_string())
+        .bind(chat_id.to_string())
+        .bind(memory_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        let payload = payload.ok_or(sqlx::Error::RowNotFound)?;
+        let value: serde_json::Value =
+            serde_json::from_str(&payload).map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        if value.get("status").and_then(serde_json::Value::as_str) != Some("approved") {
+            return Err(sqlx::Error::Protocol(
+                "only approved memories can be mapped to historical Qoin vectors".into(),
+            ));
+        }
+        let created_at = value
+            .get("created_at")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| sqlx::Error::Protocol("memory creation timestamp is missing".into()))?;
+        let timestamp = DateTime::parse_from_rfc3339(created_at)
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        Ok(timestamp.timestamp_millis())
+    }
+
     /// Accept only vectors attached to an approved, existing source memory.
     /// The original event payload remains in memory_events and is copied as a
     /// retrieval value only for convenient hydration.
