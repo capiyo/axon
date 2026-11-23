@@ -378,6 +378,13 @@ mod tests {
         assert_eq!(a, b);
     }
 
+
+    #[test]
+    fn lexical_relevance_excludes_unrelated_memory_and_rewards_exact_phrases() {
+        assert_eq!(lexical_relevance("portfolio risk model", "football fixture commentary"), 0.0);
+        assert!(lexical_relevance("portfolio risk model", "portfolio risk model design") > 0.7);
+    }
+
     #[test]
     fn invalid_scores_are_rejected() {
         let mut item = record(Uuid::new_v4(), MemoryScope::Workspace, MemorySensitivity::Public);
