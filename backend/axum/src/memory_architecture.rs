@@ -287,6 +287,10 @@ impl MemoryEpochCoordinator {
         ).bind(id.to_string()).bind(workspace_id).bind(next_epoch)
             .bind(now.to_rfc3339()).bind(max_sequence).bind(indexed_count).bind(marker)
             .execute(&mut *tx).await?;
+        sqlx::query(
+            "INSERT INTO memory_epoch_items (epoch_id, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version) SELECT ?, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved' AND source_event_sequence <= ?"
+        ).bind(id.to_string()).bind(workspace_id).bind(max_sequence)
+            .execute(&mut *tx).await?;
         tx.commit().await?;
         Ok(true)
     }
@@ -419,10 +423,10 @@ impl MemoryEpochCoordinator {
         request.query.validate().map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
         let epoch = self.latest_epoch(request.workspace_id).await?.ok_or(sqlx::Error::RowNotFound)?;
         let rows = sqlx::query(
-            "SELECT memory_id, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved' AND (visibility = 'workspace_shared' OR (visibility = 'agent_private' AND owner_agent_id = ?) OR (visibility = 'task_shared' AND task_id = ?) OR (visibility = 'project_shared' AND project_id = ?)) AND source_event_sequence <= ? ORDER BY source_event_sequence DESC"
-        ).bind(request.workspace_id.to_string()).bind(request.agent_id.to_string())
+            "SELECT e.memory_id, e.qoin_vector_json, e.value_payload_json, e.tags_json, e.dependency_ids_json, e.outcome_score, e.evidence_score, e.source_event_sequence FROM memory_epoch_items e JOIN memory_vector_index live ON live.memory_id = e.memory_id AND live.status = 'approved' WHERE e.epoch_id = ? AND e.workspace_id = ? AND (e.visibility = 'workspace_shared' OR (e.visibility = 'agent_private' AND e.owner_agent_id = ?) OR (e.visibility = 'task_shared' AND e.task_id = ?) OR (e.visibility = 'project_shared' AND e.project_id = ?)) ORDER BY e.source_event_sequence DESC"
+        ).bind(epoch.id.to_string()).bind(request.workspace_id.to_string()).bind(request.agent_id.to_string())
             .bind(request.task_id.map(|v| v.to_string())).bind(request.project_id.map(|v| v.to_string()))
-            .bind(epoch.source_event_sequence).fetch_all(&self.pool).await?;
+            .fetch_all(&self.pool).await?;
         let mut memories = Vec::with_capacity(rows.len());
         let mut payloads = std::collections::HashMap::new();
         for row in rows {
@@ -454,11 +458,11 @@ impl MemoryEpochCoordinator {
         let session_id = Uuid::new_v4();
         let initial_ids = selection.initial.iter().map(|s| s.memory_id).collect::<Vec<_>>();
         sqlx::query(
-            "INSERT INTO agent_memory_sessions (session_id, workspace_id, agent_id, task_id, memory_epoch_id, initial_memory_ids_json, retrieved_memory_ids_json, created_at) VALUES (?, ?, ?, ?, ?, ?, '[]', ?)"
+            "INSERT INTO agent_memory_sessions (session_id, workspace_id, agent_id, task_id, memory_epoch_id, initial_memory_ids_json, retrieved_memory_ids_json, created_at, project_id) VALUES (?, ?, ?, ?, ?, ?, '[]', ?, ?)"
         ).bind(session_id.to_string()).bind(request.workspace_id.to_string())
             .bind(request.agent_id.to_string()).bind(request.task_id.map(|v| v.to_string()))
             .bind(epoch.id.to_string()).bind(serde_json::to_string(&initial_ids).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
-            .bind(Utc::now().to_rfc3339()).execute(&self.pool).await?;
+            .bind(Utc::now().to_rfc3339()).bind(request.project_id.map(|v| v.to_string())).execute(&self.pool).await?;
         let initial = selection.initial.iter().filter_map(|score| {
             payloads.get(&score.memory_id).map(|(payload, sequence)| HandoverMemory {
                 memory_id: score.memory_id, source_event_sequence: *sequence,
