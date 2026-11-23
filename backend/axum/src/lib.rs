@@ -7,6 +7,7 @@ mod chat_memory_routes;
 pub mod firebase_auth;
 pub mod identity;
 pub mod memory_intelligence;
+pub mod memory_architecture;
 mod model;
 pub mod robotics;
 mod robotics_routes;
