@@ -228,7 +228,11 @@ impl MemoryStore {
             .ok_or(MemoryStoreError::NotFound)?;
         let payload: String = row.try_get("payload_json")?;
         let mut record: MemoryRecord = serde_json::from_str(&payload)?;
-        if matches!(record.verification, crate::memory_system::Verification::Verified | crate::memory_system::Verification::Rejected) {
+        if matches!(
+            record.verification,
+            crate::memory_system::Verification::Verified
+                | crate::memory_system::Verification::Rejected
+        ) {
             return Err(MemoryStoreError::Policy(MemoryError::InvalidRecord));
         }
         record.verification = if approved {
@@ -236,7 +240,10 @@ impl MemoryStore {
         } else {
             crate::memory_system::Verification::Rejected
         };
-        record.version = record.version.checked_add(1).ok_or(MemoryStoreError::Policy(MemoryError::InvalidRecord))?;
+        record.version = record
+            .version
+            .checked_add(1)
+            .ok_or(MemoryStoreError::Policy(MemoryError::InvalidRecord))?;
         self.put(record.clone(), actor).await?;
         Ok(record)
     }
@@ -350,7 +357,10 @@ mod tests {
     #[tokio::test]
     async fn private_agent_memory_requires_an_explicit_grant_and_returns_context() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
-        let account = storage.ensure_firebase_user("memory-test", "memory-store-user").await.unwrap();
+        let account = storage
+            .ensure_firebase_user("memory-test", "memory-store-user")
+            .await
+            .unwrap();
         let chat_store = storage.chat_memory_store();
         let store = MemoryStore::new(chat_store.sqlite_pool());
         let owner = Uuid::new_v4();
@@ -366,11 +376,17 @@ mod tests {
             granted_memory_ids: BTreeSet::new(),
             now: Utc::now(),
         };
-        let hidden = store.allocate(&context, "deterministic evidence-first process", 128).await.unwrap();
+        let hidden = store
+            .allocate(&context, "deterministic evidence-first process", 128)
+            .await
+            .unwrap();
         assert!(hidden.selected.is_empty());
 
         store.grant(account.workspace.id, record.id, recipient, "human:test").await.unwrap();
-        let visible = store.allocate(&context, "deterministic evidence-first process", 128).await.unwrap();
+        let visible = store
+            .allocate(&context, "deterministic evidence-first process", 128)
+            .await
+            .unwrap();
         assert_eq!(visible.selected.len(), 1);
         assert_eq!(visible.selected[0].content, record.content);
         assert!(visible.tokens_allocated <= visible.token_budget);
@@ -380,13 +396,19 @@ mod tests {
     #[tokio::test]
     async fn review_promotes_a_proposal_as_a_new_immutable_version() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
-        let account = storage.ensure_firebase_user("memory-test", "memory-store-review-user").await.unwrap();
+        let account = storage
+            .ensure_firebase_user("memory-test", "memory-store-review-user")
+            .await
+            .unwrap();
         let store = MemoryStore::new(storage.chat_memory_store().sqlite_pool());
         let mut record = agent_memory(account.workspace.id, Uuid::new_v4());
         record.verification = Verification::Proposed;
         store.put(record.clone(), "human:proposer").await.unwrap();
 
-        let reviewed = store.review(account.workspace.id, record.id, true, "human:reviewer").await.unwrap();
+        let reviewed = store
+            .review(account.workspace.id, record.id, true, "human:reviewer")
+            .await
+            .unwrap();
         assert_eq!(reviewed.version, 2);
         assert_eq!(reviewed.verification, Verification::Verified);
         assert!(matches!(
@@ -398,7 +420,10 @@ mod tests {
     #[tokio::test]
     async fn memory_grants_cannot_cross_workspace_boundaries() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
-        let account = storage.ensure_firebase_user("memory-test", "memory-store-user-2").await.unwrap();
+        let account = storage
+            .ensure_firebase_user("memory-test", "memory-store-user-2")
+            .await
+            .unwrap();
         let store = MemoryStore::new(storage.chat_memory_store().sqlite_pool());
         let record = agent_memory(account.workspace.id, Uuid::new_v4());
         store.put(record.clone(), "human:test").await.unwrap();
