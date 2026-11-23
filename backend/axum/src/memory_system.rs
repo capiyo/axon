@@ -230,7 +230,7 @@ pub fn allocate_context(
             return Err(MemoryError::InvalidScore);
         }
         let utility = score_memory(record, relevance, context.now).utility();
-        ranked.push((record.id, record.token_cost, utility));
+        ranked.push((record.id, record.token_cost, utility, record.content.clone(), record.source.clone(), record.verification));
     }
     // Greedy utility density is deterministic and bounded. Stable UUID tie
     // breaking makes identical inputs produce byte-for-byte equivalent plans.
@@ -241,7 +241,7 @@ pub fn allocate_context(
     });
     let mut tokens_allocated = 0usize;
     let mut selected = Vec::new();
-    for (id, cost, utility) in ranked {
+    for (id, cost, utility, content, source, verification) in ranked {
         if cost > token_budget.saturating_sub(tokens_allocated) {
             excluded.push(id);
             continue;
