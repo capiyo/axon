@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS agent_memories (
     authority REAL NOT NULL CHECK (authority >= 0 AND authority <= 1),
     created_at TEXT NOT NULL,
     expires_at TEXT,
-    version INTEGER NOT NULL DEFAULT 1,
+    version INTEGER NOT NULL DEFAULT 1 CHECK (version > 0),
     token_cost INTEGER NOT NULL CHECK (token_cost > 0),
     updated_at TEXT NOT NULL
 );
@@ -31,14 +31,16 @@ CREATE TABLE IF NOT EXISTS agent_memory_grants (
 CREATE INDEX IF NOT EXISTS idx_agent_memory_grants_agent
     ON agent_memory_grants(agent_id, revoked_at);
 CREATE TABLE IF NOT EXISTS agent_memory_versions (
-    memory_id TEXT NOT NULL,
-    version INTEGER NOT NULL,
+    memory_id TEXT NOT NULL REFERENCES agent_memories(id),
+    version INTEGER NOT NULL CHECK (version > 0),
     payload_json TEXT NOT NULL,
     actor TEXT NOT NULL,
     event_type TEXT NOT NULL,
     occurred_at TEXT NOT NULL,
     PRIMARY KEY(memory_id, version)
 );
+CREATE INDEX IF NOT EXISTS idx_agent_memory_versions_latest
+    ON agent_memory_versions(memory_id, version DESC);
 CREATE TABLE IF NOT EXISTS agent_memory_allocations (
     id TEXT PRIMARY KEY NOT NULL,
     workspace_id TEXT NOT NULL,
