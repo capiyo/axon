@@ -256,6 +256,48 @@ impl MemoryStore {
         Ok(record)
     }
 
+    /// Permanently remove expired content and its versions before retrieval.
+    /// The append-only workspace audit receives a content-free tombstone.
+    pub async fn purge_expired(
+        &self,
+        workspace_id: Uuid,
+        now: chrono::DateTime<Utc>,
+    ) -> Result<u64, MemoryStoreError> {
+        let mut tx = self.pool.begin().await?;
+        let rows = sqlx::query("SELECT id FROM agent_memories WHERE workspace_id = ? AND expires_at IS NOT NULL AND expires_at <= ?")
+            .bind(workspace_id.to_string())
+            .bind(now.to_rfc3339())
+            .fetch_all(&mut *tx)
+            .await?;
+        let mut removed = 0u64;
+        for row in rows {
+            let id: String = row.try_get("id")?;
+            sqlx::query("DELETE FROM agent_memory_grants WHERE memory_id = ?")
+                .bind(&id)
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("DELETE FROM agent_memory_versions WHERE memory_id = ?")
+                .bind(&id)
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("DELETE FROM agent_memories WHERE id = ? AND workspace_id = ?")
+                .bind(&id)
+                .bind(workspace_id.to_string())
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, ?, 'system:memory-ttl', 'agent_memory.expired', 'agent_memory', ?, ?, '{}')")
+                .bind(Uuid::new_v4().to_string())
+                .bind(workspace_id.to_string())
+                .bind(&id)
+                .bind(now.to_rfc3339())
+                .execute(&mut *tx)
+                .await?;
+            removed += 1;
+        }
+        tx.commit().await?;
+        Ok(removed)
+    }
+
     /// Retrieve and rank only records visible to the requesting agent, then
     /// persist the exact context allocation for later inspection.
     pub async fn allocate(
@@ -264,6 +306,7 @@ impl MemoryStore {
         query: &str,
         token_budget: usize,
     ) -> Result<MemoryAllocation, MemoryStoreError> {
+        self.purge_expired(context.workspace_id, context.now).await?;
         let rows = sqlx::query("SELECT v.payload_json FROM agent_memory_versions v JOIN (SELECT memory_id, MAX(version) AS version FROM agent_memory_versions GROUP BY memory_id) latest ON latest.memory_id=v.memory_id AND latest.version=v.version JOIN agent_memories m ON m.id=v.memory_id WHERE m.workspace_id = ? AND (m.expires_at IS NULL OR m.expires_at > ?)")
             .bind(context.workspace_id.to_string())
             .bind(context.now.to_rfc3339())
