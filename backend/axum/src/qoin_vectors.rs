@@ -139,6 +139,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn deserializes_qoin_internal_market_vector_contract() {
+        let decision: QoinDecision = serde_json::from_value(serde_json::json!({
+            "symbol": "BTCUSDT",
+            "strategy_version": "edge-map-v1",
+            "attended_features": [0.1, -0.2, 0.3, 0.4, 0.0, -0.1],
+            "features": {"order_flow_imbalance": 0.1},
+            "action": "wait",
+            "reason": "outside threshold",
+            "decision_vector": [0.0, 0.0]
+        }))
+        .unwrap();
+        assert_eq!(decision.symbol, "BTCUSDT");
+        assert_eq!(decision.strategy_version.as_deref(), Some("edge-map-v1"));
+        assert_eq!(decision.attended_features.unwrap().len(), QOIN_VECTOR_DIMENSION);
+    }
+
+    #[test]
     fn qoin_endpoint_is_built_from_service_base_url() {
         let client = QoinVectorClient::new("http://127.0.0.1:8081/").unwrap();
         assert_eq!(
