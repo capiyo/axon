@@ -371,6 +371,26 @@ impl ChatMemoryStore {
             .bind(chat_id.to_string())
             .execute(&mut *tx)
             .await?;
+        let chat_row = sqlx::query("SELECT owner_id, title FROM chats WHERE id = ?")
+            .bind(chat_id.to_string()).fetch_one(&mut *tx).await?;
+        let owner_id = Uuid::parse_str(&chat_row.try_get::<String, _>("owner_id")?).unwrap_or_default();
+        let title: String = chat_row.try_get("title")?;
+        let actor_user_id = actor.strip_prefix("human:").and_then(|value| Uuid::parse_str(value).ok());
+        if !owner_id.is_nil() && actor_user_id != Some(owner_id) {
+            sqlx::query(
+                "INSERT INTO notifications (id, recipient_id, workspace_id, event_type, entity_type, entity_id, title, body, created_at, read_at)
+                 VALUES (?, ?, ?, 'chat.message', 'chat', ?, ?, ?, ?, NULL)"
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(owner_id.to_string())
+            .bind(workspace_id.to_string())
+            .bind(chat_id.to_string())
+            .bind(format!("New activity in {title}"))
+            .bind(message.content.chars().take(220).collect::<String>())
+            .bind(now.to_rfc3339())
+            .execute(&mut *tx)
+            .await?;
+        }
         insert_audit(
             &mut tx,
             workspace_id,
