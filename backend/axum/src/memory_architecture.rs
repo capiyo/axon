@@ -115,7 +115,9 @@ pub fn qkv_attention(
     let mut logits = vec![vec![0.0_f64; memories.len()]; query.heads];
     for (index, memory) in memories.iter().enumerate() {
         memory.key.validate()?;
-        if memory.key.values.len() != query.query.values.len() {
+        if memory.key.values.len() != query.query.values.len()
+            || memory.key.model_version != query.query.model_version
+        {
             return Err(AttentionError::InvalidVector);
         }
         if !memory.outcome_score.is_finite()
