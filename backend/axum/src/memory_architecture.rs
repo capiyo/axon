@@ -515,6 +515,28 @@ pub struct HandoverRequest {
 }
 
 impl MemoryEpochCoordinator {
+    /// Read the original timestamp of a source chat message before mapping it
+    /// to the Qoin market state that existed at that moment.
+    pub async fn chat_message_context_timestamp_ms(
+        &self,
+        workspace_id: Uuid,
+        chat_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<i64, sqlx::Error> {
+        let created_at: Option<String> = sqlx::query_scalar(
+            "SELECT m.created_at FROM chat_messages m JOIN chats c ON c.id = m.chat_id WHERE c.workspace_id = ? AND m.chat_id = ? AND m.id = ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(chat_id.to_string())
+        .bind(message_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        let created_at = created_at.ok_or(sqlx::Error::RowNotFound)?;
+        let timestamp = DateTime::parse_from_rfc3339(&created_at)
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        Ok(timestamp.timestamp_millis())
+    }
+
     /// Read the original creation time from the immutable approved-memory event.
     /// Qoin history lookup uses this timestamp so old memories are never mapped
     /// to the market state that happens to be current when someone indexes them.
