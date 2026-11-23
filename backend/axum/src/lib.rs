@@ -6,6 +6,9 @@ pub mod chat_memory;
 mod chat_memory_routes;
 pub mod firebase_auth;
 pub mod identity;
+pub mod memory_architecture;
+pub mod memory_intelligence;
+mod memory_routes;
 mod model;
 pub mod robotics;
 mod robotics_routes;
@@ -49,6 +52,26 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/v1/workspaces/:workspace_id/chats/:chat_id/memory/:entry_id/:action",
             post(chat_memory_routes::mutate_memory_entry),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memory/index",
+            post(memory_routes::index_memory),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/chats/:chat_id/messages/:message_id/memory-index",
+            post(memory_routes::index_chat_message),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memory/epoch",
+            get(memory_routes::latest_epoch),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-context",
+            post(memory_routes::prepare_handover),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-sessions/:session_id/retrieve",
+            post(memory_routes::progressive_retrieval),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/audit",

@@ -1,6 +1,7 @@
 use crate::{
     audit::AuditEvent,
     chat_memory::ChatMemoryStore,
+    memory_architecture::MemoryEpochCoordinator,
     model::{Agent, Artifact, Task, Workspace},
 };
 use async_trait::async_trait;
@@ -120,6 +121,7 @@ pub struct UserWorkspace {
 #[async_trait]
 pub trait Storage: Send + Sync {
     fn chat_memory_store(&self) -> ChatMemoryStore;
+    fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator;
     async fn apply(&self, mutation: StorageMutation) -> Result<(), StorageError>;
 
     async fn list_entities(
@@ -181,6 +183,10 @@ impl SqliteStorage {
         Ok(Self { pool })
     }
 
+    pub fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator {
+        MemoryEpochCoordinator::new(self.pool.clone())
+    }
+
     pub fn shared(self) -> Arc<dyn Storage> {
         Arc::new(self)
     }
@@ -190,6 +196,10 @@ impl SqliteStorage {
 impl Storage for SqliteStorage {
     fn chat_memory_store(&self) -> ChatMemoryStore {
         ChatMemoryStore::new(self.pool.clone())
+    }
+
+    fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator {
+        MemoryEpochCoordinator::new(self.pool.clone())
     }
 
     async fn apply(&self, mutation: StorageMutation) -> Result<(), StorageError> {

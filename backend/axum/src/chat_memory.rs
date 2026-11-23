@@ -406,6 +406,18 @@ impl ChatMemoryStore {
             actor,
         )
         .await?;
+        if entry.status != "approved" {
+            let index_status = if entry.status == "superseded" {
+                "superseded"
+            } else {
+                "deleted"
+            };
+            sqlx::query("UPDATE memory_vector_index SET status = ? WHERE memory_id = ?")
+                .bind(index_status)
+                .bind(entry.id.to_string())
+                .execute(&mut *tx)
+                .await?;
+        }
         bump_memory_version(&mut tx, chat_id, Utc::now()).await?;
         insert_audit(
             &mut tx,
@@ -423,7 +435,7 @@ impl ChatMemoryStore {
 
     async fn rebuild_memory(&self, chat_id: Uuid) -> Result<Vec<MemoryEntry>, sqlx::Error> {
         let mut connection = self.pool.acquire().await?;
-        let mut entries = replay_memory(&mut *connection)
+        let mut entries = replay_memory(&mut *connection, chat_id)
             .await?
             .into_values()
             .filter(|entry| entry.status != "deleted")
