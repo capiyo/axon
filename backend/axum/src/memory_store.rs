@@ -25,6 +25,33 @@ pub struct MemoryStore {
     pool: SqlitePool,
 }
 
+fn scope_label(value: crate::memory_system::MemoryScope) -> &'static str {
+    match value {
+        crate::memory_system::MemoryScope::Workspace => "workspace",
+        crate::memory_system::MemoryScope::Task => "task",
+        crate::memory_system::MemoryScope::Agent => "agent",
+        crate::memory_system::MemoryScope::Execution => "execution",
+    }
+}
+
+fn sensitivity_label(value: crate::memory_system::MemorySensitivity) -> &'static str {
+    match value {
+        crate::memory_system::MemorySensitivity::Public => "public",
+        crate::memory_system::MemorySensitivity::Internal => "internal",
+        crate::memory_system::MemorySensitivity::Confidential => "confidential",
+        crate::memory_system::MemorySensitivity::Secret => "secret",
+    }
+}
+
+fn verification_label(value: crate::memory_system::Verification) -> &'static str {
+    match value {
+        crate::memory_system::Verification::Unverified => "unverified",
+        crate::memory_system::Verification::Proposed => "proposed",
+        crate::memory_system::Verification::Verified => "verified",
+        crate::memory_system::Verification::Rejected => "rejected",
+    }
+}
+
 impl MemoryStore {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
@@ -41,24 +68,34 @@ impl MemoryStore {
         let payload = serde_json::to_string(&record)?;
         let now = Utc::now().to_rfc3339();
         let mut tx = self.pool.begin().await?;
-        let existing: Option<i64> = sqlx::query_scalar(
-            "SELECT version FROM agent_memories WHERE id = ? AND workspace_id = ?",
+        let existing_row = sqlx::query(
+            "SELECT workspace_id, version FROM agent_memories WHERE id = ?",
         )
         .bind(record.id.to_string())
-        .bind(record.workspace_id.to_string())
         .fetch_optional(&mut *tx)
         .await?;
-        if existing.is_some_and(|version| version as u64 >= record.version) {
+        if let Some(row) = &existing_row {
+            let existing_workspace: String = row.try_get("workspace_id")?;
+            let existing_version: i64 = row.try_get("version")?;
+            if existing_workspace != record.workspace_id.to_string() {
+                return Err(MemoryStoreError::NotFound);
+            }
+            if existing_version as u64 >= record.version {
+                return Err(MemoryStoreError::Policy(MemoryError::InvalidRecord));
+            }
+        }
+        let existing = existing_row.is_some();
+        if existing && record.version == 1 {
             return Err(MemoryStoreError::Policy(MemoryError::InvalidRecord));
         }
         sqlx::query("INSERT INTO agent_memories (id, workspace_id, scope, scope_id, owner_agent_id, sensitivity, verification, content, source, confidence, authority, created_at, expires_at, version, token_cost, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET scope=excluded.scope, scope_id=excluded.scope_id, owner_agent_id=excluded.owner_agent_id, sensitivity=excluded.sensitivity, verification=excluded.verification, content=excluded.content, source=excluded.source, confidence=excluded.confidence, authority=excluded.authority, expires_at=excluded.expires_at, version=excluded.version, token_cost=excluded.token_cost, updated_at=excluded.updated_at WHERE agent_memories.workspace_id=excluded.workspace_id")
             .bind(record.id.to_string())
             .bind(record.workspace_id.to_string())
-            .bind(serde_json::to_value(record.scope)?.as_str().unwrap_or("workspace"))
+            .bind(scope_label(record.scope))
             .bind(record.scope_id.map(|id| id.to_string()))
             .bind(record.owner_agent_id.map(|id| id.to_string()))
-            .bind(serde_json::to_value(record.sensitivity)?.as_str().unwrap_or("internal"))
-            .bind(serde_json::to_value(record.verification)?.as_str().unwrap_or("unverified"))
+            .bind(sensitivity_label(record.sensitivity))
+            .bind(verification_label(record.verification))
             .bind(&record.content)
             .bind(&record.source)
             .bind(record.confidence)
@@ -75,7 +112,7 @@ impl MemoryStore {
             .bind(record.version as i64)
             .bind(payload)
             .bind(actor)
-            .bind(if existing.is_some() { "revised" } else { "proposed" })
+            .bind(if existing { "revised" } else { "proposed" })
             .bind(now)
             .execute(&mut *tx)
             .await?;
@@ -83,7 +120,7 @@ impl MemoryStore {
             .bind(Uuid::new_v4().to_string())
             .bind(record.workspace_id.to_string())
             .bind(actor)
-            .bind(if existing.is_some() { "agent_memory.revised" } else { "agent_memory.proposed" })
+            .bind(if existing { "agent_memory.revised" } else { "agent_memory.proposed" })
             .bind(record.id.to_string())
             .bind(Utc::now().to_rfc3339())
             .bind(json!({"scope": record.scope, "version": record.version}).to_string())
