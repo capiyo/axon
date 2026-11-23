@@ -530,7 +530,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
             </div>
             {activeView === "chats" ? <section className="panel chat-panel">
               <div className="panel-heading"><div><span className="kicker">04 · PROJECT CONVERSATIONS</span><h3>Chats & memory</h3></div><span className="count">{chats.length} CHATS</span></div>
-              <div className="chat-layout">
+              <div className={mobileConversationOpen ? "chat-layout mobile-conversation-open" : "chat-layout"}>
                 <aside className="chat-sidebar">
                   <form className="stack-form" onSubmit={createChat}>
                     <label htmlFor="chat-title">New chat</label>
