@@ -86,6 +86,13 @@ pub async fn create_task(
     }
     drop(artifacts);
 
+    if let Some(source_chat_id) = input.source_chat_id {
+        let chat_store = state.chat_memory.as_ref().ok_or_else(storage_failure)?;
+        if chat_store.get_chat(workspace_id, source_chat_id).await.map_err(|_| storage_failure())?.is_none() {
+            return Err(error(StatusCode::BAD_REQUEST, "Source conversation must belong to the target workspace."));
+        }
+    }
+
     let now = Utc::now();
     let task = Task {
         id: Uuid::new_v4(),
@@ -93,6 +100,7 @@ pub async fn create_task(
         title: title.to_owned(),
         objective: objective.to_owned(),
         assignee_agent_id: input.assignee_agent_id,
+        source_chat_id: input.source_chat_id,
         context_artifact_ids: input.context_artifact_ids,
         response_artifact_id: None,
         status: TaskStatus::Offered,
