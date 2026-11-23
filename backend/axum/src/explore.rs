@@ -144,7 +144,10 @@ impl ExploreStore {
         Self { pool }
     }
 
-    pub async fn publish(&self, input: PublishAgentRecord<'_>) -> Result<Option<Uuid>, sqlx::Error> {
+    pub async fn publish(
+        &self,
+        input: PublishAgentRecord<'_>,
+    ) -> Result<Option<Uuid>, sqlx::Error> {
         let now = Utc::now();
         let listing_id = Uuid::new_v4();
         let result = sqlx::query(
@@ -312,16 +315,28 @@ impl ExploreStore {
             .bind(listing_id.to_string())
             .fetch_one(&self.pool)
             .await?;
-            notify_user(&self.pool, NotificationInput {
-                recipient_id: recipient,
-                workspace_id: Uuid::parse_str(&workspace).ok(),
-                event_type: if parent_comment_id.is_some() { "explore.reply" } else { "explore.comment" },
-                entity_type: "agent_listing",
-                entity_id: listing_id,
-                title: if parent_comment_id.is_some() { "New reply on an agent discussion" } else { "New comment on your agent" },
-                body,
-                actor_id: author_id,
-            }).await?;
+            notify_user(
+                &self.pool,
+                NotificationInput {
+                    recipient_id: recipient,
+                    workspace_id: Uuid::parse_str(&workspace).ok(),
+                    event_type: if parent_comment_id.is_some() {
+                        "explore.reply"
+                    } else {
+                        "explore.comment"
+                    },
+                    entity_type: "agent_listing",
+                    entity_id: listing_id,
+                    title: if parent_comment_id.is_some() {
+                        "New reply on an agent discussion"
+                    } else {
+                        "New comment on your agent"
+                    },
+                    body,
+                    actor_id: author_id,
+                },
+            )
+            .await?;
         }
         self.get_comment(id, author_id).await
     }
@@ -475,22 +490,29 @@ impl ExploreStore {
             let listing_id =
                 Uuid::parse_str(&row.try_get::<String, _>("listing_id")?).unwrap_or_default();
             let workspace_id = Uuid::parse_str(&row.try_get::<String, _>("workspace_id")?).ok();
-            notify_user(&self.pool, NotificationInput {
-                recipient_id: recipient,
-                workspace_id,
-                event_type: "explore.comment_liked",
-                entity_type: "agent_comment",
-                entity_id: comment_id,
-                title: "Someone liked your comment",
-                body: "Your Explore comment received a like.",
-                actor_id: user_id,
-            }).await?;
+            notify_user(
+                &self.pool,
+                NotificationInput {
+                    recipient_id: recipient,
+                    workspace_id,
+                    event_type: "explore.comment_liked",
+                    entity_type: "agent_comment",
+                    entity_id: comment_id,
+                    title: "Someone liked your comment",
+                    body: "Your Explore comment received a like.",
+                    actor_id: user_id,
+                },
+            )
+            .await?;
             let _ = listing_id;
         }
         Ok(liked)
     }
 
-    pub async fn notify_task_event(&self, notification: NotificationInput<'_>) -> Result<(), sqlx::Error> {
+    pub async fn notify_task_event(
+        &self,
+        notification: NotificationInput<'_>,
+    ) -> Result<(), sqlx::Error> {
         notify_user(&self.pool, notification).await
     }
 
@@ -641,16 +663,20 @@ async fn notify_listing_owner(
     if let Some(row) = row {
         let owner = Uuid::parse_str(&row.try_get::<String, _>("owner_id")?).unwrap_or_default();
         let workspace = Uuid::parse_str(&row.try_get::<String, _>("workspace_id")?).ok();
-        notify_user(pool, NotificationInput {
-            recipient_id: owner,
-            workspace_id: workspace,
-            event_type,
-            entity_type: "agent_listing",
-            entity_id: listing_id,
-            title,
-            body,
-            actor_id,
-        }).await?;
+        notify_user(
+            pool,
+            NotificationInput {
+                recipient_id: owner,
+                workspace_id: workspace,
+                event_type,
+                entity_type: "agent_listing",
+                entity_id: listing_id,
+                title,
+                body,
+                actor_id,
+            },
+        )
+        .await?;
     }
     Ok(())
 }
@@ -1265,7 +1291,7 @@ mod tests {
         let workspace_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
         let listing_id = store
-.publish(PublishAgentRecord {
+            .publish(PublishAgentRecord {
                 agent_id,
                 workspace_id,
                 owner_id,
