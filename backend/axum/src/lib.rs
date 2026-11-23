@@ -8,6 +8,7 @@ pub mod firebase_auth;
 pub mod identity;
 pub mod memory_architecture;
 pub mod memory_intelligence;
+pub mod qoin_vectors;
 mod memory_routes;
 mod model;
 pub mod robotics;
