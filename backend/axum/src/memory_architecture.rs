@@ -311,7 +311,8 @@ mod tests {
             .collect::<Vec<_>>();
         let selection = pareto_select(&scores, &ParetoPolicy::default()).unwrap();
         assert_eq!(selection.initial.len(), 2);
-        assert!(selection.achieved_coverage >= 0.8);
+        assert!((selection.achieved_coverage - (10.0 / 18.0)).abs() < 1e-9);
+        assert!(selection.budget_exhausted);
         assert_eq!(selection.deferred.len(), 8);
     }
 }
