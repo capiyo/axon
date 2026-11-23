@@ -172,6 +172,12 @@ pub fn can_read(record: &MemoryRecord, context: &RetrievalContext) -> bool {
     {
         return false;
     }
+    if record.verification != Verification::Verified
+        && !(record.scope == MemoryScope::Agent
+            && record.owner_agent_id == Some(context.agent_id))
+    {
+        return false;
+    }
     match record.scope {
         MemoryScope::Workspace => true,
         MemoryScope::Task => record.scope_id == context.task_id,
@@ -409,6 +415,25 @@ mod tests {
         assert!(lexical_relevance("portfolio risk model", "portfolio risk model design") > 0.7);
     }
 
+
+
+    #[test]
+    fn proposed_shared_memory_waits_for_human_verification() {
+        let workspace = Uuid::new_v4();
+        let mut item = record(workspace, MemoryScope::Workspace, MemorySensitivity::Internal);
+        item.verification = Verification::Proposed;
+        let context = RetrievalContext {
+            workspace_id: workspace,
+            task_id: None,
+            agent_id: Uuid::new_v4(),
+            allowed_sensitivity: MemorySensitivity::Internal,
+            granted_memory_ids: BTreeSet::new(),
+            now: Utc::now(),
+        };
+        assert!(!can_read(&item, &context));
+        item.verification = Verification::Verified;
+        assert!(can_read(&item, &context));
+    }
 
     #[test]
     fn task_memory_is_confined_to_its_task() {
