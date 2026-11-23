@@ -466,11 +466,27 @@ function WorkspaceApp() {
               <Pressable onPress={createChat} disabled={!chatTitle.trim()||busy} style={{width:44,borderRadius:12,alignItems:"center",justifyContent:"center",backgroundColor:"#67d8f0",opacity:!chatTitle.trim()||busy?0.45:1}}><Text style={{color:"#071a24",fontSize:23,fontWeight:"800"}}>＋</Text></Pressable>
             </View>
             <View style={{gap:6,marginBottom:14}}>
-              {chats.map(chat=><Pressable key={chat.id} onPress={()=>setActiveChat(chat.id)} style={{flexDirection:"row",alignItems:"center",gap:10,padding:11,borderRadius:13,backgroundColor:activeChat===chat.id?"#1a2945":"#111a2e",borderWidth:1,borderColor:activeChat===chat.id?"#455c31":"#1b2942"}}>
-                <View style={{width:35,height:35,borderRadius:12,backgroundColor:"#29372b",alignItems:"center",justifyContent:"center"}}><Text style={{color:"#c5f58b",fontWeight:"800"}}>{chat.title.slice(0,1).toUpperCase()}</Text></View>
-                <View style={{flex:1,minWidth:0}}><Text numberOfLines={1} style={{color:"#edf3ff",fontSize:12,fontWeight:"700"}}>{chat.title}</Text><Text style={{color:"#788cac",fontSize:9,marginTop:4}}>{new Date(chat.updated_at).toLocaleDateString()}</Text></View>
-                <Text style={{color:"#788cac",fontSize:20}}>›</Text>
-              </Pressable>)}
+              {chats.map(chat=>{
+                const isActive=activeChat===chat.id;
+                const latestMessage=isActive&&chatDetail?.chat.id===chat.id?chatDetail.messages[chatDetail.messages.length-1]:undefined;
+                const messageCount=isActive&&chatDetail?.chat.id===chat.id?chatDetail.messages.length:null;
+                return <Pressable key={chat.id} onPress={()=>setActiveChat(chat.id)} accessibilityRole="button" accessibilityLabel={`Open conversation: ${chat.title}`} style={{minHeight:136,padding:12,borderRadius:13,backgroundColor:isActive?"#1a2945":"#111a2e",borderWidth:1,borderColor:isActive?"rgba(103,216,240,0.48)":"#263654",borderLeftWidth:isActive?3:1,borderLeftColor:isActive?"#67d8f0":"#263654",justifyContent:"space-between",gap:9}}>
+                  <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                    <Text style={{color:"#67d8f0",fontSize:8,fontWeight:"800",letterSpacing:1}}>WORKSPACE CHAT</Text>
+                    <Text style={{color:"#8295b5",fontSize:9}}>{new Date(chat.updated_at).toLocaleDateString(undefined,{month:"short",day:"numeric"})}</Text>
+                  </View>
+                  <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
+                    <View style={{width:31,height:31,borderRadius:16,backgroundColor:"#22314c",alignItems:"center",justifyContent:"center"}}><Text style={{color:"#9ae9f7",fontSize:12,fontWeight:"800"}}>{chat.title.slice(0,1).toUpperCase()}</Text></View>
+                    <Text numberOfLines={1} style={{flex:1,color:"#edf3ff",fontSize:12,fontWeight:"800"}}>{chat.title}</Text>
+                    <Text style={{color:"#67d8f0",fontSize:19}}>›</Text>
+                  </View>
+                  <Text numberOfLines={2} style={{color:"#a0b2d0",fontSize:10,lineHeight:15,minHeight:30}}>{latestMessage?`${latestMessage.role==="user"?"You":latestMessage.answered_by||"Agent"}: ${latestMessage.content}`:"Open this conversation to continue your work."}</Text>
+                  <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingTop:7,borderTopWidth:1,borderTopColor:"rgba(150,190,255,0.10)"}}>
+                    <Text numberOfLines={1} style={{color:"#788cac",fontSize:8,flex:1}}>{selected?.name??"Personal workspace"}</Text>
+                    <Text style={{color:"#788cac",fontSize:8}}>{messageCount===null?"Private conversation":`${messageCount} messages`}</Text>
+                  </View>
+                </Pressable>;
+              })}
               {chats.length===0?<View style={{padding:22,alignItems:"center",borderRadius:14,backgroundColor:"#111a2e"}}><Text style={{color:"#67d8f0",fontSize:24}}>◌</Text><Text style={{color:"#edf3ff",fontSize:12,fontWeight:"700",marginTop:7}}>No conversations yet</Text><Text style={{color:"#788cac",fontSize:10,textAlign:"center",marginTop:5}}>Create a chat to start a shared working history.</Text></View>:null}
             </View>
             {chatDetail ? <>
