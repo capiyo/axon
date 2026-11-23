@@ -1,6 +1,7 @@
 use crate::{
     audit::{AuditEvent, AuditStore},
     chat_memory::ChatMemoryStore,
+    explore::ExploreStore,
     firebase_auth::FirebaseVerifier,
     memory_architecture::MemoryEpochCoordinator,
     model::{Agent, Artifact, Task, Workspace},
@@ -34,6 +35,7 @@ pub struct AppState {
     pub audit: Arc<RwLock<AuditStore>>,
     storage: Option<Arc<dyn Storage>>,
     pub chat_memory: Option<ChatMemoryStore>,
+    pub explore: Option<ExploreStore>,
     pub memory_epochs: Option<MemoryEpochCoordinator>,
     pub qoin_vectors: Option<QoinVectorClient>,
     pub firebase_verifier: Option<FirebaseVerifier>,
@@ -43,10 +45,12 @@ pub struct AppState {
 impl AppState {
     pub async fn with_storage(storage: Arc<dyn Storage>) -> Result<Self, StorageError> {
         let chat_memory = Some(storage.chat_memory_store());
+        let explore = Some(storage.explore_store());
         let memory_epochs = Some(storage.memory_epoch_coordinator());
         let state = Self {
             storage: Some(storage.clone()),
             chat_memory,
+            explore,
             memory_epochs,
             firebase_verifier: None,
             simulator_enabled: false,
