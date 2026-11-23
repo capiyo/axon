@@ -33,6 +33,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function taskProgress(status: string): number {
+  switch (status) {
+    case "completed": return 100;
+    case "accepted": return 90;
+    case "review_required":
+    case "submitted": return 80;
+    case "in_progress": return 60;
+    case "acknowledged": return 30;
+    case "offered": return 10;
+    case "changes_requested": return 55;
+    default: return 0;
+  }
+}
+
 function ActionButton({ label, onPress, disabled = false, secondary = false }: {
   label: string;
   onPress: () => void;
@@ -722,13 +736,13 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
             <>
               <View style={styles.screenHeading}><Text style={styles.eyebrow}>PRIVATE WORKSPACE</Text><Text style={styles.screenTitle}>Chats</Text><Text style={styles.description}>Conversations, agent work and project context in one place.</Text></View>
               <View style={styles.newChatRow}><TextInput value={chatTitle} onChangeText={setChatTitle} placeholder="Start a new conversation…" style={[styles.input,styles.newChatInput]} maxLength={160}/><ActionButton label="＋" onPress={createChat} disabled={!chatTitle.trim() || busy}/></View>
-              {chats.map(chat => { const preview = chatPreviews[chat.id]; const last = preview?.messages[preview.messages.length-1]; return <View key={chat.id} style={styles.chatCardMobile}>
+              {chats.map(chat => { const preview = chatPreviews[chat.id]; const last = preview?.messages[preview.messages.length-1]; const linkedTasks = tasks.filter(task => task.source_chat_id === chat.id); const progress = linkedTasks.length ? Math.round(linkedTasks.reduce((sum,task)=>sum+taskProgress(task.status),0)/linkedTasks.length) : null; return <View key={chat.id} style={styles.chatCardMobile}>
                 <Pressable onPress={() => {setActiveChat(chat.id);setMobileChatOpen(true);}}>
                   <View style={styles.chatCardMobileHeader}><View style={styles.chatCardMobileAvatar}><Text style={styles.chatCardMobileAvatarText}>{(last?.answered_by || chat.title || "A").slice(0,1).toUpperCase()}</Text></View><View style={{flex:1}}><Text style={styles.chatCardMobileTitle}>{chat.title}</Text><Text style={styles.chatCardMobileAgent}>{last?.answered_by || "Workspace conversation"}</Text></View><Text style={styles.chatCardMobileTime}>{new Date(chat.updated_at).toLocaleString()}</Text></View>
-                  <Text style={styles.chatCardMobilePreview}>{last?.content || "No messages yet. Open this conversation to begin."}</Text>
+                  <Text style={styles.chatCardMobilePreview}>{last?.content || "No messages yet. Open this conversation to begin."}</Text>{progress !== null ? <View style={styles.chatCardMobileProgress}><View style={[styles.chatCardMobileProgressFill,{width: `${progress}%`}]}/></View> : null}
                   <Text style={styles.chatCardMobileOpen}>OPEN CONVERSATION →</Text>
                 </Pressable>
-                <View style={styles.chatCardMobileFooter}><Text style={styles.chatCardMobileMeta}>{preview ? `${preview.messages.length} messages` : "Loading conversation"} · {last?.role === "assistant" ? "Agent replied" : last?.role === "user" ? "Your message" : "New conversation"}</Text><View style={styles.chatCardMobileActions}>{chat.unread_count > 0 ? <Text style={styles.chatUnreadCount}>{chat.unread_count}</Text> : null}<Pressable onPress={() => toggleChatLike(chat.id)}><Text style={styles.chatCardMobileLike}>{chat.is_liked ? "♥" : "♡"}</Text></Pressable><Pressable onPress={() => archiveChatById(chat.id)}><Text style={styles.chatCardMobileArchive}>Archive</Text></Pressable></View></View>
+                <View style={styles.chatCardMobileFooter}><Text style={styles.chatCardMobileMeta}>{preview ? `${preview.messages.length} messages` : "Loading conversation"} · {linkedTasks.length} tasks · {last?.role === "assistant" ? "Agent replied" : last?.role === "user" ? "Your message" : "New conversation"}</Text><View style={styles.chatCardMobileActions}>{chat.unread_count > 0 ? <Text style={styles.chatUnreadCount}>{chat.unread_count}</Text> : null}<Pressable onPress={() => toggleChatLike(chat.id)}><Text style={styles.chatCardMobileLike}>{chat.is_liked ? "♥" : "♡"}</Text></Pressable><Pressable onPress={() => archiveChatById(chat.id)}><Text style={styles.chatCardMobileArchive}>Archive</Text></Pressable></View></View>
               </View>; })
               {chats.length === 0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No conversations yet</Text><Text style={styles.muted}>Create your first chat above.</Text></View> : null}
             </>
