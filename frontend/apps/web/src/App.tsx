@@ -17,6 +17,7 @@ const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
     ...init,
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init?.headers }
   });
+  if (response.status === 204) return undefined as T;
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(body.error ?? "Request failed");
