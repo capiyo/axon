@@ -131,7 +131,7 @@ impl QoinVectorClient {
         }
         let event_ts_ms = decision.event_ts_ms;
         if let Some(requested_at) = at_ms {
-            if event_ts_ms.is_none_or(|event_time| event_time > requested_at) {
+            if event_ts_ms.map_or(true, |event_time| event_time > requested_at) {
                 return Err(QoinVectorError::InvalidVector);
             }
         }
