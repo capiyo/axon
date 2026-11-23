@@ -282,8 +282,11 @@ impl MemoryStore {
                 "rank": item.rank
             })
         }).collect::<Vec<_>>();
+        let allocation_id = Uuid::new_v4();
+        let occurred_at = Utc::now().to_rfc3339();
+        let mut tx = self.pool.begin().await?;
         sqlx::query("INSERT INTO agent_memory_allocations (id, workspace_id, task_id, agent_id, token_budget, tokens_allocated, selected_json, excluded_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-            .bind(Uuid::new_v4().to_string())
+            .bind(allocation_id.to_string())
             .bind(allocation.workspace_id.to_string())
             .bind(allocation.task_id.map(|id| id.to_string()))
             .bind(allocation.agent_id.to_string())
@@ -291,9 +294,25 @@ impl MemoryStore {
             .bind(allocation.tokens_allocated as i64)
             .bind(serde_json::to_string(&selected_audit)?)
             .bind(serde_json::to_string(&allocation.excluded)?)
-            .bind(Utc::now().to_rfc3339())
-            .execute(&self.pool)
+            .bind(&occurred_at)
+            .execute(&mut *tx)
             .await?;
+        sqlx::query("INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, ?, ?, 'agent_memory.allocated', 'agent_memory_allocation', ?, ?, ?)")
+            .bind(Uuid::new_v4().to_string())
+            .bind(allocation.workspace_id.to_string())
+            .bind(format!("agent:{}", allocation.agent_id))
+            .bind(allocation_id.to_string())
+            .bind(occurred_at)
+            .bind(json!({
+                "task_id": allocation.task_id,
+                "token_budget": allocation.token_budget,
+                "tokens_allocated": allocation.tokens_allocated,
+                "selected_count": allocation.selected.len(),
+                "excluded_count": allocation.excluded.len()
+            }).to_string())
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
         Ok(allocation)
     }
 }
