@@ -394,10 +394,15 @@ impl ChatMemoryStore {
             .execute(&mut *tx)
             .await?;
         let chat_row = sqlx::query("SELECT owner_id, title FROM chats WHERE id = ?")
-            .bind(chat_id.to_string()).fetch_one(&mut *tx).await?;
-        let owner_id = Uuid::parse_str(&chat_row.try_get::<String, _>("owner_id")?).unwrap_or_default();
+            .bind(chat_id.to_string())
+            .fetch_one(&mut *tx)
+            .await?;
+        let owner_id =
+            Uuid::parse_str(&chat_row.try_get::<String, _>("owner_id")?).unwrap_or_default();
         let title: String = chat_row.try_get("title")?;
-        let actor_user_id = actor.strip_prefix("human:").and_then(|value| Uuid::parse_str(value).ok());
+        let actor_user_id = actor
+            .strip_prefix("human:")
+            .and_then(|value| Uuid::parse_str(value).ok());
         if !owner_id.is_nil() && actor_user_id != Some(owner_id) {
             sqlx::query(
                 "INSERT INTO notifications (id, recipient_id, workspace_id, event_type, entity_type, entity_id, title, body, created_at, read_at)
@@ -708,11 +713,15 @@ fn parse_chat(row: &sqlx::sqlite::SqliteRow) -> Result<Chat, sqlx::Error> {
             let answered_by: Option<String> = row.try_get("last_message_answered_by")?;
             match (id, role, content, created_at) {
                 (Some(id), Some(role), Some(content), Some(created_at)) => Some(ChatMessage {
-                    id: Uuid::parse_str(&id).map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
-                    chat_id: Uuid::parse_str(&row.try_get::<String, _>("id")?).map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                    id: Uuid::parse_str(&id)
+                        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                    chat_id: Uuid::parse_str(&row.try_get::<String, _>("id")?)
+                        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
                     role,
                     content,
-                    created_at: DateTime::parse_from_rfc3339(&created_at).map_err(|error| sqlx::Error::Decode(Box::new(error)))?.with_timezone(&Utc),
+                    created_at: DateTime::parse_from_rfc3339(&created_at)
+                        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?
+                        .with_timezone(&Utc),
                     answered_by,
                 }),
                 _ => None,
@@ -1062,7 +1071,13 @@ mod tests {
             .unwrap();
         assert_eq!(before_read[0].unread_count, 1);
         assert_eq!(before_read[0].message_count, 1);
-        assert_eq!(before_read[0].last_message.as_ref().map(|message| message.content.as_str()), Some("A real agent response."));
+        assert_eq!(
+            before_read[0]
+                .last_message
+                .as_ref()
+                .map(|message| message.content.as_str()),
+            Some("A real agent response.")
+        );
         assert!(!before_read[0].is_liked);
 
         assert!(store
