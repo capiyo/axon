@@ -216,6 +216,8 @@ export type Chat = {
   created_at: string;
   updated_at: string;
   archived: boolean;
+  unread_count: number;
+  is_liked: boolean;
 };
 
 export type ChatMessage = {
