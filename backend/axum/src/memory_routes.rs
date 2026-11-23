@@ -113,6 +113,28 @@ pub async fn propose(
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ReviewMemory {
+    pub decision: String,
+}
+
+pub async fn review(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, memory_id)): Path<(Uuid, Uuid)>,
+    Json(input): Json<ReviewMemory>,
+) -> ApiResult<Json<MemoryRecord>> {
+    require_member(&state, &user, workspace_id).await?;
+    let approved = match input.decision.as_str() {
+        "approve" => true,
+        "reject" => false,
+        _ => return Err(error(StatusCode::BAD_REQUEST, "Decision must be approve or reject.")),
+    };
+    let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
+    let record = store.review(workspace_id, memory_id, approved, &format!("human:{}", user.user_id)).await.map_err(store_error)?;
+    Ok(Json(record))
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ShareMemory {
     pub agent_id: Uuid,
 }
@@ -176,8 +198,8 @@ pub async fn allocate(
     drop(agents);
     if let Some(task_id) = input.task_id {
         let tasks = state.tasks.read().await;
-        if !tasks.get(&task_id).is_some_and(|task| task.workspace_id == workspace_id) {
-            return Err(error(StatusCode::BAD_REQUEST, "Task must belong to this workspace."));
+        if !tasks.get(&task_id).is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == input.agent_id) {
+            return Err(error(StatusCode::FORBIDDEN, "Only the task's assigned agent may receive task-scoped memory."));
         }
     }
     let context = RetrievalContext {
