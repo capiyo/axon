@@ -50,6 +50,7 @@ function WorkspaceApp() {
   const [adminAvailable, setAdminAvailable] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<"Chats" | "Feed">("Chats");
+  const [mobileHeaderVisible, setMobileHeaderVisible] = useState(true);
 
   async function refreshWorkspaces() {
     const [items, status] = await Promise.all([
@@ -95,6 +96,22 @@ function WorkspaceApp() {
       setTasks([]);
     }
   }, [selected?.id]);
+
+  useEffect(() => {
+    const root = document.querySelector(".content");
+    if (!root) return;
+    let lastTop = root.scrollTop;
+    const reportScroll = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !root.contains(target)) return;
+      const top = target.scrollTop;
+      if (top < lastTop - 1 || top < 24) setMobileHeaderVisible(true);
+      else if (top > lastTop + 1) setMobileHeaderVisible(false);
+      lastTop = top;
+    };
+    root.addEventListener("scroll", reportScroll, true);
+    return () => root.removeEventListener("scroll", reportScroll, true);
+  }, []);
 
   useEffect(() => {
     if (!selected || !activeChat) { setChatDetail(null); return; }
@@ -329,7 +346,7 @@ function WorkspaceApp() {
         <div className="rail-bottom">AXON</div>
       </aside>
       <section className="content" data-mobile-tab={activeMobileTab}>
-        <header className="topbar">
+        <header className={mobileHeaderVisible ? "topbar mobile-header-visible" : "topbar mobile-header-hidden"}>
           <div className="axon-navbar-brand">
             <span className="axon-wordmark">AXON</span>
             <div className="axon-navbar-context">
@@ -354,7 +371,7 @@ function WorkspaceApp() {
           </div>
         </header>
         {selected && !showAdmin && (
-          <nav className="mobile-home-tabs" aria-label="Workspace sections">
+          <nav className={mobileHeaderVisible ? "mobile-home-tabs mobile-header-visible" : "mobile-home-tabs mobile-header-hidden"} aria-label="Workspace sections">
             <div className="floating-pill">
               <button type="button" aria-label="Chats" title="Chats" className={activeMobileTab === "Chats" ? "floating-pill-item active" : "floating-pill-item"} onClick={() => setActiveMobileTab("Chats")}><span aria-hidden="true">◉</span></button>
               <button type="button" aria-label="Feed" title="Feed" className={activeMobileTab === "Feed" ? "floating-pill-item active" : "floating-pill-item"} onClick={() => setActiveMobileTab("Feed")}><span aria-hidden="true">▤</span></button>
