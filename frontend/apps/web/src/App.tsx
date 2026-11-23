@@ -209,7 +209,7 @@ function WorkspaceApp() {
   }
 
   async function indexMemoryWithQoin(entry: ProjectMemoryEntry) {
-    if (!selected || !qoinSymbol.trim()) return;
+    if (!selected || !activeChat || !qoinSymbol.trim()) return;
     setBusy(true);
     setError("");
     try {
@@ -227,6 +227,7 @@ function WorkspaceApp() {
           })
         }
       );
+      setQoinNotice(`Indexed ${receipt.memory_id.slice(0, 8)} with ${receipt.symbol} · available after the next hourly epoch.`);
       setError("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not index this memory with Qoin.");
