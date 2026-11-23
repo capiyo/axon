@@ -490,9 +490,17 @@ function WorkspaceApp() {
           <div className="axon-pane-heading"><div><span className="axon-section-label">YOUR CONVERSATIONS</span><strong>Chats</strong></div><span className="axon-chat-count">{chats.length}</span></div>
           <form className="axon-new-chat" onSubmit={createChat}><input aria-label="New chat title" value={chatTitle} onChange={event => setChatTitle(event.target.value)} placeholder="Start a new chat…" maxLength={160} required /><button disabled={!chatTitle.trim() || busy} aria-label="Create chat">＋</button></form>
           <div className="axon-chat-list">
-            {chats.map(chat => <button type="button" key={chat.id} className={activeChat === chat.id ? "axon-chat-item active" : "axon-chat-item"} onClick={() => { setActiveChat(chat.id); setActiveTab("chats"); }}>
-              <span className="axon-chat-avatar">{chat.title.slice(0,1).toUpperCase()}</span><span className="axon-chat-copy"><strong>{chat.title}</strong><small>{new Date(chat.updated_at).toLocaleDateString()}</small></span><span className="axon-chat-chevron">›</span>
-            </button>)}
+            {chats.map(chat => {
+              const isActive = activeChat === chat.id;
+              const latestMessage = isActive && chatDetail?.chat.id === chat.id ? chatDetail.messages.at(-1) : undefined;
+              const messageCount = isActive && chatDetail?.chat.id === chat.id ? chatDetail.messages.length : null;
+              return <button type="button" key={chat.id} className={isActive ? "axon-chat-item active" : "axon-chat-item"} onClick={() => { setActiveChat(chat.id); setActiveTab("chats"); }} aria-label={`Open conversation: ${chat.title}`}>
+                <span className="axon-chat-meta"><span className="axon-chat-kind">WORKSPACE CHAT</span><time dateTime={chat.updated_at}>{new Date(chat.updated_at).toLocaleDateString([], { month: "short", day: "numeric" })}</time></span>
+                <span className="axon-chat-title-row"><span className="axon-chat-avatar">{chat.title.slice(0,1).toUpperCase()}</span><strong>{chat.title}</strong><span className="axon-chat-chevron">›</span></span>
+                <span className="axon-chat-preview">{latestMessage ? `${latestMessage.role === "user" ? "You" : latestMessage.answered_by || "Agent"}: ${latestMessage.content}` : "Open this conversation to continue your work."}</span>
+                <span className="axon-chat-footer"><span>{selected?.name ?? "Personal workspace"}</span><span>{messageCount === null ? "Private conversation" : `${messageCount} messages`}</span></span>
+              </button>;
+            })}
             {chats.length === 0 && <div className="axon-empty-list"><span>◌</span><strong>No conversations yet</strong><small>Create a chat to begin working with your agents.</small></div>}
           </div>
         </aside>
