@@ -1055,6 +1055,8 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(before_read[0].unread_count, 1);
+        assert_eq!(before_read[0].message_count, 1);
+        assert_eq!(before_read[0].last_message.as_ref().map(|message| message.content.as_str()), Some("A real agent response."));
         assert!(!before_read[0].is_liked);
 
         assert!(store
