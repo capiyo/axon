@@ -1,6 +1,6 @@
 use crate::{
     auth_middleware::AuthenticatedUser,
-    memory_architecture::{HandoverContext, HandoverRequest, IndexMemoryInput, MemoryEpoch, ProgressiveRetrieval, ProgressiveRetrievalRequest},
+    memory_architecture::{HandoverContext, HandoverRequest, IndexMemoryInput, IndexChatMessageInput, MemoryEpoch, ProgressiveRetrieval, ProgressiveRetrievalRequest},
     AppState,
 };
 use axum::{extract::{Extension, Path, State}, http::StatusCode, Json};
@@ -102,4 +102,19 @@ pub async fn progressive_retrieval(
     let result = coordinator(&state)?.retrieve_progressive(workspace_id, agent_id, session_id, input).await
         .map_err(|_| error(StatusCode::UNPROCESSABLE_ENTITY, "Could not retrieve additional context from this agent's pinned memory epoch."))?;
     Ok(Json(result))
+}
+
+pub async fn index_chat_message(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, chat_id, message_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(input): Json<IndexChatMessageInput>,
+) -> ApiResult<StatusCode> {
+    require_member(&state, user.user_id, workspace_id).await?;
+    if input.workspace_id != workspace_id || input.chat_id != chat_id || input.message_id != message_id {
+        return Err(error(StatusCode::BAD_REQUEST, "Workspace, chat, and message path identifiers must match the payload."));
+    }
+    coordinator(&state)?.index_chat_message(input).await
+        .map_err(|_| error(StatusCode::UNPROCESSABLE_ENTITY, "Chat message must exist and have a valid Qoin vector."))?;
+    Ok(StatusCode::CREATED)
 }
