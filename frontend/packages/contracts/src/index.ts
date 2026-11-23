@@ -237,6 +237,8 @@ export type Chat = {
   archived: boolean;
   unread_count: number;
   is_liked: boolean;
+  message_count: number;
+  last_message: ChatMessage | null;
 };
 
 export type ChatMessage = {
