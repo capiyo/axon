@@ -91,7 +91,7 @@ fn default_outcome_score() -> f32 {
     0.5
 }
 fn default_evidence_score() -> f32 {
-    0.75
+    0.5
 }
 
 #[derive(Debug, Serialize)]
@@ -150,13 +150,12 @@ pub async fn index_memory_with_qoin(
     if ![
         "agent_private",
         "task_shared",
-        "project_shared",
         "workspace_shared",
     ]
     .contains(&input.visibility.as_str())
         || (input.visibility == "agent_private" && input.owner_agent_id.is_none())
         || (input.visibility == "task_shared" && input.task_id.is_none())
-        || (input.visibility == "project_shared" && input.project_id.is_none())
+
     {
         return Err(error(
             StatusCode::BAD_REQUEST,
