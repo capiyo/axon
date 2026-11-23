@@ -525,7 +525,8 @@ mod tests {
             action: HistoricalAction::Approved,
             snapshot: state,
         }];
-        let report = reconstruct_history(&events, Some(&BTreeMap::new()));
+        let expected = BTreeMap::from([(id, HistoricalState { text: "expected".into(), status: MemoryStatus::Proposed })]);
+        let report = reconstruct_history(&events, Some(&expected));
         assert!(!report.issues.is_empty());
         assert_eq!(report.matches_expected, Some(false));
     }
