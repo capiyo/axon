@@ -181,10 +181,6 @@ pub fn pareto_select(ranked: &[AttentionScore], policy: &ParetoPolicy) -> Result
         initial: selected, deferred, achieved_coverage: achieved })
 }
 
-fn sigmoid(value: f64) -> f64 {
-    if value >= 0.0 { 1.0 / (1.0 + (-value).exp()) }
-    else { let e = value.exp(); e / (1.0 + e) }
-}
 fn jaccard<T: Ord>(a: &BTreeSet<T>, b: &BTreeSet<T>) -> f64 {
     if a.is_empty() || b.is_empty() { return 0.0; }
     a.intersection(b).count() as f64 / a.union(b).count() as f64
