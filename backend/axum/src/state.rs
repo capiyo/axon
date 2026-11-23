@@ -3,6 +3,7 @@ use crate::{
     chat_memory::ChatMemoryStore,
     firebase_auth::FirebaseVerifier,
     memory_architecture::MemoryEpochCoordinator,
+    qoin_vectors::QoinVectorClient,
     model::{Agent, Artifact, Task, Workspace},
     robotics::TelemetryEvent,
     storage::{EntityKind, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
@@ -34,6 +35,7 @@ pub struct AppState {
     storage: Option<Arc<dyn Storage>>,
     pub chat_memory: Option<ChatMemoryStore>,
     pub memory_epochs: Option<MemoryEpochCoordinator>,
+    pub qoin_vectors: Option<QoinVectorClient>,
     pub firebase_verifier: Option<FirebaseVerifier>,
     pub simulator_enabled: bool,
 }
@@ -112,6 +114,11 @@ impl AppState {
 
         self.audit.write().await.append_event(event);
         Ok(())
+    }
+
+    pub fn with_qoin_vector_client(mut self, client: Option<QoinVectorClient>) -> Self {
+        self.qoin_vectors = client;
+        self
     }
 
     pub fn with_firebase_verifier(
