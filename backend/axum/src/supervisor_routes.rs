@@ -389,7 +389,8 @@ pub async fn create_run(
     };
     let risk = task_risk_score(&run.title, &run.objective);
     let ambiguity = task_ambiguity(&run.title, &run.objective);
-    let policy_escalated = profile.level == TaskLevel::Quick && (risk >= 0.80 || ambiguity >= 0.75);
+    let policy_escalated = (risk >= 0.80 || ambiguity >= 0.75)
+        && profile.level != TaskLevel::Important;
     if policy_escalated {
         // Quick tasks with material risk or ambiguity require the checklist and
         // independent review stages rather than bypassing supervision.
@@ -495,7 +496,7 @@ pub async fn create_run(
             let mut notices = plan.notices;
             if policy_escalated {
                 notices.push(
-                    "Vector policy upgraded Quick to Important supervision for risk or ambiguity."
+                    "Vector policy upgraded the requested level to Important due to risk or ambiguity."
                         .into(),
                 );
             }
@@ -516,7 +517,7 @@ pub async fn create_run(
             }
             if policy_escalated {
                 notice.push_str(
-                    " Vector policy requires Important supervision for risk or ambiguity.",
+                    " Vector policy requires Important supervision due to risk or ambiguity.",
                 );
             }
             run.assignment_notice = Some(notice);
