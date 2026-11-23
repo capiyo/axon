@@ -67,7 +67,7 @@
 
 ## Verification
 
-GitHub Actions run **#590** completed successfully:
+GitHub Actions run **#605** completed successfully:
 
 | Check | Result |
 |---|---|
