@@ -423,7 +423,7 @@ impl ChatMemoryStore {
 
     async fn rebuild_memory(&self, chat_id: Uuid) -> Result<Vec<MemoryEntry>, sqlx::Error> {
         let mut connection = self.pool.acquire().await?;
-        let mut entries = replay_memory(&mut *connection)
+        let mut entries = replay_memory(&mut *connection, chat_id)
             .await?
             .into_values()
             .filter(|entry| entry.status != "deleted")
