@@ -51,6 +51,8 @@ pub struct IndexedMemory {
     pub id: Uuid,
     pub workspace_id: Uuid,
     pub chat_id: Uuid,
+    pub task_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
     pub owner_agent_id: Option<Uuid>,
     pub visibility: MemoryVisibility,
     pub status: MemoryStatus,
@@ -67,6 +69,8 @@ pub struct IndexedMemory {
 pub struct MemoryQuery {
     pub workspace_id: Uuid,
     pub requester_agent_id: Option<Uuid>,
+    pub task_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
     pub semantic: Vec<f32>,
     pub context: f32,
     pub outcome: f32,
@@ -121,7 +125,7 @@ pub fn retrieve_memories(query: &MemoryQuery, memories: &[IndexedMemory]) -> Res
     let mut ranked = Vec::new();
     let mut excluded = 0;
     for memory in memories {
-        if memory.workspace_id != query.workspace_id || memory.status != MemoryStatus::Approved || !visible_to(memory, query.requester_agent_id) {
+        if memory.workspace_id != query.workspace_id || memory.status != MemoryStatus::Approved || memory.superseded_by.is_some() || !visible_to(memory, query) {
             excluded += 1;
             continue;
         }
@@ -149,10 +153,12 @@ pub fn retrieve_memories(query: &MemoryQuery, memories: &[IndexedMemory]) -> Res
     Ok(RetrievalResult { candidates_examined: memories.len(), excluded_by_scope_or_status: excluded, ranked })
 }
 
-fn visible_to(memory: &IndexedMemory, requester: Option<Uuid>) -> bool {
+fn visible_to(memory: &IndexedMemory, query: &MemoryQuery) -> bool {
     match memory.visibility {
-        MemoryVisibility::AgentPrivate => memory.owner_agent_id.is_some() && memory.owner_agent_id == requester,
-        MemoryVisibility::TaskShared | MemoryVisibility::ProjectShared | MemoryVisibility::WorkspaceShared => true,
+        MemoryVisibility::AgentPrivate => memory.owner_agent_id.is_some() && memory.owner_agent_id == query.requester_agent_id,
+        MemoryVisibility::TaskShared => memory.task_id.is_some() && memory.task_id == query.task_id,
+        MemoryVisibility::ProjectShared => memory.project_id.is_some() && memory.project_id == query.project_id,
+        MemoryVisibility::WorkspaceShared => true,
     }
 }
 
@@ -164,13 +170,14 @@ fn score_memory(query: &MemoryQuery, memory: &IndexedMemory) -> ScoreBreakdown {
         1.0 - (query.outcome as f64 - memory.vector.outcome as f64).abs()
     } else { overlap(&query.outcome_labels, &memory.outcome_labels) };
     let failure = 1.0 - (query.failure as f64 - memory.vector.failure as f64).abs();
-    let evidence = memory.vector.evidence as f64;
+    let evidence = memory.vector.evidence as f64 * query.evidence as f64;
     let age_days = query.now_unix.saturating_sub(memory.created_at_unix).max(0) as f64 / 86_400.0;
     let recency = (1.0 / (1.0 + age_days / 30.0)).clamp(0.0, 1.0);
     let tags = overlap(&query.tags, &memory.tags);
     // Weights are explicit and explainable; tags are a small additive signal.
     let total = 0.30 * semantic + 0.15 * context + 0.18 * dependency
         + 0.10 * outcome + 0.12 * failure + 0.10 * evidence + 0.05 * recency + 0.08 * tags;
+    let total = total / 1.08;
     ScoreBreakdown { semantic, context, dependency, outcome, failure, evidence, recency, tags, total }
 }
 
@@ -227,7 +234,14 @@ pub fn reconstruct_history(events: &[HistoricalEvent], expected: Option<&BTreeMa
             continue;
         }
         let exists = state.contains_key(&event.memory_id);
-        let valid = match event.action { HistoricalAction::Created => !exists, _ => exists };
+        let valid = match event.action {
+            HistoricalAction::Created => !exists && event.snapshot.status == MemoryStatus::Proposed,
+            HistoricalAction::Approved => exists && event.snapshot.status == MemoryStatus::Approved,
+            HistoricalAction::Edited => exists && event.snapshot.status == MemoryStatus::Proposed,
+            HistoricalAction::Rejected => exists && event.snapshot.status == MemoryStatus::Rejected,
+            HistoricalAction::Superseded => exists && event.snapshot.status == MemoryStatus::Superseded,
+            HistoricalAction::Deleted => exists && event.snapshot.status == MemoryStatus::Deleted,
+        };
         if !valid {
             issues.push(format!("invalid {:?} transition for memory {}", event.action, event.memory_id));
             continue;
@@ -255,7 +269,7 @@ mod tests {
             dependency_ids: BTreeSet::new(), outcome_labels: BTreeSet::new(), limit: 10 }
     }
     fn memory(workspace_id: Uuid, semantic: Vec<f32>, status: MemoryStatus) -> IndexedMemory {
-        IndexedMemory { id: Uuid::new_v4(), workspace_id, chat_id: Uuid::new_v4(), owner_agent_id: None,
+        IndexedMemory { id: Uuid::new_v4(), workspace_id, chat_id: Uuid::new_v4(), task_id: None, project_id: None, owner_agent_id: None,
             visibility: MemoryVisibility::WorkspaceShared, status, vector: vector(semantic), tags: BTreeSet::new(),
             dependency_ids: BTreeSet::new(), outcome_labels: BTreeSet::new(), source_event_ids: vec![Uuid::new_v4()],
             created_at_unix: 1_999_000, superseded_by: None }
