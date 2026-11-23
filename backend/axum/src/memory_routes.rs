@@ -175,7 +175,7 @@ pub struct AllocateMemory {
     pub task_id: Option<Uuid>,
     pub agent_id: Uuid,
     pub token_budget: usize,
-    pub relevance: Vec<(Uuid, f64)>,
+    pub query: String,
 }
 
 pub async fn allocate(
@@ -185,7 +185,7 @@ pub async fn allocate(
     Json(input): Json<AllocateMemory>,
 ) -> ApiResult<Json<crate::memory_system::MemoryAllocation>> {
     require_member(&state, &user, workspace_id).await?;
-    if input.token_budget == 0 || input.token_budget > 2_000_000 {
+    if input.token_budget == 0 || input.token_budget > 2_000_000 || input.query.trim().is_empty() || input.query.len() > 20_000 {
         return Err(error(StatusCode::BAD_REQUEST, "Context token budget is outside the supported range."));
     }
     let agents = state.agents.read().await;
@@ -210,6 +210,6 @@ pub async fn allocate(
         now: Utc::now(),
     };
     let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
-    let allocation = store.allocate(&context, &input.relevance, input.token_budget).await.map_err(store_error)?;
+    let allocation = store.allocate(&context, &input.query, input.token_budget).await.map_err(store_error)?;
     Ok(Json(allocation))
 }
