@@ -54,3 +54,19 @@ CREATE TABLE IF NOT EXISTS agent_reports (
 );
 CREATE INDEX IF NOT EXISTS idx_agent_reports_status_created
     ON agent_reports(status, created_at);
+
+CREATE TABLE IF NOT EXISTS chat_read_states (
+    chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    last_read_at TEXT NOT NULL,
+    PRIMARY KEY(chat_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS chat_reactions (
+    chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    reaction TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(chat_id, user_id, reaction)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_reactions_user
+    ON chat_reactions(user_id, chat_id);
