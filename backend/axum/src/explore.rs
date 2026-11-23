@@ -815,15 +815,15 @@ pub async fn publish_agent(
         )
     })?;
     let id = store
-        .publish(
-            agent.id,
+        .publish(PublishAgentRecord {
+            agent_id: agent.id,
             workspace_id,
-            user.user_id,
-            &agent.display_name,
-            &agent.provider,
+            owner_id: user.user_id,
+            title: &agent.display_name,
+            provider: &agent.provider,
             description,
             category,
-        )
+        })
         .await
         .map_err(|_| {
             error(
@@ -1147,15 +1147,15 @@ mod tests {
         let agent_id = Uuid::new_v4();
 
         let listing_id = store
-            .publish(
+            .publish(PublishAgentRecord {
                 agent_id,
                 workspace_id,
                 owner_id,
-                "Memory Architect",
-                "manual",
-                "Organises project context and retrieves historical decisions.",
-                "Productivity",
-            )
+                title: "Memory Architect",
+                provider: "manual",
+                description: "Organises project context and retrieves historical decisions.",
+                category: "Productivity",
+            })
             .await
             .expect("publish")
             .expect("listing id");
@@ -1229,15 +1229,15 @@ mod tests {
         let workspace_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
         store
-            .publish(
+            .publish(PublishAgentRecord {
                 agent_id,
                 workspace_id,
                 owner_id,
-                "Agent",
-                "manual",
-                "Description",
-                "General",
-            )
+                title: "Agent",
+                provider: "manual",
+                description: "Description",
+                category: "General",
+            })
             .await
             .expect("publish");
         assert!(!store
