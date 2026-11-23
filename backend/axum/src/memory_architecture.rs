@@ -395,7 +395,7 @@ impl MemoryEpochCoordinator {
             .bind(input.chat_id.to_string()).bind(input.task_id.map(|v| v.to_string()))
             .bind(input.project_id.map(|v| v.to_string())).bind(input.owner_agent_id.map(|v| v.to_string()))
             .bind(input.visibility).bind(serde_json::to_string(&input.vector).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
-            .bind(serde_json::json!({"tags": input.tags, "dependencies": input.dependency_ids}).to_string())
+            .bind(serde_json::json!({"tags": &input.tags, "dependencies": &input.dependency_ids}).to_string())
             .bind(payload).bind(serde_json::to_string(&input.tags).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
             .bind(serde_json::to_string(&input.dependency_ids).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
             .bind(input.outcome_score).bind(input.evidence_score).bind(sequence)
