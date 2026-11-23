@@ -31,6 +31,7 @@ pub struct ExploreAgent {
     pub comment_count: i64,
     pub is_liked: bool,
     pub is_following: bool,
+    pub is_owner: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -195,7 +196,8 @@ impl ExploreStore {
              (SELECT COUNT(*) FROM agent_listing_likes x WHERE x.listing_id = l.id) AS like_count,
              (SELECT COUNT(*) FROM agent_comments c WHERE c.listing_id = l.id AND c.status = 'visible') AS comment_count,
              EXISTS(SELECT 1 FROM agent_listing_likes x WHERE x.listing_id = l.id AND x.user_id = ?) AS is_liked,
-             EXISTS(SELECT 1 FROM agent_listing_follows f WHERE f.listing_id = l.id AND f.user_id = ?) AS is_following
+             EXISTS(SELECT 1 FROM agent_listing_follows f WHERE f.listing_id = l.id AND f.user_id = ?) AS is_following,
+             l.owner_id = ? AS is_owner
              FROM agent_listings l ORDER BY {order} LIMIT ? OFFSET ?"
         );
         let rows = sqlx::query(&sql)
@@ -608,6 +610,7 @@ fn parse_agent(row: &sqlx::sqlite::SqliteRow) -> Result<ExploreAgent, sqlx::Erro
         comment_count: row.try_get("comment_count")?,
         is_liked: row.try_get::<i64, _>("is_liked")? != 0,
         is_following: row.try_get::<i64, _>("is_following")? != 0,
+        is_owner: row.try_get::<i64, _>("is_owner")? != 0,
     })
 }
 
