@@ -5,7 +5,7 @@ import { auth } from "./firebase";
 import type {
   Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage,
   ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext,
-  QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt
+  QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt, ExploreAgent, ExploreComment
 } from "../../../packages/contracts/src";
 
 
@@ -35,6 +35,14 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [activeView, setActiveView] = useState<"chats" | "explore">("chats");
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
+  const [exploreAgents, setExploreAgents] = useState<ExploreAgent[]>([]);
+  const [exploreComments, setExploreComments] = useState<Record<string, ExploreComment[]>>({});
+  const [exploreSort, setExploreSort] = useState<"recent" | "popular" | "discussed">("recent");
+  const [exploreDrafts, setExploreDrafts] = useState<Record<string, string>>({});
+  const [replyTarget, setReplyTarget] = useState<{ listingId: string; parentId: string } | null>(null);
+  const [publishAgentId, setPublishAgentId] = useState("");
+  const [publishDescription, setPublishDescription] = useState("");
+  const [publishCategory, setPublishCategory] = useState("Productivity");
   const [activeChat, setActiveChat] = useState<string>("");
   const [chatDetail, setChatDetail] = useState<ChatDetail | null>(null);
   const [chatTitle, setChatTitle] = useState("");
@@ -97,9 +105,70 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     setHandoverAgentId(current => agentItems.some(agent => agent.id === current) ? current : agentItems[0]?.id ?? "");
   }
 
+  async function refreshExplore() {
+    const listings = await api<ExploreAgent[]>(`/api/v1/explore/agents?sort=${exploreSort}&limit=30&offset=0`);
+    setExploreAgents(listings);
+    const commentEntries = await Promise.all(listings.map(async listing => {
+      const comments = await api<ExploreComment[]>(`/api/v1/explore/agents/${listing.id}/comments?limit=50&offset=0`);
+      return [listing.id, comments] as const;
+    }));
+    setExploreComments(Object.fromEntries(commentEntries));
+  }
+
+  async function publishExploreAgent(event: FormEvent<HTMLFormElement>) {
+    if (!selected || !publishAgentId || !publishDescription.trim() || !publishCategory.trim()) return;
+    await runForm(event, async () => {
+      await api(`/api/v1/workspaces/${selected.id}/agents/${publishAgentId}/publish`, {
+        method: "POST",
+        body: JSON.stringify({ description: publishDescription.trim(), category: publishCategory.trim() })
+      });
+      setPublishDescription("");
+      await refreshExplore();
+    });
+  }
+
+  async function toggleExploreAction(path: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await api(path, { method: "POST" });
+      await refreshExplore();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Explore action failed.");
+    } finally { setBusy(false); }
+  }
+
+  async function submitExploreComment(listingId: string, parentId: string | null = null) {
+    const body = exploreDrafts[listingId]?.trim() ?? "";
+    if (!body) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/api/v1/explore/agents/${listingId}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ body, parent_comment_id: parentId })
+      });
+      setExploreDrafts(current => ({ ...current, [listingId]: "" }));
+      setReplyTarget(null);
+      await refreshExplore();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not post comment.");
+    } finally { setBusy(false); }
+  }
+
+  async function toggleCommentLike(commentId: string) {
+    await toggleExploreAction(`/api/v1/explore/comments/${commentId}/like`);
+  }
+
   useEffect(() => {
     void refreshWorkspaces().catch(cause => setError(cause instanceof Error ? cause.message : "Could not reach the Axon API."));
   }, []);
+
+  useEffect(() => {
+    if (activeView === "explore") {
+      void refreshExplore().catch(cause => setError(cause instanceof Error ? cause.message : "Could not load Explore."));
+    }
+  }, [activeView, exploreSort, selected?.id]);
 
   useEffect(() => {
     if (selected) {
