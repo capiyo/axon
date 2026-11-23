@@ -97,6 +97,7 @@ pub async fn create_task(
     let task = Task {
         id: Uuid::new_v4(),
         workspace_id,
+        created_by: user.user_id,
         title: title.to_owned(),
         objective: objective.to_owned(),
         assignee_agent_id: input.assignee_agent_id,
