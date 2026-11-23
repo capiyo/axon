@@ -563,6 +563,17 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                   <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "offered" || task.status === "acknowledged").length}</Text><Text style={styles.mobileStatLabel}>Queued</Text></View>
                   <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{artifacts.length}</Text><Text style={styles.mobileStatLabel}>Artifacts</Text></View>
                 </View>
+                <View style={styles.profileMetricsMobile}>
+                  <Text style={styles.fieldLabel}>MEMORY & CONTEXT</Text>
+                  <Text style={styles.rowMeta}>Approved memory entries · {Object.values(chatPreviews).reduce((total,detail)=>total+detail.memory.filter(entry=>entry.status==="approved").length,0)}</Text>
+                  <Text style={styles.rowMeta}>Messages across conversations · {Object.values(chatPreviews).reduce((total,detail)=>total+detail.messages.length,0)}</Text>
+                  <Text style={styles.rowMeta}>Captured artifacts · {artifacts.length}</Text>
+                  <Text style={styles.fieldLabel}>EXECUTION & HEALTH</Text>
+                  <Text style={styles.rowMeta}>Awaiting review · {tasks.filter(task=>task.status==="review_required" || task.status==="submitted").length}</Text>
+                  <Text style={styles.rowMeta}>Rejected / cancelled · {tasks.filter(task=>task.status==="rejected" || task.status==="cancelled").length}</Text>
+                  <Text style={styles.rowMeta}>API · {health?.status === "ok" ? "Connected" : "Unavailable"}</Text>
+                  <Text style={styles.rowMeta}>Storage · {health?.storage === "persistent" ? "Persistent" : health?.storage ?? "Unknown"}</Text>
+                </View>
                 <Text style={styles.fieldLabel}>AGENT REGISTRY</Text>
                 <TextInput value={agentName} onChangeText={setAgentName} placeholder="Agent name" style={styles.input}/>
                 <TextInput value={provider} onChangeText={setProvider} placeholder="Provider" style={styles.input}/>
@@ -719,6 +730,7 @@ const styles = StyleSheet.create({
   screenHeading: { marginBottom: 15, gap: 6 },
   screenTitle: { color: "#E7F6EB", fontSize: 25, fontWeight: "800", letterSpacing: -0.6 },
   profileIdentityMobile: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 },
+  profileMetricsMobile: { gap: 8, paddingVertical: 14, marginBottom: 14, borderTopWidth: 1, borderTopColor: "#294034", borderBottomWidth: 1, borderBottomColor: "#294034" },
   profileAvatarMobile: { width: 48, height: 48, borderRadius: 24 },
   profileAvatarFallback: { width: 48, height: 48, borderRadius: 24, backgroundColor: "#28583D", alignItems: "center", justifyContent: "center" },
   profileAvatarFallbackText: { color: "#E7F6EB", fontSize: 18, fontWeight: "800" },
