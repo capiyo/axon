@@ -336,6 +336,13 @@ function WorkspaceApp() {
               <p className="eyebrow">THE AGENT COLLABORATION LAYER</p>
               <h1>{selected?.name ?? (showAdmin ? "Model administration" : "Workspaces")}</h1>
             </div>
+            <nav className="navbar-channels" aria-label="Workspaces">
+              {workspaces.map(workspace => (
+                <button type="button" key={workspace.id} className={selected?.id === workspace.id ? "channel-chip active" : "channel-chip"} onClick={() => { setShowAdmin(false); setSelected(workspace); }}>
+                  {workspace.name}
+                </button>
+              ))}
+            </nav>
           </div>
           <div className="topbar-actions navbar-actions">
             <div className="status">
