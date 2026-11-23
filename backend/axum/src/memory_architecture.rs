@@ -288,7 +288,7 @@ impl MemoryEpochCoordinator {
             .bind(now.to_rfc3339()).bind(max_sequence).bind(indexed_count).bind(marker)
             .execute(&mut *tx).await?;
         sqlx::query(
-            "INSERT INTO memory_epoch_items (epoch_id, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version) SELECT ?, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved' AND source_event_sequence <= ?"
+            "INSERT INTO memory_epoch_items (epoch_id, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, source_kind) SELECT ?, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, source_kind FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved'"
         ).bind(id.to_string()).bind(workspace_id).bind(max_sequence)
             .execute(&mut *tx).await?;
         tx.commit().await?;
@@ -349,6 +349,7 @@ pub struct IndexMemoryInput {
 #[derive(Debug, Clone, Serialize)]
 pub struct HandoverMemory {
     pub memory_id: Uuid,
+    pub source_kind: String,
     pub source_event_sequence: i64,
     pub payload_json: String,
     pub attention_score: f64,
@@ -406,7 +407,7 @@ impl MemoryEpochCoordinator {
         let sequence: i64 = source.try_get("sequence")?;
         let now = Utc::now().to_rfc3339();
         sqlx::query(
-            "INSERT INTO memory_vector_index (memory_id, workspace_id, chat_id, task_id, project_id, owner_agent_id, visibility, status, qoin_vector_json, key_metadata_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(memory_id) DO UPDATE SET workspace_id=excluded.workspace_id, chat_id=excluded.chat_id, task_id=excluded.task_id, project_id=excluded.project_id, owner_agent_id=excluded.owner_agent_id, visibility=excluded.visibility, status='approved', qoin_vector_json=excluded.qoin_vector_json, key_metadata_json=excluded.key_metadata_json, value_payload_json=excluded.value_payload_json, tags_json=excluded.tags_json, dependency_ids_json=excluded.dependency_ids_json, outcome_score=excluded.outcome_score, evidence_score=excluded.evidence_score, source_event_sequence=excluded.source_event_sequence, model_version=excluded.model_version, indexed_at=excluded.indexed_at"
+            "INSERT INTO memory_vector_index (memory_id, workspace_id, chat_id, task_id, project_id, owner_agent_id, visibility, status, qoin_vector_json, key_metadata_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, indexed_at, source_kind) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'memory_entry') ON CONFLICT(memory_id) DO UPDATE SET workspace_id=excluded.workspace_id, chat_id=excluded.chat_id, task_id=excluded.task_id, project_id=excluded.project_id, owner_agent_id=excluded.owner_agent_id, visibility=excluded.visibility, status='approved', qoin_vector_json=excluded.qoin_vector_json, key_metadata_json=excluded.key_metadata_json, value_payload_json=excluded.value_payload_json, tags_json=excluded.tags_json, dependency_ids_json=excluded.dependency_ids_json, outcome_score=excluded.outcome_score, evidence_score=excluded.evidence_score, source_event_sequence=excluded.source_event_sequence, model_version=excluded.model_version, indexed_at=excluded.indexed_at, source_kind='memory_entry'"
         ).bind(input.memory_id.to_string()).bind(input.workspace_id.to_string())
             .bind(input.chat_id.to_string()).bind(input.task_id.map(|v| v.to_string()))
             .bind(input.project_id.map(|v| v.to_string())).bind(input.owner_agent_id.map(|v| v.to_string()))
@@ -423,7 +424,7 @@ impl MemoryEpochCoordinator {
         request.query.validate().map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
         let epoch = self.latest_epoch(request.workspace_id).await?.ok_or(sqlx::Error::RowNotFound)?;
         let rows = sqlx::query(
-            "SELECT e.memory_id, e.qoin_vector_json, e.value_payload_json, e.tags_json, e.dependency_ids_json, e.outcome_score, e.evidence_score, e.source_event_sequence FROM memory_epoch_items e JOIN memory_vector_index live ON live.memory_id = e.memory_id AND live.status = 'approved' WHERE e.epoch_id = ? AND e.workspace_id = ? AND (e.visibility = 'workspace_shared' OR (e.visibility = 'agent_private' AND e.owner_agent_id = ?) OR (e.visibility = 'task_shared' AND e.task_id = ?) OR (e.visibility = 'project_shared' AND e.project_id = ?)) ORDER BY e.source_event_sequence DESC"
+            "SELECT e.memory_id, e.source_kind, e.qoin_vector_json, e.value_payload_json, e.tags_json, e.dependency_ids_json, e.outcome_score, e.evidence_score, e.source_event_sequence FROM memory_epoch_items e JOIN memory_vector_index live ON live.memory_id = e.memory_id AND live.status = 'approved' WHERE e.epoch_id = ? AND e.workspace_id = ? AND (e.visibility = 'workspace_shared' OR (e.visibility = 'agent_private' AND e.owner_agent_id = ?) OR (e.visibility = 'task_shared' AND e.task_id = ?) OR (e.visibility = 'project_shared' AND e.project_id = ?)) ORDER BY e.source_event_sequence DESC"
         ).bind(epoch.id.to_string()).bind(request.workspace_id.to_string()).bind(request.agent_id.to_string())
             .bind(request.task_id.map(|v| v.to_string())).bind(request.project_id.map(|v| v.to_string()))
             .fetch_all(&self.pool).await?;
@@ -465,7 +466,7 @@ impl MemoryEpochCoordinator {
             .bind(Utc::now().to_rfc3339()).bind(request.project_id.map(|v| v.to_string())).execute(&self.pool).await?;
         let initial = selection.initial.iter().filter_map(|score| {
             payloads.get(&score.memory_id).map(|(payload, sequence)| HandoverMemory {
-                memory_id: score.memory_id, source_event_sequence: *sequence,
+                memory_id: score.memory_id, source_kind: memories.iter().find(|memory| memory.memory_id == score.memory_id).map(|memory| memory.value_kind.clone()).unwrap_or_else(|| "memory_entry".into()), source_event_sequence: *sequence,
                 payload_json: payload.clone(), attention_score: score.total
             })
         }).collect();
@@ -545,7 +546,7 @@ impl MemoryEpochCoordinator {
                 sqlx::query("INSERT OR IGNORE INTO agent_memory_session_retrievals (session_id, memory_id, retrieved_at) VALUES (?, ?, ?)")
                     .bind(session_id.to_string()).bind(score.memory_id.to_string())
                     .bind(Utc::now().to_rfc3339()).execute(&self.pool).await?;
-                memories.push(HandoverMemory { memory_id: score.memory_id,
+                memories.push(HandoverMemory { memory_id: score.memory_id, source_kind: candidates.iter().find(|memory| memory.memory_id == score.memory_id).map(|memory| memory.value_kind.clone()).unwrap_or_else(|| "memory_entry".into()),
                     source_event_sequence: *sequence, payload_json: payload.clone(), attention_score: score.total });
             }
         }
