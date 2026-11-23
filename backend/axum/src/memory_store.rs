@@ -291,7 +291,6 @@ impl MemoryStore {
 mod tests {
     use super::*;
     use crate::{
-        chat_memory::ChatMemoryStore,
         memory_system::{MemoryScope, MemorySensitivity, Verification},
         storage::{SqliteStorage, Storage},
     };
