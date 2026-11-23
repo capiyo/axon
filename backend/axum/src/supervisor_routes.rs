@@ -509,7 +509,9 @@ pub async fn create_run(
         crate::vector_decision::DecisionThresholds::default(),
     );
     let action_notice = match action {
-        crate::vector_decision::AgentAction::Execute => None,
+        crate::vector_decision::AgentAction::Execute => {
+            Some("Vector policy selected execution.".to_string())
+        },
         crate::vector_decision::AgentAction::Delegate => {
             Some("Vector policy recommends delegation.".to_string())
         },
