@@ -747,7 +747,7 @@ pub async fn submit_review(
         None => "supervisor_run.review_submitted",
     };
     let persisted = persist_run(&state, &user, run, event).await?;
-    match outcome {
+    match outcome.as_ref() {
         Some(crate::supervisor::SupervisionOutcome::Accepted) => {
             update_model_outcomes(&state, &user, &persisted, true).await?;
         }
