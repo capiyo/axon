@@ -80,7 +80,7 @@ impl MemoryStore {
             if existing_workspace != record.workspace_id.to_string() {
                 return Err(MemoryStoreError::NotFound);
             }
-            if existing_version as u64 >= record.version {
+            if existing_version as u64 + 1 != record.version {
                 return Err(MemoryStoreError::Policy(MemoryError::InvalidRecord));
             }
         }
@@ -236,7 +236,7 @@ impl MemoryStore {
         } else {
             crate::memory_system::Verification::Rejected
         };
-        record.version += 1;
+        record.version = record.version.checked_add(1).ok_or(MemoryStoreError::Policy(MemoryError::InvalidRecord))?;
         self.put(record.clone(), actor).await?;
         Ok(record)
     }
