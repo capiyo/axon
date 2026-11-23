@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { auth } from "./firebase";
 
-import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry } from "../../../packages/contracts/src";
+import type {
+  Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage,
+  ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext,
+  QoinMemoryIndexReceipt
+} from "../../../packages/contracts/src";
 
 
 const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
@@ -46,6 +50,12 @@ function WorkspaceApp() {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [qoinSymbol, setQoinSymbol] = useState("BTCUSDT");
+  const [qoinVector, setQoinVector] = useState<QoinVectorSnapshot | null>(null);
+  const [handoverAgentId, setHandoverAgentId] = useState("");
+  const [handoverTaskId, setHandoverTaskId] = useState("");
+  const [handover, setHandover] = useState<HandoverContext | null>(null);
+  const [progressiveContext, setProgressiveContext] = useState<ProgressiveMemoryContext | null>(null);
 
   async function refreshWorkspaces() {
     const [items, status] = await Promise.all([
@@ -73,6 +83,7 @@ function WorkspaceApp() {
       setChatDetail(null);
     }
     setAssignee(current => agentItems.some(agent => agent.id === current) ? current : agentItems[0]?.id ?? "");
+    setHandoverAgentId(current => agentItems.some(agent => agent.id === current) ? current : agentItems[0]?.id ?? "");
   }
 
   useEffect(() => {
@@ -172,6 +183,102 @@ function WorkspaceApp() {
       setChatDetail(await api<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Memory update failed.");
+    } finally { setBusy(false); }
+  }
+
+
+  async function loadQoinVector() {
+    if (!selected || !qoinSymbol.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      const snapshot = await api<QoinVectorSnapshot>(
+        `/api/v1/workspaces/${selected.id}/memory/qoin-vector?symbol=${encodeURIComponent(qoinSymbol.trim())}`
+      );
+      setQoinVector(snapshot);
+      setHandover(null);
+      setProgressiveContext(null);
+    } catch (cause) {
+      setQoinVector(null);
+      setError(cause instanceof Error ? cause.message : "Could not load the Qoin market vector.");
+    } finally { setBusy(false); }
+  }
+
+  async function indexMemoryWithQoin(entry: ProjectMemoryEntry) {
+    if (!selected || !qoinSymbol.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      await api<QoinMemoryIndexReceipt>(
+        `/api/v1/workspaces/${selected.id}/chats/${activeChat}/memory-index/${entry.id}/qoin`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            symbol: qoinSymbol.trim(),
+            visibility: "workspace_shared",
+            tags: [entry.type, `symbol:${qoinSymbol.trim().toUpperCase()}`],
+            dependency_ids: [],
+            outcome_score: 0.5,
+            evidence_score: 0.75
+          })
+        }
+      );
+      setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not index this memory with Qoin.");
+    } finally { setBusy(false); }
+  }
+
+  async function prepareAgentHandover() {
+    if (!selected || !handoverAgentId || !qoinVector) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<HandoverContext>(
+        `/api/v1/workspaces/${selected.id}/agents/${handoverAgentId}/memory-context`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            workspace_id: selected.id,
+            agent_id: handoverAgentId,
+            task_id: handoverTaskId || null,
+            project_id: null,
+            query: qoinVector.vector,
+            heads: 2,
+            tags: [`symbol:${qoinVector.symbol}`],
+            dependency_ids: [],
+            pareto: { initial_share: 0.2, target_contribution_coverage: 0.8 }
+          })
+        }
+      );
+      setHandover(result);
+      setProgressiveContext(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not prepare agent memory context.");
+    } finally { setBusy(false); }
+  }
+
+  async function retrieveMoreContext() {
+    if (!selected || !handoverAgentId || !handover || !qoinVector) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<ProgressiveMemoryContext>(
+        `/api/v1/workspaces/${selected.id}/agents/${handoverAgentId}/memory-sessions/${handover.session_id}/retrieve`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            query: qoinVector.vector,
+            heads: 2,
+            tags: [`symbol:${qoinVector.symbol}`],
+            dependency_ids: [],
+            limit: 10
+          })
+        }
+      );
+      setProgressiveContext(result);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not retrieve additional context.");
     } finally { setBusy(false); }
   }
 
@@ -396,13 +503,43 @@ function WorkspaceApp() {
                     <div className="memory-section">
                       <div className="panel-heading"><div><span className="kicker">PROJECT MEMORY</span><h3>Review proposed knowledge</h3></div></div>
                       <form className="memory-compose" onSubmit={proposeMemory}><select value={memoryType} onChange={event => setMemoryType(event.target.value as ProjectMemoryEntry["type"])}><option value="decision">Decision</option><option value="fact">Fact</option><option value="constraint">Constraint</option><option value="open_task">Open task</option><option value="note">Note</option></select><input value={memoryDraft} onChange={event => setMemoryDraft(event.target.value)} placeholder="Capture a decision, fact, constraint or open task…" maxLength={4000} required /><button disabled={!memoryDraft.trim() || busy}>Propose memory</button></form>
-                      {chatDetail.memory.map(entry => <article className="memory-item" key={entry.id}><div><strong>{entry.type.replaceAll("_", " ")}</strong><small> · {entry.status}</small></div>{editingMemoryId === entry.id ? <div className="memory-compose"><input value={editMemoryDraft} onChange={event => setEditMemoryDraft(event.target.value)} maxLength={4000} /><button type="button" disabled={busy || !editMemoryDraft.trim()} onClick={() => void saveMemoryEdit(entry)}>Save</button><button type="button" className="secondary" onClick={() => setEditingMemoryId("")}>Cancel</button></div> : <p>{entry.text}</p>}<div className="memory-actions">{entry.status === "proposed" && <><button type="button" disabled={busy} onClick={() => void reviewMemory(entry, "approve")}>Approve</button><button type="button" className="secondary" disabled={busy} onClick={() => void reviewMemory(entry, "reject")}>Reject</button></>}<button type="button" className="secondary" disabled={busy} onClick={() => { setEditingMemoryId(entry.id); setEditMemoryDraft(entry.text); }}>Edit</button><button type="button" className="secondary" disabled={busy} onClick={() => void reviewMemory(entry, "delete")}>Delete</button></div></article>)}
+                      {chatDetail.memory.map(entry => <article className="memory-item" key={entry.id}><div><strong>{entry.type.replaceAll("_", " ")}</strong><small> · {entry.status}</small></div>{editingMemoryId === entry.id ? <div className="memory-compose"><input value={editMemoryDraft} onChange={event => setEditMemoryDraft(event.target.value)} maxLength={4000} /><button type="button" disabled={busy || !editMemoryDraft.trim()} onClick={() => void saveMemoryEdit(entry)}>Save</button><button type="button" className="secondary" onClick={() => setEditingMemoryId("")}>Cancel</button></div> : <p>{entry.text}</p>}<div className="memory-actions">{entry.status === "proposed" && <><button type="button" disabled={busy} onClick={() => void reviewMemory(entry, "approve")}>Approve</button><button type="button" className="secondary" disabled={busy} onClick={() => void reviewMemory(entry, "reject")}>Reject</button></>}<button type="button" className="secondary" disabled={busy} onClick={() => { setEditingMemoryId(entry.id); setEditMemoryDraft(entry.text); }}>Edit</button><button type="button" className="secondary" disabled={busy || entry.status !== "approved"} onClick={() => void indexMemoryWithQoin(entry)}>Index with Qoin</button><button type="button" className="secondary" disabled={busy} onClick={() => void reviewMemory(entry, "delete")}>Delete</button></div></article>)}
                       {chatDetail.memory.length === 0 && <p className="muted">No project memory proposed yet. Only approved entries shape future resume briefs.</p>}
                     </div>
                   </>}
                 </div>
               </div>
             </section>
+
+            <section className="panel qoin-memory-panel">
+              <div className="panel-heading">
+                <div><span className="kicker">05 · QOIN × AXON</span><h3>Market-aware historical memory</h3></div>
+                <span className="count">QKV + QOIN VECTOR</span>
+              </div>
+              <p className="muted">Qoin supplies its six-dimensional attended market-state vector. Axon uses it as the query/key context for historical decisions; it is a market-state vector, not a text embedding.</p>
+              <div className="qoin-bridge-controls">
+                <label>Market symbol<input value={qoinSymbol} onChange={event => setQoinSymbol(event.target.value.toUpperCase())} maxLength={32} placeholder="BTCUSDT" /></label>
+                <button type="button" disabled={busy || !qoinSymbol.trim()} onClick={() => void loadQoinVector()}>{busy ? "Loading…" : "Load latest Qoin vector"}</button>
+              </div>
+              {qoinVector && <div className="qoin-snapshot">
+                <div className="qoin-snapshot-head"><strong>{qoinVector.symbol}</strong><span>Model {qoinVector.vector.model_version}</span><span>Signal {qoinVector.action.toUpperCase()}</span></div>
+                <div className="qoin-features">{Object.entries(qoinVector.features).map(([name, value]) => <span key={name}>{name.replaceAll("_", " ")} <strong>{value.toFixed(3)}</strong></span>)}</div>
+                <p>{qoinVector.reason}</p>
+              </div>}
+              <div className="handover-controls">
+                <label>Receiving agent<select value={handoverAgentId} onChange={event => setHandoverAgentId(event.target.value)}><option value="">Choose an agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.display_name} · {agent.provider}</option>)}</select></label>
+                <label>Optional task scope<select value={handoverTaskId} onChange={event => setHandoverTaskId(event.target.value)}><option value="">Workspace-wide context</option>{tasks.filter(task => task.assignee_agent_id === handoverAgentId).map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
+                <button type="button" disabled={busy || !qoinVector || !handoverAgentId} onClick={() => void prepareAgentHandover()}>Prepare agent's first 20% context</button>
+              </div>
+              {handover && <div className="handover-result">
+                <div className="panel-heading"><div><span className="kicker">PINNED MEMORY EPOCH {handover.epoch.epoch_number}</span><h4>Initial context loaded</h4></div><span className="count">{handover.initial.length} MEMORIES</span></div>
+                <div className="qoin-coverage"><strong>{(handover.achieved_coverage * 100).toFixed(1)}%</strong><span>measured contribution coverage · {handover.deferred_count} deferred</span>{handover.budget_exhausted && <small>20% context budget reached before the 80% target.</small>}</div>
+                {handover.initial.map(item => <details className="handover-memory" key={item.memory_id}><summary><strong>{item.source_kind}</strong><span>Attention {(item.attention_score * 100).toFixed(1)}%</span></summary><code>{item.payload_json}</code></details>)}
+                <button type="button" className="secondary" disabled={busy || handover.deferred_count === 0} onClick={() => void retrieveMoreContext()}>Retrieve next 10 historical memories</button>
+                {progressiveContext && <div className="progressive-result"><strong>Progressive retrieval · {progressiveContext.memories.length} added · {progressiveContext.remaining_candidates} remaining</strong>{progressiveContext.memories.map(item => <details className="handover-memory" key={item.memory_id}><summary>{item.source_kind} · {(item.attention_score * 100).toFixed(1)}% attention</summary><code>{item.payload_json}</code></details>)}</div>}
+              </div>}
+            </section>
+
             <div className="workspace-columns">
               <section className="panel">
                 <div className="panel-heading"><div><span className="kicker">01 · PARTICIPANTS</span><h3>Agents</h3></div><span className="count">{agents.length}</span></div>
