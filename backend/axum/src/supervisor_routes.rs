@@ -389,34 +389,6 @@ pub async fn create_run(
     }
     let assignment_engine = state.assignment_engine();
     let mut assignment = assignment_engine.assign(&profile, &providers, &models, &stats);
-    if policy_escalated
-        && assignment.as_ref().is_ok_and(|plan| plan.level != TaskLevel::Important)
-    {
-        // Do not silently trade away mandatory supervision to satisfy a budget.
-        assignment = Err(crate::model_registry::AssignmentError::BudgetExceeded);
-    }
-    let has_alternative = assignment.as_ref().is_ok_and(|plan| {
-        plan.decisions.iter().any(|decision| decision.candidates_considered.len() > 1)
-    });
-    let action = crate::vector_decision::VectorDecisionEngine.choose_action(
-        crate::vector_decision::DecisionContext {
-            capability_fit: if assignment.is_ok() { 0.90 } else { 0.10 },
-            evidence_completeness: 1.0,
-            ambiguity,
-            risk,
-            eligible_alternative_exists: has_alternative,
-            can_split: ambiguity >= 0.75,
-        },
-        crate::vector_decision::DecisionThresholds::default(),
-    );
-    let action_notice = match action {
-        crate::vector_decision::AgentAction::Execute => None,
-        crate::vector_decision::AgentAction::Delegate => Some("Vector policy recommends delegation.".to_string()),
-        crate::vector_decision::AgentAction::Split => Some("Vector policy requires task decomposition in the checklist before workers proceed.".to_string()),
-        crate::vector_decision::AgentAction::RequestEvidence => Some("Vector policy requires more evidence before execution.".to_string()),
-        crate::vector_decision::AgentAction::Escalate => Some("Vector policy escalated this task to higher supervision.".to_string()),
-        crate::vector_decision::AgentAction::Abstain => Some("Vector policy abstained because no eligible agent assignment was available.".to_string()),
-    };
     if let Ok(plan) = &assignment {
         let reserved = state
             .reserve_model_spend(
@@ -466,6 +438,34 @@ pub async fn create_run(
             }
         }
     }
+    if policy_escalated
+        && assignment.as_ref().is_ok_and(|plan| plan.level != TaskLevel::Important)
+    {
+        // Do not silently trade away mandatory supervision to satisfy a budget.
+        assignment = Err(crate::model_registry::AssignmentError::BudgetExceeded);
+    }
+    let has_alternative = assignment.as_ref().is_ok_and(|plan| {
+        plan.decisions.iter().any(|decision| decision.candidates_considered.len() > 1)
+    });
+    let action = crate::vector_decision::VectorDecisionEngine.choose_action(
+        crate::vector_decision::DecisionContext {
+            capability_fit: if assignment.is_ok() { 0.90 } else { 0.10 },
+            evidence_completeness: 1.0,
+            ambiguity,
+            risk,
+            eligible_alternative_exists: has_alternative,
+            can_split: ambiguity >= 0.75,
+        },
+        crate::vector_decision::DecisionThresholds::default(),
+    );
+    let action_notice = match action {
+        crate::vector_decision::AgentAction::Execute => None,
+        crate::vector_decision::AgentAction::Delegate => Some("Vector policy recommends delegation.".to_string()),
+        crate::vector_decision::AgentAction::Split => Some("Vector policy requires task decomposition in the checklist before workers proceed.".to_string()),
+        crate::vector_decision::AgentAction::RequestEvidence => Some("Vector policy requires more evidence before execution.".to_string()),
+        crate::vector_decision::AgentAction::Escalate => Some("Vector policy escalated this task to higher supervision.".to_string()),
+        crate::vector_decision::AgentAction::Abstain => Some("Vector policy abstained because no eligible agent assignment was available.".to_string()),
+    };
     match assignment {
         Ok(plan) => {
             run.assignment_level = Some(plan.level.clone());
