@@ -79,6 +79,10 @@ pub fn app(state: AppState) -> Router {
             post(memory_routes::share),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/memory/:memory_id/review",
+            post(memory_routes::review),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/memory/:memory_id/share/:agent_id",
             axum::routing::delete(memory_routes::revoke),
         )
