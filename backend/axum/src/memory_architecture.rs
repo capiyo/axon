@@ -158,8 +158,8 @@ pub fn qkv_attention(query: &AttentionQuery, memories: &[AttentionMemory]) -> Re
 /// when the budget cannot reach 80%, the achieved coverage is reported rather
 /// than pretending the Pareto rule was satisfied.
 pub fn pareto_select(ranked: &[AttentionScore], policy: &ParetoPolicy) -> Result<ParetoSelection, AttentionError> {
-    if !(0.0..1.0).contains(&policy.initial_share)
-        || !(0.0..1.0).contains(&policy.target_contribution_coverage) {
+    if !(0.0..=1.0).contains(&policy.initial_share) || policy.initial_share == 0.0
+        || !(0.0..=1.0).contains(&policy.target_contribution_coverage) || policy.target_contribution_coverage == 0.0 {
         return Err(AttentionError::InvalidParetoPolicy);
     }
     if ranked.is_empty() {
