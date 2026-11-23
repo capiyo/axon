@@ -1125,6 +1125,27 @@ mod tests {
             .expect("list")
             .is_empty());
     }
+    #[tokio::test]
+    async fn community_activity_creates_owner_notifications_and_read_state() {
+        let storage = SqliteStorage::connect_in_memory().await.expect("in-memory storage");
+        let store = storage.explore_store();
+        let owner_id = Uuid::new_v4();
+        let visitor_id = Uuid::new_v4();
+        let workspace_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+        let listing_id = store.publish(
+            agent_id, workspace_id, owner_id, "Agent", "manual", "Public description", "General",
+        ).await.expect("publish").expect("listing");
+        store.create_comment(listing_id, visitor_id, None, "A public comment.")
+            .await.expect("comment");
+        let page = store.list_notifications(owner_id, 20, 0).await.expect("notifications");
+        assert_eq!(page.unread_count, 1);
+        assert_eq!(page.items[0].event_type, "explore.comment");
+        assert!(store.mark_notification_read(page.items[0].id, owner_id).await.expect("mark read"));
+        let read_page = store.list_notifications(owner_id, 20, 0).await.expect("read notifications");
+        assert_eq!(read_page.unread_count, 0);
+    }
+
 }
 
 pub async fn list_notifications(
