@@ -18,6 +18,8 @@ pub struct Chat {
     pub archived: bool,
     pub unread_count: i64,
     pub is_liked: bool,
+    pub message_count: i64,
+    pub last_message: Option<ChatMessage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,7 +105,13 @@ impl ChatMemoryStore {
              (SELECT COUNT(*) FROM chat_messages m
               WHERE m.chat_id = c.id AND m.role IN ('assistant', 'system')
               AND m.created_at > COALESCE((SELECT r.last_read_at FROM chat_read_states r WHERE r.chat_id = c.id AND r.user_id = ?), '1970-01-01T00:00:00Z')) AS unread_count,
-             EXISTS(SELECT 1 FROM chat_reactions x WHERE x.chat_id = c.id AND x.user_id = ? AND x.reaction = 'like') AS is_liked
+             EXISTS(SELECT 1 FROM chat_reactions x WHERE x.chat_id = c.id AND x.user_id = ? AND x.reaction = 'like') AS is_liked,
+             (SELECT COUNT(*) FROM chat_messages m WHERE m.chat_id = c.id) AS message_count,
+             (SELECT m.id FROM chat_messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_id,
+             (SELECT m.role FROM chat_messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_role,
+             (SELECT m.content FROM chat_messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_content,
+             (SELECT m.created_at FROM chat_messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_created_at,
+             (SELECT m.answered_by FROM chat_messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_answered_by
              FROM chats c WHERE c.workspace_id = ? AND c.archived = 0 ORDER BY c.updated_at DESC, c.id DESC"
         )
         .bind(user_id.to_string())
@@ -220,6 +228,8 @@ impl ChatMemoryStore {
             archived: false,
             unread_count: 0,
             is_liked: false,
+            message_count: 0,
+            last_message: None,
         };
         let mut tx = self.pool.begin().await?;
         let is_member: Option<i64> = sqlx::query_scalar(
@@ -268,7 +278,13 @@ impl ChatMemoryStore {
             "SELECT c.id, c.workspace_id, c.owner_id, c.title, c.created_at, c.updated_at, c.archived, c.memory_version,
              (SELECT COUNT(*) FROM chat_messages m WHERE m.chat_id = c.id AND m.role IN ('assistant', 'system')
               AND m.created_at > COALESCE((SELECT r.last_read_at FROM chat_read_states r WHERE r.chat_id = c.id AND r.user_id = ?), '1970-01-01T00:00:00Z')) AS unread_count,
-             EXISTS(SELECT 1 FROM chat_reactions x WHERE x.chat_id = c.id AND x.user_id = ? AND x.reaction = 'like') AS is_liked
+             EXISTS(SELECT 1 FROM chat_reactions x WHERE x.chat_id = c.id AND x.user_id = ? AND x.reaction = 'like') AS is_liked,
+             (SELECT COUNT(*) FROM chat_messages m WHERE m.chat_id = c.id) AS message_count,
+             (SELECT m.id FROM chat_messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_id,
+             (SELECT m.role FROM chat_messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_role,
+             (SELECT m.content FROM chat_messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_content,
+             (SELECT m.created_at FROM chat_messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_created_at,
+             (SELECT m.answered_by FROM chat_messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message_answered_by
              FROM chats c WHERE c.id = ? AND c.workspace_id = ?"
         )
             .bind(user_id.to_string())
@@ -677,6 +693,25 @@ fn parse_chat(row: &sqlx::sqlite::SqliteRow) -> Result<Chat, sqlx::Error> {
         archived: row.try_get::<i64, _>("archived")? != 0,
         unread_count: row.try_get("unread_count")?,
         is_liked: row.try_get::<i64, _>("is_liked")? != 0,
+        message_count: row.try_get("message_count")?,
+        last_message: {
+            let id: Option<String> = row.try_get("last_message_id")?;
+            let role: Option<String> = row.try_get("last_message_role")?;
+            let content: Option<String> = row.try_get("last_message_content")?;
+            let created_at: Option<String> = row.try_get("last_message_created_at")?;
+            let answered_by: Option<String> = row.try_get("last_message_answered_by")?;
+            match (id, role, content, created_at) {
+                (Some(id), Some(role), Some(content), Some(created_at)) => Some(ChatMessage {
+                    id: Uuid::parse_str(&id).map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                    chat_id: Uuid::parse_str(&row.try_get::<String, _>("id")?).map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                    role,
+                    content,
+                    created_at: DateTime::parse_from_rfc3339(&created_at).map_err(|error| sqlx::Error::Decode(Box::new(error)))?.with_timezone(&Utc),
+                    answered_by,
+                }),
+                _ => None,
+            }
+        },
     })
 }
 
