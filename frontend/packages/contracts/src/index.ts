@@ -229,6 +229,7 @@ export type QoinVectorSnapshot = {
   action: string;
   reason: string;
   decision_vector: [number, number] | null;
+  event_ts_ms: number | null;
 };
 
 export type MemoryEpoch = {
@@ -268,5 +269,7 @@ export type QoinMemoryIndexReceipt = {
   memory_id: string;
   symbol: string;
   model_version: string;
+  memory_created_at_ms: number;
+  qoin_event_ts_ms: number;
   indexed: boolean;
 };
