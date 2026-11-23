@@ -63,6 +63,29 @@ pub struct Notification {
     pub read_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct PublishAgentRecord<'a> {
+    pub agent_id: Uuid,
+    pub workspace_id: Uuid,
+    pub owner_id: Uuid,
+    pub title: &'a str,
+    pub provider: &'a str,
+    pub description: &'a str,
+    pub category: &'a str,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NotificationInput<'a> {
+    pub recipient_id: Uuid,
+    pub workspace_id: Option<Uuid>,
+    pub event_type: &'a str,
+    pub entity_type: &'a str,
+    pub entity_id: Uuid,
+    pub title: &'a str,
+    pub body: &'a str,
+    pub actor_id: Uuid,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct NotificationPage {
     pub items: Vec<Notification>,
@@ -121,16 +144,7 @@ impl ExploreStore {
         Self { pool }
     }
 
-    pub async fn publish(
-        &self,
-        agent_id: Uuid,
-        workspace_id: Uuid,
-        owner_id: Uuid,
-        title: &str,
-        provider: &str,
-        description: &str,
-        category: &str,
-    ) -> Result<Option<Uuid>, sqlx::Error> {
+    pub async fn publish(&self, input: PublishAgentRecord<'_>) -> Result<Option<Uuid>, sqlx::Error> {
         let now = Utc::now();
         let listing_id = Uuid::new_v4();
         let result = sqlx::query(
@@ -141,13 +155,13 @@ impl ExploreStore {
              WHERE agent_listings.owner_id = excluded.owner_id AND agent_listings.workspace_id = excluded.workspace_id"
         )
         .bind(listing_id.to_string())
-        .bind(agent_id.to_string())
-        .bind(workspace_id.to_string())
-        .bind(owner_id.to_string())
-        .bind(title)
-        .bind(provider)
-        .bind(description)
-        .bind(category)
+        .bind(input.agent_id.to_string())
+        .bind(input.workspace_id.to_string())
+        .bind(input.owner_id.to_string())
+        .bind(input.title)
+        .bind(input.provider)
+        .bind(input.description)
+        .bind(input.category)
         .bind(now.to_rfc3339())
         .bind(now.to_rfc3339())
         .execute(&self.pool)
@@ -156,7 +170,7 @@ impl ExploreStore {
             return Ok(None);
         }
         let id: String = sqlx::query_scalar("SELECT id FROM agent_listings WHERE agent_id = ?")
-            .bind(agent_id.to_string())
+            .bind(input.agent_id.to_string())
             .fetch_one(&self.pool)
             .await?;
         Ok(Uuid::parse_str(&id).ok())
@@ -298,26 +312,16 @@ impl ExploreStore {
             .bind(listing_id.to_string())
             .fetch_one(&self.pool)
             .await?;
-            notify_user(
-                &self.pool,
-                recipient,
-                Uuid::parse_str(&workspace).ok(),
-                if parent_comment_id.is_some() {
-                    "explore.reply"
-                } else {
-                    "explore.comment"
-                },
-                "agent_listing",
-                listing_id,
-                if parent_comment_id.is_some() {
-                    "New reply on an agent discussion"
-                } else {
-                    "New comment on your agent"
-                },
+            notify_user(&self.pool, NotificationInput {
+                recipient_id: recipient,
+                workspace_id: Uuid::parse_str(&workspace).ok(),
+                event_type: if parent_comment_id.is_some() { "explore.reply" } else { "explore.comment" },
+                entity_type: "agent_listing",
+                entity_id: listing_id,
+                title: if parent_comment_id.is_some() { "New reply on an agent discussion" } else { "New comment on your agent" },
                 body,
-                author_id,
-            )
-            .await?;
+                actor_id: author_id,
+            }).await?;
         }
         self.get_comment(id, author_id).await
     }
@@ -471,45 +475,23 @@ impl ExploreStore {
             let listing_id =
                 Uuid::parse_str(&row.try_get::<String, _>("listing_id")?).unwrap_or_default();
             let workspace_id = Uuid::parse_str(&row.try_get::<String, _>("workspace_id")?).ok();
-            notify_user(
-                &self.pool,
-                recipient,
+            notify_user(&self.pool, NotificationInput {
+                recipient_id: recipient,
                 workspace_id,
-                "explore.comment_liked",
-                "agent_comment",
-                comment_id,
-                "Someone liked your comment",
-                "Your Explore comment received a like.",
-                user_id,
-            )
-            .await?;
+                event_type: "explore.comment_liked",
+                entity_type: "agent_comment",
+                entity_id: comment_id,
+                title: "Someone liked your comment",
+                body: "Your Explore comment received a like.",
+                actor_id: user_id,
+            }).await?;
             let _ = listing_id;
         }
         Ok(liked)
     }
 
-    pub async fn notify_task_event(
-        &self,
-        recipient_id: Uuid,
-        workspace_id: Uuid,
-        task_id: Uuid,
-        actor_id: Uuid,
-        event_type: &str,
-        title: &str,
-        body: &str,
-    ) -> Result<(), sqlx::Error> {
-        notify_user(
-            &self.pool,
-            recipient_id,
-            Some(workspace_id),
-            event_type,
-            "task",
-            task_id,
-            title,
-            body,
-            actor_id,
-        )
-        .await
+    pub async fn notify_task_event(&self, notification: NotificationInput<'_>) -> Result<(), sqlx::Error> {
+        notify_user(&self.pool, notification).await
     }
 
     pub async fn list_notifications(
@@ -621,26 +603,26 @@ async fn toggle_relation(
 
 async fn notify_user(
     pool: &SqlitePool,
-    recipient_id: Uuid,
-    workspace_id: Option<Uuid>,
-    event_type: &str,
-    entity_type: &str,
-    entity_id: Uuid,
-    title: &str,
-    body: &str,
-    actor_id: Uuid,
+    notification: NotificationInput<'_>,
 ) -> Result<(), sqlx::Error> {
-    if recipient_id.is_nil() || recipient_id == actor_id {
+    if notification.recipient_id.is_nil() || notification.recipient_id == notification.actor_id {
         return Ok(());
     }
     sqlx::query(
         "INSERT INTO notifications (id, recipient_id, workspace_id, event_type, entity_type, entity_id, title, body, created_at, read_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)"
     )
-    .bind(Uuid::new_v4().to_string()).bind(recipient_id.to_string())
-    .bind(workspace_id.map(|id| id.to_string())).bind(event_type).bind(entity_type)
-    .bind(entity_id.to_string()).bind(title).bind(body.chars().take(220).collect::<String>())
-    .bind(Utc::now().to_rfc3339()).execute(pool).await?;
+    .bind(Uuid::new_v4().to_string())
+    .bind(notification.recipient_id.to_string())
+    .bind(notification.workspace_id.map(|id| id.to_string()))
+    .bind(notification.event_type)
+    .bind(notification.entity_type)
+    .bind(notification.entity_id.to_string())
+    .bind(notification.title)
+    .bind(notification.body.chars().take(220).collect::<String>())
+    .bind(Utc::now().to_rfc3339())
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
@@ -659,18 +641,16 @@ async fn notify_listing_owner(
     if let Some(row) = row {
         let owner = Uuid::parse_str(&row.try_get::<String, _>("owner_id")?).unwrap_or_default();
         let workspace = Uuid::parse_str(&row.try_get::<String, _>("workspace_id")?).ok();
-        notify_user(
-            pool,
-            owner,
-            workspace,
+        notify_user(pool, NotificationInput {
+            recipient_id: owner,
+            workspace_id: workspace,
             event_type,
-            "agent_listing",
-            listing_id,
+            entity_type: "agent_listing",
+            entity_id: listing_id,
             title,
             body,
             actor_id,
-        )
-        .await?;
+        }).await?;
     }
     Ok(())
 }
