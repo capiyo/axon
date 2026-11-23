@@ -56,6 +56,31 @@ All other registered routes require a valid Firebase bearer token.
 - POST /api/v1/tasks/{task_id}/submit
 - POST /api/v1/tasks/{task_id}/transitions
 
+## Vector decisions and agent memory
+
+Model assignment uses Axon's deterministic vector engine. Each eligible model's observed vector combines completion, independent supervisor pass, latency efficiency, cost efficiency and retry resilience. Task-level weights change the trade-off for Quick, Normal and Important work. Curated model order remains the cold-start prior; observed history gains influence as its sample count grows. Eligibility, privacy, provider diversity and budget checks remain hard constraints ahead of scoring.
+
+The supervisor applies a second vector policy to the run. Risky or materially ambiguous tasks are raised to Important supervision; the budget fallback cannot silently downgrade that requirement. The selected action (execute, delegate, split, request evidence, escalate or abstain) is recorded in the run notice. Terminal accepted/failed runs update completion and supervisor-pass history for models with existing category/role statistics. Retry rate, provider latency and billed cost are not fabricated when this workflow has no measurement for them.
+
+Memory is separate from chat history and uses four scopes:
+- `workspace`: shared with agents in that workspace.
+- `task`: available only to the task's assigned agent.
+- `agent`: private to its owner unless an explicit grant is active.
+- `execution`: task-bound, explicitly granted and required to have an expiry.
+
+New memory is always a proposal with source provenance. A workspace member reviews it with approve/reject before it becomes verified. Sharing and revocation are explicit. Retrieval checks workspace, scope, grant, expiry and sensitivity before relevance scoring. The allocator uses deterministic lexical relevance plus freshness, authority, confidence and verification, then selects by utility per token under the requested budget. The current member API is capped at Internal sensitivity; higher-sensitivity access requires a future role policy. Expired content and its versions are purged before allocation, with a content-free audit tombstone. Allocation audit rows retain selection metadata, not copied memory content.
+
+Memory endpoints (all require Firebase authentication and workspace membership):
+
+- POST `/api/v1/workspaces/{workspace_id}/memory` — propose memory. JSON example:
+  `{"scope":"workspace","scope_id":null,"owner_agent_id":null,"content":"Use append-only event records for chat memory.","source":"design review","sensitivity":"internal","expires_at":null}`
+- POST `/api/v1/workspaces/{workspace_id}/memory/{memory_id}/review` — JSON: `{"decision":"approve"}` or `{"decision":"reject"}`.
+- POST `/api/v1/workspaces/{workspace_id}/memory/{memory_id}/share` — JSON: `{"agent_id":"<agent-uuid>"}`.
+- DELETE `/api/v1/workspaces/{workspace_id}/memory/{memory_id}/share/{agent_id}` — revoke an agent grant.
+- POST `/api/v1/workspaces/{workspace_id}/memory/allocate` — JSON: `{"task_id":null,"agent_id":"<agent-uuid>","token_budget":8192,"query":"What are the approved memory decisions for this task?"}`. The response includes selected memory content and provenance, plus token totals and excluded IDs.
+
+For task memory, set `scope_id` to the task UUID and allocate with that task's assigned agent. For agent memory, set `owner_agent_id`. Execution memory must include `scope_id` and `expires_at`.
+
 ## Simulator routes
 
 - GET /api/v1/sim/devices/{device_id}/telemetry
