@@ -660,11 +660,21 @@ async fn update_model_outcomes(
     let decisions = state
         .list_entities(EntityKind::AssignmentDecision, None)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Assignment outcomes could not be loaded."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Assignment outcomes could not be loaded.",
+            )
+        })?;
     let stats = state
         .list_entities(EntityKind::ModelStat, None)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Model statistics could not be loaded."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Model statistics could not be loaded.",
+            )
+        })?;
     let mut updated_keys = Vec::new();
     for entity in decisions {
         let StoredEntity::AssignmentDecision(decision) = entity else {
@@ -727,7 +737,12 @@ async fn update_model_outcomes(
                 ),
             )
             .await
-            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Model outcome statistics could not be persisted."))?;
+            .map_err(|_| {
+                api_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Model outcome statistics could not be persisted.",
+                )
+            })?;
         updated_keys.push((decision.chosen_model_id, decision.role.clone()));
     }
     Ok(())
