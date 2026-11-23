@@ -314,3 +314,146 @@ impl MemoryEpochCoordinator {
         }
     }
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IndexMemoryInput {
+    pub workspace_id: Uuid,
+    pub chat_id: Uuid,
+    pub memory_id: Uuid,
+    pub task_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
+    pub owner_agent_id: Option<Uuid>,
+    pub visibility: String,
+    pub vector: QoinVector,
+    pub tags: BTreeSet<String>,
+    pub dependency_ids: BTreeSet<Uuid>,
+    pub outcome_score: f32,
+    pub evidence_score: f32,
+}
+#[derive(Debug, Clone, Serialize)]
+pub struct HandoverMemory {
+    pub memory_id: Uuid,
+    pub source_event_sequence: i64,
+    pub payload_json: String,
+    pub attention_score: f64,
+}
+#[derive(Debug, Clone, Serialize)]
+pub struct HandoverContext {
+    pub session_id: Uuid,
+    pub epoch: MemoryEpoch,
+    pub initial: Vec<HandoverMemory>,
+    pub deferred_count: usize,
+    pub achieved_coverage: f64,
+    pub budget_exhausted: bool,
+}
+#[derive(Debug, Clone, Deserialize)]
+pub struct HandoverRequest {
+    pub workspace_id: Uuid,
+    pub agent_id: Uuid,
+    pub task_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
+    pub query: QoinVector,
+    pub heads: usize,
+    pub tags: BTreeSet<String>,
+    pub dependency_ids: BTreeSet<Uuid>,
+    #[serde(default)]
+    pub pareto: ParetoPolicy,
+}
+
+impl MemoryEpochCoordinator {
+    /// Accept only vectors attached to an approved, existing source memory.
+    /// The original event payload remains in memory_events and is copied as a
+    /// retrieval value only for convenient hydration.
+    pub async fn index_approved_memory(&self, input: IndexMemoryInput) -> Result<(), sqlx::Error> {
+        input.vector.validate().map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        if !["agent_private", "task_shared", "project_shared", "workspace_shared"].contains(&input.visibility.as_str())
+            || !input.outcome_score.is_finite() || !(0.0..=1.0).contains(&input.outcome_score)
+            || !input.evidence_score.is_finite() || !(0.0..=1.0).contains(&input.evidence_score) {
+            return Err(sqlx::Error::Protocol("invalid memory index metadata".into()));
+        }
+        if input.visibility == "agent_private" && input.owner_agent_id.is_none()
+            || input.visibility == "task_shared" && input.task_id.is_none()
+            || input.visibility == "project_shared" && input.project_id.is_none() {
+            return Err(sqlx::Error::Protocol("visibility scope identifier is required".into()));
+        }
+        let source = sqlx::query(
+            "SELECT sequence, payload_json FROM memory_events WHERE workspace_id = ? AND chat_id = ? AND memory_entry_id = ? ORDER BY sequence DESC LIMIT 1"
+        ).bind(input.workspace_id.to_string()).bind(input.chat_id.to_string())
+            .bind(input.memory_id.to_string()).fetch_optional(&self.pool).await?;
+        let Some(source) = source else { return Err(sqlx::Error::RowNotFound); };
+        let payload: String = source.try_get("payload_json")?;
+        let parsed: serde_json::Value = serde_json::from_str(&payload)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        if parsed.get("status").and_then(|v| v.as_str()) != Some("approved") {
+            return Err(sqlx::Error::Protocol("only approved memories may be indexed".into()));
+        }
+        let sequence: i64 = source.try_get("sequence")?;
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "INSERT INTO memory_vector_index (memory_id, workspace_id, chat_id, task_id, project_id, owner_agent_id, visibility, status, qoin_vector_json, key_metadata_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(memory_id) DO UPDATE SET workspace_id=excluded.workspace_id, chat_id=excluded.chat_id, task_id=excluded.task_id, project_id=excluded.project_id, owner_agent_id=excluded.owner_agent_id, visibility=excluded.visibility, status='approved', qoin_vector_json=excluded.qoin_vector_json, key_metadata_json=excluded.key_metadata_json, value_payload_json=excluded.value_payload_json, tags_json=excluded.tags_json, dependency_ids_json=excluded.dependency_ids_json, outcome_score=excluded.outcome_score, evidence_score=excluded.evidence_score, source_event_sequence=excluded.source_event_sequence, model_version=excluded.model_version, indexed_at=excluded.indexed_at"
+        ).bind(input.memory_id.to_string()).bind(input.workspace_id.to_string())
+            .bind(input.chat_id.to_string()).bind(input.task_id.map(|v| v.to_string()))
+            .bind(input.project_id.map(|v| v.to_string())).bind(input.owner_agent_id.map(|v| v.to_string()))
+            .bind(input.visibility).bind(serde_json::to_string(&input.vector).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
+            .bind(serde_json::json!({"tags": input.tags, "dependencies": input.dependency_ids}).to_string())
+            .bind(payload).bind(serde_json::to_string(&input.tags).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
+            .bind(serde_json::to_string(&input.dependency_ids).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
+            .bind(input.outcome_score).bind(input.evidence_score).bind(sequence)
+            .bind(input.vector.model_version).bind(now).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    pub async fn prepare_handover(&self, request: HandoverRequest) -> Result<HandoverContext, sqlx::Error> {
+        request.query.validate().map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let epoch = self.latest_epoch(request.workspace_id).await?.ok_or(sqlx::Error::RowNotFound)?;
+        let rows = sqlx::query(
+            "SELECT memory_id, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved' AND (visibility = 'workspace_shared' OR (visibility = 'agent_private' AND owner_agent_id = ?) OR (visibility = 'task_shared' AND task_id = ?) OR (visibility = 'project_shared' AND project_id = ?)) AND source_event_sequence <= ? ORDER BY source_event_sequence DESC"
+        ).bind(request.workspace_id.to_string()).bind(request.agent_id.to_string())
+            .bind(request.task_id.map(|v| v.to_string())).bind(request.project_id.map(|v| v.to_string()))
+            .bind(epoch.source_event_sequence).fetch_all(&self.pool).await?;
+        let mut memories = Vec::with_capacity(rows.len());
+        let mut payloads = std::collections::HashMap::new();
+        for row in rows {
+            let id_text: String = row.try_get("memory_id")?;
+            let id = Uuid::parse_str(&id_text).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let vector_json: String = row.try_get("qoin_vector_json")?;
+            let vector: QoinVector = serde_json::from_str(&vector_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            if vector.model_version != request.query.model_version {
+                continue;
+            }
+            let tags_json: String = row.try_get("tags_json")?;
+            let tags: BTreeSet<String> = serde_json::from_str(&tags_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let deps_json: String = row.try_get("dependency_ids_json")?;
+            let deps_vec: Vec<Uuid> = serde_json::from_str(&deps_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let dependencies = deps_vec.into_iter().collect::<BTreeSet<_>>();
+            let value: String = row.try_get("value_payload_json")?;
+            let outcome: f32 = row.try_get("outcome_score")?;
+            let evidence: f32 = row.try_get("evidence_score")?;
+            let sequence: i64 = row.try_get("source_event_sequence")?;
+            payloads.insert(id, (value, sequence));
+            memories.push(AttentionMemory { memory_id: id, key: vector, value: id.to_string(),
+                outcome_score: outcome, evidence_score: evidence, source_event_sequence: sequence,
+                tags, dependency_ids: dependencies });
+        }
+        let query = AttentionQuery { query: request.query, heads: request.heads,
+            tags: request.tags, dependency_ids: request.dependency_ids };
+        let ranked = qkv_attention(&query, &memories).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let selection = pareto_select(&ranked, &request.pareto).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let session_id = Uuid::new_v4();
+        let initial_ids = selection.initial.iter().map(|s| s.memory_id).collect::<Vec<_>>();
+        sqlx::query(
+            "INSERT INTO agent_memory_sessions (session_id, workspace_id, agent_id, task_id, memory_epoch_id, initial_memory_ids_json, retrieved_memory_ids_json, created_at) VALUES (?, ?, ?, ?, ?, ?, '[]', ?)"
+        ).bind(session_id.to_string()).bind(request.workspace_id.to_string())
+            .bind(request.agent_id.to_string()).bind(request.task_id.map(|v| v.to_string()))
+            .bind(epoch.id.to_string()).bind(serde_json::to_string(&initial_ids).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
+            .bind(Utc::now().to_rfc3339()).execute(&self.pool).await?;
+        let initial = selection.initial.iter().filter_map(|score| {
+            payloads.get(&score.memory_id).map(|(payload, sequence)| HandoverMemory {
+                memory_id: score.memory_id, source_event_sequence: *sequence,
+                payload_json: payload.clone(), attention_score: score.total
+            })
+        }).collect();
+        Ok(HandoverContext { session_id, epoch, initial, deferred_count: selection.deferred.len(),
+            achieved_coverage: selection.achieved_coverage, budget_exhausted: selection.budget_exhausted })
+    }
+}
