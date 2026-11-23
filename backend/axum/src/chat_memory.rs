@@ -16,6 +16,8 @@ pub struct Chat {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub archived: bool,
+    pub unread_count: i64,
+    pub is_liked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,9 +90,98 @@ impl ChatMemoryStore {
     }
 
     pub async fn list_chats(&self, workspace_id: Uuid) -> Result<Vec<Chat>, sqlx::Error> {
-        let rows = sqlx::query("SELECT id, workspace_id, owner_id, title, created_at, updated_at, archived FROM chats WHERE workspace_id = ? AND archived = 0 ORDER BY updated_at DESC, id DESC")
-            .bind(workspace_id.to_string()).fetch_all(&self.pool).await?;
+        self.list_chats_for_user(workspace_id, Uuid::nil()).await
+    }
+
+    pub async fn list_chats_for_user(&self, workspace_id: Uuid, user_id: Uuid) -> Result<Vec<Chat>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT c.id, c.workspace_id, c.owner_id, c.title, c.created_at, c.updated_at, c.archived,
+             (SELECT COUNT(*) FROM chat_messages m
+              WHERE m.chat_id = c.id AND m.role IN ('assistant', 'system')
+              AND m.created_at > COALESCE((SELECT r.last_read_at FROM chat_read_states r WHERE r.chat_id = c.id AND r.user_id = ?), '1970-01-01T00:00:00Z')) AS unread_count,
+             EXISTS(SELECT 1 FROM chat_reactions x WHERE x.chat_id = c.id AND x.user_id = ? AND x.reaction = 'like') AS is_liked
+             FROM chats c WHERE c.workspace_id = ? AND c.archived = 0 ORDER BY c.updated_at DESC, c.id DESC"
+        )
+        .bind(user_id.to_string())
+        .bind(user_id.to_string())
+        .bind(workspace_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
         rows.iter().map(parse_chat).collect()
+    }
+
+    pub async fn mark_chat_read(
+        &self,
+        workspace_id: Uuid,
+        chat_id: Uuid,
+        user_id: Uuid,
+        actor: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let exists: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM chats c JOIN workspace_memberships m ON m.workspace_id = c.workspace_id
+             WHERE c.id = ? AND c.workspace_id = ? AND m.user_id = ? AND c.archived = 0"
+        )
+        .bind(chat_id.to_string())
+        .bind(workspace_id.to_string())
+        .bind(user_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if exists.is_none() { return Ok(false); }
+        let now = Utc::now();
+        sqlx::query(
+            "INSERT INTO chat_read_states (chat_id, user_id, last_read_at) VALUES (?, ?, ?)
+             ON CONFLICT(chat_id, user_id) DO UPDATE SET last_read_at = excluded.last_read_at"
+        )
+        .bind(chat_id.to_string())
+        .bind(user_id.to_string())
+        .bind(now.to_rfc3339())
+        .execute(&mut *tx)
+        .await?;
+        insert_audit(&mut tx, workspace_id, actor, "chat.read", "chat", chat_id, json!({"user_id": user_id})).await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    pub async fn toggle_chat_like(
+        &self,
+        workspace_id: Uuid,
+        chat_id: Uuid,
+        user_id: Uuid,
+        actor: &str,
+    ) -> Result<Option<bool>, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let exists: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM chats c JOIN workspace_memberships m ON m.workspace_id = c.workspace_id
+             WHERE c.id = ? AND c.workspace_id = ? AND m.user_id = ? AND c.archived = 0"
+        )
+        .bind(chat_id.to_string())
+        .bind(workspace_id.to_string())
+        .bind(user_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if exists.is_none() { return Ok(None); }
+        let inserted = sqlx::query("INSERT OR IGNORE INTO chat_reactions (chat_id, user_id, reaction, created_at) VALUES (?, ?, 'like', ?)")
+            .bind(chat_id.to_string()).bind(user_id.to_string()).bind(Utc::now().to_rfc3339())
+            .execute(&mut *tx).await?;
+        let liked = if inserted.rows_affected() == 1 {
+            true
+        } else {
+            sqlx::query("DELETE FROM chat_reactions WHERE chat_id = ? AND user_id = ? AND reaction = 'like'")
+                .bind(chat_id.to_string()).bind(user_id.to_string()).execute(&mut *tx).await?;
+            false
+        };
+        insert_audit(
+            &mut tx,
+            workspace_id,
+            actor,
+            if liked { "chat.liked" } else { "chat.unliked" },
+            "chat",
+            chat_id,
+            json!({"user_id": user_id}),
+        ).await?;
+        tx.commit().await?;
+        Ok(Some(liked))
     }
 
     pub async fn create_chat(
@@ -109,6 +200,8 @@ impl ChatMemoryStore {
             created_at: now,
             updated_at: now,
             archived: false,
+            unread_count: 0,
+            is_liked: false,
         };
         let mut tx = self.pool.begin().await?;
         let is_member: Option<i64> = sqlx::query_scalar(
@@ -143,8 +236,28 @@ impl ChatMemoryStore {
         workspace_id: Uuid,
         chat_id: Uuid,
     ) -> Result<Option<ChatDetail>, sqlx::Error> {
-        let row = sqlx::query("SELECT id, workspace_id, owner_id, title, created_at, updated_at, archived, memory_version FROM chats WHERE id = ? AND workspace_id = ?")
-            .bind(chat_id.to_string()).bind(workspace_id.to_string()).fetch_optional(&self.pool).await?;
+        self.get_chat_for_user(workspace_id, chat_id, Uuid::nil()).await
+    }
+
+    pub async fn get_chat_for_user(
+        &self,
+        workspace_id: Uuid,
+        chat_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Option<ChatDetail>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT c.id, c.workspace_id, c.owner_id, c.title, c.created_at, c.updated_at, c.archived, c.memory_version,
+             (SELECT COUNT(*) FROM chat_messages m WHERE m.chat_id = c.id AND m.role IN ('assistant', 'system')
+              AND m.created_at > COALESCE((SELECT r.last_read_at FROM chat_read_states r WHERE r.chat_id = c.id AND r.user_id = ?), '1970-01-01T00:00:00Z')) AS unread_count,
+             EXISTS(SELECT 1 FROM chat_reactions x WHERE x.chat_id = c.id AND x.user_id = ? AND x.reaction = 'like') AS is_liked
+             FROM chats c WHERE c.id = ? AND c.workspace_id = ?"
+        )
+            .bind(user_id.to_string())
+            .bind(user_id.to_string())
+            .bind(chat_id.to_string())
+            .bind(workspace_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
         let Some(row) = row else {
             return Ok(None);
         };
@@ -523,6 +636,8 @@ fn parse_chat(row: &sqlx::sqlite::SqliteRow) -> Result<Chat, sqlx::Error> {
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
             .with_timezone(&Utc),
         archived: row.try_get::<i64, _>("archived")? != 0,
+        unread_count: row.try_get("unread_count")?,
+        is_liked: row.try_get::<i64, _>("is_liked")? != 0,
     })
 }
 
