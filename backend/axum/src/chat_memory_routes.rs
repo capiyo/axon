@@ -96,8 +96,16 @@ pub async fn mark_chat_read(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, chat_id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<StatusCode> {
-    if store(&state)?.mark_chat_read(workspace_id, chat_id, user.user_id, &actor(&user)).await
-        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not mark chat as read."))? {
+    if store(&state)?
+        .mark_chat_read(workspace_id, chat_id, user.user_id, &actor(&user))
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not mark chat as read.",
+            )
+        })?
+    {
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(error(StatusCode::NOT_FOUND, "Chat not found."))
@@ -109,8 +117,15 @@ pub async fn toggle_chat_like(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, chat_id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let liked = store(&state)?.toggle_chat_like(workspace_id, chat_id, user.user_id, &actor(&user)).await
-        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not update chat reaction."))?
+    let liked = store(&state)?
+        .toggle_chat_like(workspace_id, chat_id, user.user_id, &actor(&user))
+        .await
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not update chat reaction.",
+            )
+        })?
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Chat not found."))?;
     Ok(Json(serde_json::json!({ "liked": liked })))
 }
