@@ -558,7 +558,7 @@ impl MemoryEpochCoordinator {
 mod persistence_tests {
     use super::*;
     use crate::{
-        chat_memory::{CreateMemoryEntry, CreateMessage, ChatMemoryStore},
+        chat_memory::{CreateMemoryEntry, ChatMemoryStore},
         storage::{SqliteStorage, Storage},
     };
 
@@ -692,6 +692,13 @@ impl MemoryEpochCoordinator {
             .execute(&self.pool).await?;
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod chat_index_tests {
+    use super::*;
+    use crate::{chat_memory::CreateMessage, storage::{SqliteStorage, Storage}};
+
     #[tokio::test]
     async fn original_chat_messages_are_snapshotted_and_retrievable() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
@@ -721,5 +728,4 @@ impl MemoryEpochCoordinator {
         assert_eq!(handover.initial[0].source_kind, "chat_message");
         assert!(handover.initial[0].payload_json.contains("migration"));
     }
-
 }
