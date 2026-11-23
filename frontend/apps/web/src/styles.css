@@ -339,3 +339,27 @@ body { background:#0b1020; color:#edf3ff; }
 .axon-app .axon-chat-count { background:#1b2942; color:#9ae9f7; }
 .axon-app .axon-empty-list span,.axon-app .axon-empty-stream span,.axon-app .axon-empty-conversation span { color:#67d8f0; }
 .axon-app .axon-message-action,.axon-app .axon-resume-brief span { color:#67d8f0; }
+
+
+/* Conversation cards follow Funspot ChatsCard's compact, layered metadata rhythm. */
+.axon-chat-list { gap: 8px; }
+.axon-chat-item {
+  position: relative; display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:9px;
+  min-height:142px; padding:11px 12px 10px; border:1px solid rgba(150,190,255,.09);
+  border-radius:13px; background:#111a2e; text-align:left;
+  transition:background .16s ease,border-color .16s ease,transform .16s ease;
+}
+.axon-chat-item:hover { background:#17243b; border-color:rgba(103,216,240,.28); }
+.axon-chat-item:active { transform:scale(.992); }
+.axon-chat-item.active { background:#1a2945; border-color:rgba(103,216,240,.42); box-shadow:inset 3px 0 0 #67d8f0; }
+.axon-chat-meta,.axon-chat-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
+.axon-chat-kind { color:#67d8f0; font:600 8px "DM Mono",monospace; letter-spacing:.12em; }
+.axon-chat-meta time { color:#8295b5; font-size:9px; white-space:nowrap; }
+.axon-chat-title-row { display:flex; align-items:center; gap:9px; min-width:0; }
+.axon-chat-title-row strong { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#edf3ff; font-size:12px; font-weight:750; }
+.axon-chat-avatar { width:30px; height:30px; border-radius:50%; background:#22314c; color:#9ae9f7; }
+.axon-chat-chevron { color:#67d8f0; font-size:19px; line-height:1; }
+.axon-chat-preview { display:-webkit-box; min-height:30px; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; color:#a0b2d0; font-size:10px; line-height:1.45; overflow-wrap:anywhere; }
+.axon-chat-footer { margin-top:auto; padding-top:7px; border-top:1px solid rgba(150,190,255,.08); color:#788cac; font-size:8px; }
+.axon-chat-footer span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+@media (max-width:760px) { .axon-chat-list { grid-template-columns:1fr; gap:9px; } .axon-chat-item { min-height:136px; padding:12px; } .axon-chat-preview { font-size:11px; } }
