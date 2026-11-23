@@ -162,6 +162,10 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           setActiveTab("chats");
           setMobileChatOpen(true);
         }
+      } else if (item.entity_type === "task" && item.workspace_id) {
+        const workspace = workspaces.find(candidate => candidate.id === item.workspace_id);
+        if (workspace) setSelected(workspace);
+        setProfileOpen(true);
       } else {
         setActiveTab("explore");
       }
