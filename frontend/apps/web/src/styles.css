@@ -599,3 +599,60 @@ footer { color: #89968d; border-color: #ffffff14; }
 .channel-chip { flex: 0 0 auto; border: 1px solid transparent; border-radius: 9px; padding: 8px 10px; background: transparent; color: #89968d; font-size: 11px; white-space: nowrap; }
 .channel-chip:hover, .channel-chip.active { border-color: #ffffff20; background: #161f1a; color: #7df162; }
 @media (max-width: 900px) { .navbar-channels { display: none; } }
+
+
+/* Match the current Funspot desktop proportions and floating mobile navigation. */
+@media (min-width: 1201px) {
+  .rail.profile-sidebar { width: 300px; flex-basis: 300px; }
+  .content { grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 12px; }
+}
+@media (min-width: 651px) and (max-width: 1200px) {
+  .rail.profile-sidebar { width: 190px; flex-basis: 190px; }
+  .content { grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 12px; }
+}
+@media (max-width: 650px) {
+  .mobile-home-tabs {
+    position: fixed;
+    z-index: 80;
+    right: auto;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    left: 50%;
+    display: block;
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    translate: -50% 0;
+    pointer-events: none;
+  }
+  .floating-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px;
+    border: 0;
+    border-radius: 999px;
+    background: #161f1a;
+    box-shadow: 0 4px 10px #0006;
+    pointer-events: auto;
+  }
+  .floating-pill-item {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #89968d;
+    font-size: 19px;
+  }
+  .floating-pill-item.active { background: #7df162; color: #061308; }
+  .mobile-home-tabs { transition: opacity 260ms ease, transform 260ms ease; }
+}
