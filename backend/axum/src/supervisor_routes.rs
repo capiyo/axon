@@ -99,7 +99,15 @@ fn task_risk_score(title: &str, objective: &str) -> f64 {
 
 fn task_ambiguity(title: &str, objective: &str) -> f64 {
     let text = format!("{title} {objective}").to_ascii_lowercase();
-    let vague_terms = ["somehow", "maybe", "some stuff", "etc", "as needed", "make it better", "figure it out"];
+    let vague_terms = [
+        "somehow",
+        "maybe",
+        "some stuff",
+        "etc",
+        "as needed",
+        "make it better",
+        "figure it out",
+    ];
     let vague_count = vague_terms.iter().filter(|term| text.contains(**term)).count();
     if vague_count >= 2 || objective.len() > 8_000 {
         0.85
@@ -460,11 +468,23 @@ pub async fn create_run(
     );
     let action_notice = match action {
         crate::vector_decision::AgentAction::Execute => None,
-        crate::vector_decision::AgentAction::Delegate => Some("Vector policy recommends delegation.".to_string()),
-        crate::vector_decision::AgentAction::Split => Some("Vector policy requires task decomposition in the checklist before workers proceed.".to_string()),
-        crate::vector_decision::AgentAction::RequestEvidence => Some("Vector policy requires more evidence before execution.".to_string()),
-        crate::vector_decision::AgentAction::Escalate => Some("Vector policy escalated this task to higher supervision.".to_string()),
-        crate::vector_decision::AgentAction::Abstain => Some("Vector policy abstained because no eligible agent assignment was available.".to_string()),
+        crate::vector_decision::AgentAction::Delegate => {
+            Some("Vector policy recommends delegation.".to_string())
+        },
+        crate::vector_decision::AgentAction::Split => Some(
+            "Vector policy requires task decomposition in the checklist before workers proceed."
+                .to_string(),
+        ),
+        crate::vector_decision::AgentAction::RequestEvidence => {
+            Some("Vector policy requires more evidence before execution.".to_string())
+        },
+        crate::vector_decision::AgentAction::Escalate => {
+            Some("Vector policy escalated this task to higher supervision.".to_string())
+        },
+        crate::vector_decision::AgentAction::Abstain => Some(
+            "Vector policy abstained because no eligible agent assignment was available."
+                .to_string(),
+        ),
     };
     match assignment {
         Ok(plan) => {
@@ -474,7 +494,10 @@ pub async fn create_run(
             }
             let mut notices = plan.notices;
             if policy_escalated {
-                notices.push("Vector policy upgraded Quick to Important supervision for risk or ambiguity.".into());
+                notices.push(
+                    "Vector policy upgraded Quick to Important supervision for risk or ambiguity."
+                        .into(),
+                );
             }
             if let Some(notice) = action_notice.clone() {
                 notices.push(notice);
@@ -492,7 +515,9 @@ pub async fn create_run(
                 notice.push_str(&action_notice);
             }
             if policy_escalated {
-                notice.push_str(" Vector policy requires Important supervision for risk or ambiguity.");
+                notice.push_str(
+                    " Vector policy requires Important supervision for risk or ambiguity.",
+                );
             }
             run.assignment_notice = Some(notice);
         }
@@ -656,7 +681,10 @@ mod vector_policy_tests {
 
     #[test]
     fn vague_objectives_are_flagged_for_decomposition() {
-        assert!(task_ambiguity("Build feature", "Figure it out somehow and handle the rest") >= 0.75);
+        assert!(task_ambiguity(
+            "Build feature",
+            "Figure it out somehow and handle the rest"
+        ) >= 0.75);
         assert!(task_ambiguity("Summarize", "Summarize the supplied paragraph") < 0.75);
     }
 }
