@@ -303,7 +303,15 @@ pub async fn allocate(
         granted_memory_ids: BTreeSet::new(),
         now: Utc::now(),
     };
-    let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
+    let store = state
+        .memory_store
+        .as_ref()
+        .ok_or_else(|| {
+            error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Persistent memory is unavailable.",
+            )
+        })?;
     let allocation = store
         .allocate(&context, &input.query, input.token_budget)
         .await
