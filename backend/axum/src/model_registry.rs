@@ -1051,8 +1051,10 @@ mod tests {
     #[test]
     fn rejects_models_missing_required_ability_or_context() {
         let (providers, mut models) = fixture();
-        models[0].abilities.clear();
-        models[1].context_length = 100;
+        for model in &mut models {
+            model.abilities.clear();
+            model.context_length = 100;
+        }
         assert_eq!(
             assign_models(&profile(TaskLevel::Quick), &providers, &models, &[]),
             Err(AssignmentError::NoEligibleModels)
