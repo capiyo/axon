@@ -187,6 +187,14 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     setExploreComments(Object.fromEntries(entries));
   }
 
+  function loadMoreExploreComments(listingId: string) {
+    const current = exploreComments[listingId] ?? [];
+    void perform(async () => {
+      const next = await request<ExploreComment[]>(`/api/v1/explore/agents/${listingId}/comments?limit=50&offset=${current.length}`);
+      setExploreComments(value => ({ ...value, [listingId]: [...(value[listingId] ?? []), ...next] }));
+    });
+  }
+
   function publishExploreAgent() {
     if (!selected || !publishAgentId || !publishDescription.trim() || !publishCategory.trim()) return;
     void perform(async () => {
@@ -714,7 +722,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                       {replyTarget?.listingId===listing.id && replyTarget.parentId===comment.id ? <View style={styles.exploreCommentInputRow}><TextInput value={exploreDrafts[listing.id] ?? ""} onChangeText={value => setExploreDrafts(current => ({...current,[listing.id]:value}))} placeholder="Write a reply…" style={[styles.input,styles.exploreCommentInput]}/><ActionButton label="Reply" onPress={() => submitExploreComment(listing.id,comment.id)} disabled={! (exploreDrafts[listing.id] ?? "").trim() || busy}/></View> : null}
                     </View></View>)}
                     {roots.length===0 ? <Text style={styles.muted}>No comments yet. Start the discussion.</Text> : null}
-                    <View style={styles.exploreCommentInputRow}><TextInput value={replyTarget?.listingId===listing.id ? "" : exploreDrafts[listing.id] ?? ""} onChangeText={value => setExploreDrafts(current => ({...current,[listing.id]:value}))} placeholder="Write a comment…" style={[styles.input,styles.exploreCommentInput]}/><ActionButton label="Post" onPress={() => submitExploreComment(listing.id)} disabled={!(exploreDrafts[listing.id] ?? "").trim() || busy}/></View>
+                    {comments.length >= 50 ? <Pressable onPress={() => loadMoreExploreComments(listing.id)}><Text style={styles.exploreActionText}>Load more comments</Text></Pressable> : null}<View style={styles.exploreCommentInputRow}><TextInput value={replyTarget?.listingId===listing.id ? "" : exploreDrafts[listing.id] ?? ""} onChangeText={value => setExploreDrafts(current => ({...current,[listing.id]:value}))} placeholder="Write a comment…" style={[styles.input,styles.exploreCommentInput]}/><ActionButton label="Post" onPress={() => submitExploreComment(listing.id)} disabled={!(exploreDrafts[listing.id] ?? "").trim() || busy}/></View>
                   </View>
                 </View>;
               })}
