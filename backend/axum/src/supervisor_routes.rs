@@ -672,17 +672,22 @@ async fn update_model_outcomes(
         };
         if decision.run_id != run.id
             || updated_keys.iter().any(|(model_id, role)| {
-                *model_id == decision.chosen_model_id && *role == decision.role
+                *model_id == decision.chosen_model_id && role == &decision.role
             })
         {
             continue;
         }
-        let Some(StoredEntity::ModelStat(mut stat)) = stats.iter().find(|entity| {
-            matches!(entity, StoredEntity::ModelStat(item)
+        let existing_stat = stats.iter().find_map(|entity| match entity {
+            StoredEntity::ModelStat(item)
                 if item.model_id == decision.chosen_model_id
                     && item.category == category
-                    && item.role == decision.role)
-        }).cloned() else {
+                    && item.role == decision.role =>
+            {
+                Some(item.clone())
+            }
+            _ => None,
+        });
+        let Some(mut stat) = existing_stat else {
             // Cold-start models retain their curated prior until an actual
             // evaluation or enough observed history exists.
             continue;
@@ -723,7 +728,7 @@ async fn update_model_outcomes(
             )
             .await
             .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Model outcome statistics could not be persisted."))?;
-        updated_keys.push((decision.chosen_model_id, decision.role));
+        updated_keys.push((decision.chosen_model_id, decision.role.clone()));
     }
     Ok(())
 }
