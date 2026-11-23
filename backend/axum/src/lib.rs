@@ -75,6 +75,9 @@ pub fn app(state: AppState) -> Router {
             post(explore::like_comment),
         )
         .route("/api/v1/explore/reports", post(explore::report_content))
+        .route("/api/v1/notifications", get(explore::list_notifications))
+        .route("/api/v1/notifications/read-all", post(explore::mark_all_notifications_read))
+        .route("/api/v1/notifications/:notification_id/read", post(explore::mark_notification_read))
         .route(
             "/api/v1/workspaces/:workspace_id/chats",
             get(chat_memory_routes::list_chats).post(chat_memory_routes::create_chat),
