@@ -179,6 +179,28 @@ pub fn can_read(record: &MemoryRecord, context: &RetrievalContext) -> bool {
     }
 }
 
+/// Deterministic lexical relevance used when no embedding provider is
+/// configured. It intentionally returns zero for unrelated records so
+/// freshness or authority alone cannot pull irrelevant memory into context.
+pub fn lexical_relevance(query: &str, content: &str) -> f64 {
+    fn terms(value: &str) -> BTreeSet<String> {
+        value
+            .split(|ch: char| !ch.is_alphanumeric())
+            .filter(|term| term.chars().count() > 2)
+            .map(str::to_lowercase)
+            .collect()
+    }
+    let query_terms = terms(query);
+    if query_terms.is_empty() {
+        return 0.0;
+    }
+    let content_terms = terms(content);
+    let overlap = query_terms.intersection(&content_terms).count() as f64;
+    let coverage = overlap / query_terms.len() as f64;
+    let phrase_bonus = if content.to_lowercase().contains(&query.to_lowercase()) { 0.25 } else { 0.0 };
+    (coverage + phrase_bonus).min(1.0)
+}
+
 pub fn score_memory(record: &MemoryRecord, relevance: f64, now: DateTime<Utc>) -> MemoryVector {
     let age_seconds = now.signed_duration_since(record.created_at).num_seconds().max(0) as f64;
     let freshness = 1.0 / (1.0 + age_seconds / (30.0 * 24.0 * 60.0 * 60.0));
@@ -228,6 +250,10 @@ pub fn allocate_context(
         };
         if !relevance.is_finite() || !(0.0..=1.0).contains(&relevance) {
             return Err(MemoryError::InvalidScore);
+        }
+        if relevance == 0.0 {
+            excluded.push(record.id);
+            continue;
         }
         let utility = score_memory(record, relevance, context.now).utility();
         ranked.push((record.id, record.token_cost, utility, record.content.clone(), record.source.clone(), record.verification));
