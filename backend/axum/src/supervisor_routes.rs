@@ -738,7 +738,7 @@ pub async fn submit_review(
     let mut run = find_run(&state, workspace_id, run_id).await?;
     let decision = run.submit_review(review).map_err(supervisor_error)?;
     let outcome = decision.as_ref().map(|item| item.outcome.clone());
-    let event = match outcome {
+    let event = match outcome.as_ref() {
         Some(crate::supervisor::SupervisionOutcome::Accepted) => "supervisor_run.accepted",
         Some(crate::supervisor::SupervisionOutcome::RepairRequired) => {
             "supervisor_run.repair_required"
