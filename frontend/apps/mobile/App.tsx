@@ -128,6 +128,60 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     refreshHome().catch(cause => setError(cause instanceof Error ? cause.message : "API unavailable"));
   }, []);
 
+  async function refreshExplore() {
+    const listings = await request<ExploreAgent[]>(`/api/v1/explore/agents?sort=${exploreSort}&limit=30&offset=0`);
+    setExploreAgents(listings);
+    const entries = await Promise.all(listings.map(async listing => [listing.id, await request<ExploreComment[]>(`/api/v1/explore/agents/${listing.id}/comments?limit=50&offset=0`)] as const));
+    setExploreComments(Object.fromEntries(entries));
+  }
+
+  function publishExploreAgent() {
+    if (!selected || !publishAgentId || !publishDescription.trim() || !publishCategory.trim()) return;
+    void perform(async () => {
+      await request(`/api/v1/workspaces/${selected.id}/agents/${publishAgentId}/publish`, {
+        method: "POST",
+        body: JSON.stringify({ description: publishDescription.trim(), category: publishCategory.trim() })
+      });
+      setPublishDescription("");
+      await refreshExplore();
+    });
+  }
+
+  function toggleExploreAction(path: string) {
+    void perform(async () => {
+      await request(path, { method: "POST" });
+      await refreshExplore();
+    });
+  }
+
+  function submitExploreComment(listingId: string, parentId: string | null = null) {
+    const body = exploreDrafts[listingId]?.trim() ?? "";
+    if (!body) return;
+    void perform(async () => {
+      await request(`/api/v1/explore/agents/${listingId}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ body, parent_comment_id: parentId })
+      });
+      setExploreDrafts(current => ({ ...current, [listingId]: "" }));
+      setReplyTarget(null);
+      await refreshExplore();
+    });
+  }
+
+  function startExploreConversation(listing: ExploreAgent) {
+    if (!selected) return;
+    void perform(async () => {
+      const chat = await request<Chat>(`/api/v1/workspaces/${selected.id}/chats`, {
+        method: "POST",
+        body: JSON.stringify({ title: listing.title })
+      });
+      setChats(current => [chat, ...current]);
+      setActiveChat(chat.id);
+      setActiveTab("chats");
+      setMobileChatOpen(true);
+    });
+  }
+
   useEffect(() => {
     if (activeTab === "explore") {
       refreshExplore().catch(cause => setError(cause instanceof Error ? cause.message : "Could not load Explore."));
