@@ -611,7 +611,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         <View style={styles.mobileHeader}>
           <View style={styles.mobileBrandMark}><Text style={styles.mobileBrandMarkText}>A</Text></View>
           <View style={styles.mobileHeaderCopy}><Text style={styles.mobileBrand}>AXON</Text><Text style={styles.mobileWorkspace}>{selected?.name ?? "Your workspace"}</Text></View>
-          <Pressable onPress={() => {setNotificationsOpen(true);void refreshNotifications();}} style={styles.mobileNotificationButton} accessibilityLabel="Notifications"><Text style={styles.mobileNotificationIcon}>♧</Text>{notificationUnread > 0 ? <Text style={styles.mobileNotificationBadge}>{notificationUnread}</Text> : null}</Pressable>
+          <Pressable onPress={() => {setNotificationsOpen(true);void refreshNotifications();}} style={styles.mobileNotificationButton} accessibilityLabel="Notifications"><Text style={styles.mobileNotificationIcon}>🔔</Text>{notificationUnread > 0 ? <Text style={styles.mobileNotificationBadge}>{notificationUnread}</Text> : null}</Pressable>
           <Pressable onPress={() => setProfileOpen(true)} style={styles.mobileProfileButton} accessibilityLabel="Open profile">
             {user.photoURL ? <Image source={{uri:user.photoURL}} style={styles.mobileProfileImage}/> : <Text style={styles.mobileProfileInitial}>{(user.displayName || user.email || "A").slice(0,1).toUpperCase()}</Text>}
           </Pressable>
