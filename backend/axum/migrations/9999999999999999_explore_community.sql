@@ -70,3 +70,20 @@ CREATE TABLE IF NOT EXISTS chat_reactions (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_reactions_user
     ON chat_reactions(user_id, chat_id);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    recipient_id TEXT NOT NULL,
+    workspace_id TEXT,
+    event_type TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    read_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created
+    ON notifications(recipient_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient_unread
+    ON notifications(recipient_id, read_at);
