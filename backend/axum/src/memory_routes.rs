@@ -71,7 +71,7 @@ pub async fn propose(
         || input.source.trim().is_empty() || input.source.len() > 2_000
 
     {
-        return Err(error(StatusCode::BAD_REQUEST, "Memory content, provenance or token cost is invalid."));
+        return Err(error(StatusCode::BAD_REQUEST, "Memory content or provenance is invalid."));
     }
     if let Some(agent_id) = input.owner_agent_id {
         let agents = state.agents.read().await;
@@ -175,7 +175,6 @@ pub struct AllocateMemory {
     pub task_id: Option<Uuid>,
     pub agent_id: Uuid,
     pub token_budget: usize,
-    pub allowed_sensitivity: Option<MemorySensitivity>,
     pub relevance: Vec<(Uuid, f64)>,
 }
 
@@ -204,7 +203,9 @@ pub async fn allocate(
         workspace_id,
         task_id: input.task_id,
         agent_id: input.agent_id,
-        allowed_sensitivity: input.allowed_sensitivity.unwrap_or(MemorySensitivity::Internal),
+        // Current member permissions authorize internal memory only. Higher
+        // sensitivity requires a dedicated role grant, not a request flag.
+        allowed_sensitivity: MemorySensitivity::Internal,
         granted_memory_ids: BTreeSet::new(),
         now: Utc::now(),
     };
