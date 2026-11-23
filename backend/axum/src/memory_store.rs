@@ -211,6 +211,36 @@ impl MemoryStore {
         Ok(result.rows_affected() > 0)
     }
 
+    /// Human review promotes a proposal or explicitly rejects it. Every
+    /// decision creates a new immutable version; conflicts are never erased.
+    pub async fn review(
+        &self,
+        workspace_id: Uuid,
+        memory_id: Uuid,
+        approved: bool,
+        actor: &str,
+    ) -> Result<MemoryRecord, MemoryStoreError> {
+        let row = sqlx::query("SELECT v.payload_json FROM agent_memory_versions v JOIN agent_memories m ON m.id=v.memory_id WHERE m.id=? AND m.workspace_id=? ORDER BY v.version DESC LIMIT 1")
+            .bind(memory_id.to_string())
+            .bind(workspace_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(MemoryStoreError::NotFound)?;
+        let payload: String = row.try_get("payload_json")?;
+        let mut record: MemoryRecord = serde_json::from_str(&payload)?;
+        if matches!(record.verification, crate::memory_system::Verification::Verified | crate::memory_system::Verification::Rejected) {
+            return Err(MemoryStoreError::Policy(MemoryError::InvalidRecord));
+        }
+        record.verification = if approved {
+            crate::memory_system::Verification::Verified
+        } else {
+            crate::memory_system::Verification::Rejected
+        };
+        record.version += 1;
+        self.put(record.clone(), actor).await?;
+        Ok(record)
+    }
+
     /// Retrieve and rank only records visible to the requesting agent, then
     /// persist the exact context allocation for later inspection.
     pub async fn allocate(
