@@ -121,6 +121,7 @@ pub struct UserWorkspace {
 #[async_trait]
 pub trait Storage: Send + Sync {
     fn chat_memory_store(&self) -> ChatMemoryStore;
+    fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator;
     async fn apply(&self, mutation: StorageMutation) -> Result<(), StorageError>;
 
     async fn list_entities(
@@ -195,6 +196,10 @@ impl SqliteStorage {
 impl Storage for SqliteStorage {
     fn chat_memory_store(&self) -> ChatMemoryStore {
         ChatMemoryStore::new(self.pool.clone())
+    }
+
+    fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator {
+        MemoryEpochCoordinator::new(self.pool.clone())
     }
 
     async fn apply(&self, mutation: StorageMutation) -> Result<(), StorageError> {
