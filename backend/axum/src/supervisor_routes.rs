@@ -380,14 +380,15 @@ pub async fn create_run(
         curated_model_ids,
     };
     let risk = task_risk_score(&run.title, &run.objective);
-    let risk_escalated = profile.level == TaskLevel::Quick && risk >= 0.80;
-    if risk_escalated {
-        // A user-selected Quick tier cannot bypass supervision for a risky task.
+    let ambiguity = task_ambiguity(&run.title, &run.objective);
+    let policy_escalated = profile.level == TaskLevel::Quick && (risk >= 0.80 || ambiguity >= 0.75);
+    if policy_escalated {
+        // Quick tasks with material risk or ambiguity require the checklist and
+        // independent review stages rather than bypassing supervision.
         profile.level = TaskLevel::Important;
     }
     let assignment_engine = state.assignment_engine();
     let mut assignment = assignment_engine.assign(&profile, &providers, &models, &stats);
-    let ambiguity = task_ambiguity(&run.title, &run.objective);
     let has_alternative = assignment.as_ref().is_ok_and(|plan| {
         plan.decisions.iter().any(|decision| decision.candidates_considered.len() > 1)
     });
@@ -405,7 +406,7 @@ pub async fn create_run(
     let action_notice = match action {
         crate::vector_decision::AgentAction::Execute => None,
         crate::vector_decision::AgentAction::Delegate => Some("Vector policy recommends delegation.".to_string()),
-        crate::vector_decision::AgentAction::Split => Some("Vector policy recommends splitting this ambiguous task before execution.".to_string()),
+        crate::vector_decision::AgentAction::Split => Some("Vector policy requires task decomposition in the checklist before workers proceed.".to_string()),
         crate::vector_decision::AgentAction::RequestEvidence => Some("Vector policy requires more evidence before execution.".to_string()),
         crate::vector_decision::AgentAction::Escalate => Some("Vector policy escalated this task to higher supervision.".to_string()),
         crate::vector_decision::AgentAction::Abstain => Some("Vector policy abstained because no eligible agent assignment was available.".to_string()),
@@ -466,8 +467,8 @@ pub async fn create_run(
                 run.status = SupervisorRunStatus::ReadyForWorkers;
             }
             let mut notices = plan.notices;
-            if risk_escalated {
-                notices.push("Risk policy upgraded Quick to Important supervision.".into());
+            if policy_escalated {
+                notices.push("Vector policy upgraded Quick to Important supervision for risk or ambiguity.".into());
             }
             if let Some(notice) = action_notice.clone() {
                 notices.push(notice);
@@ -485,7 +486,7 @@ pub async fn create_run(
                 notice.push_str(&action_notice);
             }
             if risk_escalated {
-                notice.push_str(" Risk policy requires Important supervision.");
+                notice.push_str(" Vector policy requires Important supervision for risk or ambiguity.");
             }
             run.assignment_notice = Some(notice);
         }
