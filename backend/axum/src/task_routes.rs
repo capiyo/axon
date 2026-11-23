@@ -250,6 +250,20 @@ pub async fn submit_task(
         .await
         .map_err(|_| storage_failure())?;
 
+    if task.created_by != user.user_id {
+        if let Some(notifications) = state.explore.as_ref() {
+            let _ = notifications.notify_task_event(
+                task.created_by,
+                task.workspace_id,
+                task.id,
+                user.user_id,
+                "task.response_submitted",
+                "Task response submitted",
+                &format!("A response was submitted for {}.", task.title),
+            ).await;
+        }
+    }
+
     state
         .artifacts
         .write()
@@ -327,6 +341,24 @@ pub async fn transition_task(
         )
         .await
         .map_err(|_| storage_failure())?;
+    if task.created_by != user.user_id {
+        if let Some(notifications) = state.explore.as_ref() {
+            let (event_type, title) = match task.status {
+                TaskStatus::Completed => ("task.completed", "Task completed"),
+                TaskStatus::Rejected | TaskStatus::Cancelled => ("task.failed", "Task stopped"),
+                _ => ("task.updated", "Task status updated"),
+            };
+            let _ = notifications.notify_task_event(
+                task.created_by,
+                task.workspace_id,
+                task.id,
+                user.user_id,
+                event_type,
+                title,
+                &format!("{} is now {}.", task.title, format!("{:?}", task.status).to_lowercase().replace('_', " ")),
+            ).await;
+        }
+    }
     tasks.insert(task.id, task.clone());
     Ok(Json(task))
 }
