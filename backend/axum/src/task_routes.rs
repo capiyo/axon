@@ -88,8 +88,16 @@ pub async fn create_task(
 
     if let Some(source_chat_id) = input.source_chat_id {
         let chat_store = state.chat_memory.as_ref().ok_or_else(storage_failure)?;
-        if chat_store.get_chat(workspace_id, source_chat_id).await.map_err(|_| storage_failure())?.is_none() {
-            return Err(error(StatusCode::BAD_REQUEST, "Source conversation must belong to the target workspace."));
+        if chat_store
+            .get_chat(workspace_id, source_chat_id)
+            .await
+            .map_err(|_| storage_failure())?
+            .is_none()
+        {
+            return Err(error(
+                StatusCode::BAD_REQUEST,
+                "Source conversation must belong to the target workspace.",
+            ));
         }
     }
 
@@ -252,15 +260,17 @@ pub async fn submit_task(
 
     if task.created_by != user.user_id {
         if let Some(notifications) = state.explore.as_ref() {
-            let _ = notifications.notify_task_event(
-                task.created_by,
-                task.workspace_id,
-                task.id,
-                user.user_id,
-                "task.response_submitted",
-                "Task response submitted",
-                &format!("A response was submitted for {}.", task.title),
-            ).await;
+            let _ = notifications
+                .notify_task_event(
+                    task.created_by,
+                    task.workspace_id,
+                    task.id,
+                    user.user_id,
+                    "task.response_submitted",
+                    "Task response submitted",
+                    &format!("A response was submitted for {}.", task.title),
+                )
+                .await;
         }
     }
 
@@ -348,15 +358,23 @@ pub async fn transition_task(
                 TaskStatus::Rejected | TaskStatus::Cancelled => ("task.failed", "Task stopped"),
                 _ => ("task.updated", "Task status updated"),
             };
-            let _ = notifications.notify_task_event(
-                task.created_by,
-                task.workspace_id,
-                task.id,
-                user.user_id,
-                event_type,
-                title,
-                &format!("{} is now {}.", task.title, format!("{:?}", task.status).to_lowercase().replace('_', " ")),
-            ).await;
+            let _ = notifications
+                .notify_task_event(
+                    task.created_by,
+                    task.workspace_id,
+                    task.id,
+                    user.user_id,
+                    event_type,
+                    title,
+                    &format!(
+                        "{} is now {}.",
+                        task.title,
+                        format!("{:?}", task.status)
+                            .to_lowercase()
+                            .replace('_', " ")
+                    ),
+                )
+                .await;
         }
     }
     tasks.insert(task.id, task.clone());
