@@ -202,8 +202,13 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
 
   useEffect(() => {
     if (!selected || !activeChat) { setChatDetail(null); return; }
-    request<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`)
-      .then(setChatDetail)
+    const chatId = activeChat;
+    request(`/api/v1/workspaces/${selected.id}/chats/${chatId}/read`, { method: "POST" })
+      .then(() => Promise.all([
+        request<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${chatId}`),
+        request<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`)
+      ]))
+      .then(([detail, items]) => { setChatDetail(detail); setChats(items); })
       .catch(cause => setError(cause instanceof Error ? cause.message : "Could not load chat"));
   }, [selected?.id, activeChat]);
 
@@ -245,6 +250,27 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       ]);
       setChatDetail(detail);
       setChats(items);
+    });
+  }
+
+  function toggleChatLike(chatId: string) {
+    if (!selected) return;
+    void perform(async () => {
+      await request(`/api/v1/workspaces/${selected.id}/chats/${chatId}/like`, { method: "POST" });
+      setChats(await request<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`));
+    });
+  }
+
+  function archiveChatById(chatId: string) {
+    if (!selected) return;
+    void perform(async () => {
+      await request(`/api/v1/workspaces/${selected.id}/chats/${chatId}/archive`, { method: "PATCH" });
+      const remaining = await request<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`);
+      setChats(remaining);
+      if (activeChat === chatId) {
+        setMobileChatOpen(false);
+        setActiveChat(remaining[0]?.id ?? "");
+      }
     });
   }
 
@@ -613,11 +639,14 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
             <>
               <View style={styles.screenHeading}><Text style={styles.eyebrow}>PRIVATE WORKSPACE</Text><Text style={styles.screenTitle}>Chats</Text><Text style={styles.description}>Conversations, agent work and project context in one place.</Text></View>
               <View style={styles.newChatRow}><TextInput value={chatTitle} onChangeText={setChatTitle} placeholder="Start a new conversation…" style={[styles.input,styles.newChatInput]} maxLength={160}/><ActionButton label="＋" onPress={createChat} disabled={!chatTitle.trim() || busy}/></View>
-              {chats.map(chat => { const preview = chatPreviews[chat.id]; const last = preview?.messages[preview.messages.length-1]; return <Pressable key={chat.id} onPress={() => {setActiveChat(chat.id);setMobileChatOpen(true);}} style={styles.chatCardMobile}>
-                <View style={styles.chatCardMobileHeader}><View style={styles.chatCardMobileAvatar}><Text style={styles.chatCardMobileAvatarText}>{(last?.answered_by || chat.title || "A").slice(0,1).toUpperCase()}</Text></View><View style={{flex:1}}><Text style={styles.chatCardMobileTitle}>{chat.title}</Text><Text style={styles.chatCardMobileAgent}>{last?.answered_by || "Workspace conversation"}</Text></View><Text style={styles.chatCardMobileTime}>{new Date(chat.updated_at).toLocaleString()}</Text></View>
-                <Text style={styles.chatCardMobilePreview}>{last?.content || "No messages yet. Open this conversation to begin."}</Text>
-                <View style={styles.chatCardMobileFooter}><Text style={styles.chatCardMobileMeta}>{preview ? `${preview.messages.length} messages` : "Loading conversation"} · {last?.role === "assistant" ? "Agent replied" : last?.role === "user" ? "Your message" : "New conversation"}</Text><Text style={styles.chatCardMobileOpen}>OPEN CONVERSATION →</Text></View>
-              </Pressable>; })}
+              {chats.map(chat => { const preview = chatPreviews[chat.id]; const last = preview?.messages[preview.messages.length-1]; return <View key={chat.id} style={styles.chatCardMobile}>
+                <Pressable onPress={() => {setActiveChat(chat.id);setMobileChatOpen(true);}}>
+                  <View style={styles.chatCardMobileHeader}><View style={styles.chatCardMobileAvatar}><Text style={styles.chatCardMobileAvatarText}>{(last?.answered_by || chat.title || "A").slice(0,1).toUpperCase()}</Text></View><View style={{flex:1}}><Text style={styles.chatCardMobileTitle}>{chat.title}</Text><Text style={styles.chatCardMobileAgent}>{last?.answered_by || "Workspace conversation"}</Text></View><Text style={styles.chatCardMobileTime}>{new Date(chat.updated_at).toLocaleString()}</Text></View>
+                  <Text style={styles.chatCardMobilePreview}>{last?.content || "No messages yet. Open this conversation to begin."}</Text>
+                  <Text style={styles.chatCardMobileOpen}>OPEN CONVERSATION →</Text>
+                </Pressable>
+                <View style={styles.chatCardMobileFooter}><Text style={styles.chatCardMobileMeta}>{preview ? `${preview.messages.length} messages` : "Loading conversation"} · {last?.role === "assistant" ? "Agent replied" : last?.role === "user" ? "Your message" : "New conversation"}</Text><View style={styles.chatCardMobileActions}>{chat.unread_count > 0 ? <Text style={styles.chatUnreadCount}>{chat.unread_count}</Text> : null}<Pressable onPress={() => toggleChatLike(chat.id)}><Text style={styles.chatCardMobileLike}>{chat.is_liked ? "♥" : "♡"}</Text></Pressable><Pressable onPress={() => archiveChatById(chat.id)}><Text style={styles.chatCardMobileArchive}>Archive</Text></Pressable></View></View>
+              </View>; })
               {chats.length === 0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No conversations yet</Text><Text style={styles.muted}>Create your first chat above.</Text></View> : null}
             </>
           )}
