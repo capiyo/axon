@@ -943,4 +943,34 @@ mod tests {
             .await;
         assert!(delete.is_err());
     }
+    #[tokio::test]
+    async fn unread_counts_clear_on_read_and_chat_likes_toggle_per_user() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let account = storage.ensure_firebase_user("axon-test", "chat-social-user").await.unwrap();
+        let store = storage.chat_memory_store();
+        let workspace_id = account.workspace.id;
+        let chat = store.create_chat(workspace_id, account.user_id, "human:test", "Unread test".into()).await.unwrap();
+        store.append_message(
+            workspace_id,
+            chat.id,
+            "agent:manual",
+            CreateMessage {
+                role: "assistant".into(),
+                content: "A real agent response.".into(),
+                answered_by: Some("Memory Architect".into()),
+            },
+        ).await.unwrap().unwrap();
+
+        let before_read = store.list_chats_for_user(workspace_id, account.user_id).await.unwrap();
+        assert_eq!(before_read[0].unread_count, 1);
+        assert!(!before_read[0].is_liked);
+
+        assert!(store.mark_chat_read(workspace_id, chat.id, account.user_id, "human:test").await.unwrap());
+        let after_read = store.list_chats_for_user(workspace_id, account.user_id).await.unwrap();
+        assert_eq!(after_read[0].unread_count, 0);
+
+        assert_eq!(store.toggle_chat_like(workspace_id, chat.id, account.user_id, "human:test").await.unwrap(), Some(true));
+        assert_eq!(store.toggle_chat_like(workspace_id, chat.id, account.user_id, "human:test").await.unwrap(), Some(false));
+    }
+
 }
