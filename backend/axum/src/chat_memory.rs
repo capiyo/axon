@@ -93,7 +93,11 @@ impl ChatMemoryStore {
         self.list_chats_for_user(workspace_id, Uuid::nil()).await
     }
 
-    pub async fn list_chats_for_user(&self, workspace_id: Uuid, user_id: Uuid) -> Result<Vec<Chat>, sqlx::Error> {
+    pub async fn list_chats_for_user(
+        &self,
+        workspace_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Vec<Chat>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT c.id, c.workspace_id, c.owner_id, c.title, c.created_at, c.updated_at, c.archived,
              (SELECT COUNT(*) FROM chat_messages m
@@ -120,25 +124,36 @@ impl ChatMemoryStore {
         let mut tx = self.pool.begin().await?;
         let exists: Option<i64> = sqlx::query_scalar(
             "SELECT 1 FROM chats c JOIN workspace_memberships m ON m.workspace_id = c.workspace_id
-             WHERE c.id = ? AND c.workspace_id = ? AND m.user_id = ? AND c.archived = 0"
+             WHERE c.id = ? AND c.workspace_id = ? AND m.user_id = ? AND c.archived = 0",
         )
         .bind(chat_id.to_string())
         .bind(workspace_id.to_string())
         .bind(user_id.to_string())
         .fetch_optional(&mut *tx)
         .await?;
-        if exists.is_none() { return Ok(false); }
+        if exists.is_none() {
+            return Ok(false);
+        }
         let now = Utc::now();
         sqlx::query(
             "INSERT INTO chat_read_states (chat_id, user_id, last_read_at) VALUES (?, ?, ?)
-             ON CONFLICT(chat_id, user_id) DO UPDATE SET last_read_at = excluded.last_read_at"
+             ON CONFLICT(chat_id, user_id) DO UPDATE SET last_read_at = excluded.last_read_at",
         )
         .bind(chat_id.to_string())
         .bind(user_id.to_string())
         .bind(now.to_rfc3339())
         .execute(&mut *tx)
         .await?;
-        insert_audit(&mut tx, workspace_id, actor, "chat.read", "chat", chat_id, json!({"user_id": user_id})).await?;
+        insert_audit(
+            &mut tx,
+            workspace_id,
+            actor,
+            "chat.read",
+            "chat",
+            chat_id,
+            json!({"user_id": user_id}),
+        )
+        .await?;
         tx.commit().await?;
         Ok(true)
     }
@@ -153,14 +168,16 @@ impl ChatMemoryStore {
         let mut tx = self.pool.begin().await?;
         let exists: Option<i64> = sqlx::query_scalar(
             "SELECT 1 FROM chats c JOIN workspace_memberships m ON m.workspace_id = c.workspace_id
-             WHERE c.id = ? AND c.workspace_id = ? AND m.user_id = ? AND c.archived = 0"
+             WHERE c.id = ? AND c.workspace_id = ? AND m.user_id = ? AND c.archived = 0",
         )
         .bind(chat_id.to_string())
         .bind(workspace_id.to_string())
         .bind(user_id.to_string())
         .fetch_optional(&mut *tx)
         .await?;
-        if exists.is_none() { return Ok(None); }
+        if exists.is_none() {
+            return Ok(None);
+        }
         let inserted = sqlx::query("INSERT OR IGNORE INTO chat_reactions (chat_id, user_id, reaction, created_at) VALUES (?, ?, 'like', ?)")
             .bind(chat_id.to_string()).bind(user_id.to_string()).bind(Utc::now().to_rfc3339())
             .execute(&mut *tx).await?;
@@ -179,7 +196,8 @@ impl ChatMemoryStore {
             "chat",
             chat_id,
             json!({"user_id": user_id}),
-        ).await?;
+        )
+        .await?;
         tx.commit().await?;
         Ok(Some(liked))
     }
@@ -236,7 +254,8 @@ impl ChatMemoryStore {
         workspace_id: Uuid,
         chat_id: Uuid,
     ) -> Result<Option<ChatDetail>, sqlx::Error> {
-        self.get_chat_for_user(workspace_id, chat_id, Uuid::nil()).await
+        self.get_chat_for_user(workspace_id, chat_id, Uuid::nil())
+            .await
     }
 
     pub async fn get_chat_for_user(
@@ -946,31 +965,66 @@ mod tests {
     #[tokio::test]
     async fn unread_counts_clear_on_read_and_chat_likes_toggle_per_user() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
-        let account = storage.ensure_firebase_user("axon-test", "chat-social-user").await.unwrap();
+        let account = storage
+            .ensure_firebase_user("axon-test", "chat-social-user")
+            .await
+            .unwrap();
         let store = storage.chat_memory_store();
         let workspace_id = account.workspace.id;
-        let chat = store.create_chat(workspace_id, account.user_id, "human:test", "Unread test".into()).await.unwrap();
-        store.append_message(
-            workspace_id,
-            chat.id,
-            "agent:manual",
-            CreateMessage {
-                role: "assistant".into(),
-                content: "A real agent response.".into(),
-                answered_by: Some("Memory Architect".into()),
-            },
-        ).await.unwrap().unwrap();
+        let chat = store
+            .create_chat(
+                workspace_id,
+                account.user_id,
+                "human:test",
+                "Unread test".into(),
+            )
+            .await
+            .unwrap();
+        store
+            .append_message(
+                workspace_id,
+                chat.id,
+                "agent:manual",
+                CreateMessage {
+                    role: "assistant".into(),
+                    content: "A real agent response.".into(),
+                    answered_by: Some("Memory Architect".into()),
+                },
+            )
+            .await
+            .unwrap()
+            .unwrap();
 
-        let before_read = store.list_chats_for_user(workspace_id, account.user_id).await.unwrap();
+        let before_read = store
+            .list_chats_for_user(workspace_id, account.user_id)
+            .await
+            .unwrap();
         assert_eq!(before_read[0].unread_count, 1);
         assert!(!before_read[0].is_liked);
 
-        assert!(store.mark_chat_read(workspace_id, chat.id, account.user_id, "human:test").await.unwrap());
-        let after_read = store.list_chats_for_user(workspace_id, account.user_id).await.unwrap();
+        assert!(store
+            .mark_chat_read(workspace_id, chat.id, account.user_id, "human:test")
+            .await
+            .unwrap());
+        let after_read = store
+            .list_chats_for_user(workspace_id, account.user_id)
+            .await
+            .unwrap();
         assert_eq!(after_read[0].unread_count, 0);
 
-        assert_eq!(store.toggle_chat_like(workspace_id, chat.id, account.user_id, "human:test").await.unwrap(), Some(true));
-        assert_eq!(store.toggle_chat_like(workspace_id, chat.id, account.user_id, "human:test").await.unwrap(), Some(false));
+        assert_eq!(
+            store
+                .toggle_chat_like(workspace_id, chat.id, account.user_id, "human:test")
+                .await
+                .unwrap(),
+            Some(true)
+        );
+        assert_eq!(
+            store
+                .toggle_chat_like(workspace_id, chat.id, account.user_id, "human:test")
+                .await
+                .unwrap(),
+            Some(false)
+        );
     }
-
 }
