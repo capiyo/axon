@@ -58,6 +58,7 @@ function WorkspaceApp() {
   const [handoverTaskId, setHandoverTaskId] = useState("");
   const [handover, setHandover] = useState<HandoverContext | null>(null);
   const [progressiveContext, setProgressiveContext] = useState<ProgressiveMemoryContext | null>(null);
+  const [qoinNotice, setQoinNotice] = useState("");
 
   async function refreshWorkspaces() {
     const [items, status] = await Promise.all([
@@ -198,6 +199,7 @@ function WorkspaceApp() {
         `/api/v1/workspaces/${selected.id}/memory/qoin-vector?symbol=${encodeURIComponent(qoinSymbol.trim())}`
       );
       setQoinVector(snapshot);
+      setQoinNotice(`Loaded ${snapshot.symbol} · ${snapshot.vector.model_version}`);
       setHandover(null);
       setProgressiveContext(null);
     } catch (cause) {
@@ -211,7 +213,7 @@ function WorkspaceApp() {
     setBusy(true);
     setError("");
     try {
-      await api<QoinMemoryIndexReceipt>(
+      const receipt = await api<QoinMemoryIndexReceipt>(
         `/api/v1/workspaces/${selected.id}/chats/${activeChat}/memory-index/${entry.id}/qoin`,
         {
           method: "POST",
@@ -523,6 +525,7 @@ function WorkspaceApp() {
                 <label>Market symbol<input value={qoinSymbol} onChange={event => setQoinSymbol(event.target.value.toUpperCase())} maxLength={32} placeholder="BTCUSDT" /></label>
                 <button type="button" disabled={busy || !qoinSymbol.trim()} onClick={() => void loadQoinVector()}>{busy ? "Loading…" : "Load latest Qoin vector"}</button>
               </div>
+              {qoinNotice && <p className="qoin-notice" role="status">{qoinNotice}</p>}
               {qoinVector && <div className="qoin-snapshot">
                 <div className="qoin-snapshot-head"><strong>{qoinVector.symbol}</strong><span>Model {qoinVector.vector.model_version}</span><span>Signal {qoinVector.action.toUpperCase()}</span></div>
                 <div className="qoin-features">{Object.entries(qoinVector.features).map(([name, value]) => <span key={name}>{name.replaceAll("_", " ")} <strong>{value.toFixed(3)}</strong></span>)}</div>
