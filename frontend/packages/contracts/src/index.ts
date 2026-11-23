@@ -273,3 +273,12 @@ export type QoinMemoryIndexReceipt = {
   qoin_event_ts_ms: number;
   indexed: boolean;
 };
+
+export type QoinChatMessageIndexReceipt = {
+  message_id: string;
+  symbol: string;
+  model_version: string;
+  context_timestamp_ms: number;
+  qoin_event_ts_ms: number;
+  indexed: boolean;
+};
