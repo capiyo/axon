@@ -207,3 +207,110 @@ mod tests {
         assert_eq!(selection.deferred.len(), 8);
     }
 }
+
+use chrono::{DateTime, Utc};
+use sqlx::{Row, SqlitePool};
+use std::time::Duration;
+
+/// SQLite-backed epoch publisher. A separate process may run this coordinator;
+/// publication is idempotent per workspace/hour through a unique epoch number.
+#[derive(Clone)]
+pub struct MemoryEpochCoordinator {
+    pool: SqlitePool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryEpoch {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub epoch_number: i64,
+    pub published_at: DateTime<Utc>,
+    pub source_event_sequence: i64,
+    pub indexed_memory_count: i64,
+    pub snapshot_digest: String,
+}
+impl MemoryEpochCoordinator {
+    pub fn new(pool: SqlitePool) -> Self { Self { pool } }
+
+    /// Publish due workspaces. Called repeatedly by the supervised hourly
+    /// worker; the one-hour guard is enforced transactionally per workspace.
+    pub async fn publish_due_epochs(&self) -> Result<usize, sqlx::Error> {
+        let workspaces: Vec<String> = sqlx::query_scalar(
+            "SELECT DISTINCT workspace_id FROM chats ORDER BY workspace_id"
+        ).fetch_all(&self.pool).await?;
+        let mut published = 0;
+        for workspace in workspaces {
+            if self.publish_workspace_if_due(&workspace).await? { published += 1; }
+        }
+        Ok(published)
+    }
+
+    async fn publish_workspace_if_due(&self, workspace_id: &str) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let latest: Option<String> = sqlx::query_scalar(
+            "SELECT published_at FROM memory_epochs WHERE workspace_id = ? ORDER BY epoch_number DESC LIMIT 1"
+        ).bind(workspace_id).fetch_optional(&mut *tx).await?;
+        if let Some(timestamp) = latest {
+            let parsed = DateTime::parse_from_rfc3339(&timestamp)
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?.with_timezone(&Utc);
+            if Utc::now().signed_duration_since(parsed).num_seconds() < 3600 {
+                tx.rollback().await?;
+                return Ok(false);
+            }
+        }
+        let max_sequence: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(sequence), 0) FROM memory_events WHERE workspace_id = ?"
+        ).bind(workspace_id).fetch_one(&mut *tx).await?;
+        let indexed_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved'"
+        ).bind(workspace_id).fetch_one(&mut *tx).await?;
+        let next_epoch: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(epoch_number), 0) + 1 FROM memory_epochs WHERE workspace_id = ?"
+        ).bind(workspace_id).fetch_one(&mut *tx).await?;
+        let now = Utc::now();
+        let id = Uuid::new_v4();
+        // This is a reproducibility marker, not a cryptographic integrity hash.
+        let marker = format!("source-sequence:{max_sequence};indexed-memories:{indexed_count}");
+        sqlx::query(
+            "INSERT INTO memory_epochs (id, workspace_id, epoch_number, published_at, source_event_sequence, indexed_memory_count, snapshot_digest) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).bind(id.to_string()).bind(workspace_id).bind(next_epoch)
+            .bind(now.to_rfc3339()).bind(max_sequence).bind(indexed_count).bind(marker)
+            .execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    pub async fn latest_epoch(&self, workspace_id: Uuid) -> Result<Option<MemoryEpoch>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, workspace_id, epoch_number, published_at, source_event_sequence, indexed_memory_count, snapshot_digest FROM memory_epochs WHERE workspace_id = ? ORDER BY epoch_number DESC LIMIT 1"
+        ).bind(workspace_id.to_string()).fetch_optional(&self.pool).await?;
+        row.map(|row| {
+            let id: String = row.try_get("id")?;
+            let workspace: String = row.try_get("workspace_id")?;
+            let published_at: String = row.try_get("published_at")?;
+            Ok(MemoryEpoch {
+                id: Uuid::parse_str(&id).map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                workspace_id: Uuid::parse_str(&workspace).map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                epoch_number: row.try_get("epoch_number")?,
+                published_at: DateTime::parse_from_rfc3339(&published_at)
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?.with_timezone(&Utc),
+                source_event_sequence: row.try_get("source_event_sequence")?,
+                indexed_memory_count: row.try_get("indexed_memory_count")?,
+                snapshot_digest: row.try_get("snapshot_digest")?,
+            })
+        }).transpose()
+    }
+
+    /// Run as a supervised Tokio task. A minute poll avoids a long-running
+    /// fixed sleep and recovers naturally after process restarts.
+    pub async fn run_hourly(self) {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            match self.publish_due_epochs().await {
+                Ok(count) if count > 0 => tracing::info!(published_workspaces = count, "published memory epochs"),
+                Ok(_) => {}
+                Err(error) => tracing::error!(%error, "memory epoch publication failed; will retry"),
+            }
+        }
+    }
+}
