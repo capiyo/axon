@@ -468,6 +468,41 @@ mod tests {
         ));
     }
 
+
+    #[tokio::test]
+    async fn expired_memory_is_purged_before_it_can_be_allocated() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let account = storage
+            .ensure_firebase_user("memory-test", "memory-store-expiry-user")
+            .await
+            .unwrap();
+        let store = MemoryStore::new(storage.chat_memory_store().sqlite_pool());
+        let agent_id = Uuid::new_v4();
+        let mut record = agent_memory(account.workspace.id, agent_id);
+        record.expires_at = Some(Utc::now() - Duration::seconds(1));
+        store.put(record.clone(), "human:test").await.unwrap();
+
+        let context = RetrievalContext {
+            workspace_id: account.workspace.id,
+            task_id: None,
+            agent_id,
+            allowed_sensitivity: MemorySensitivity::Internal,
+            granted_memory_ids: BTreeSet::new(),
+            now: Utc::now(),
+        };
+        let allocation = store
+            .allocate(&context, "deterministic evidence-first process", 128)
+            .await
+            .unwrap();
+        assert!(allocation.selected.is_empty());
+        let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM agent_memory_versions WHERE memory_id = ?")
+            .bind(record.id.to_string())
+            .fetch_one(&store.pool)
+            .await
+            .unwrap();
+        assert_eq!(remaining, 0);
+    }
+
     #[tokio::test]
     async fn memory_grants_cannot_cross_workspace_boundaries() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
