@@ -355,8 +355,10 @@ function WorkspaceApp() {
         </header>
         {selected && !showAdmin && (
           <nav className="mobile-home-tabs" aria-label="Workspace sections">
-            <button type="button" className={activeMobileTab === "Chats" ? "mobile-tab active" : "mobile-tab"} onClick={() => setActiveMobileTab("Chats")}>Chats</button>
-            <button type="button" className={activeMobileTab === "Feed" ? "mobile-tab active" : "mobile-tab"} onClick={() => setActiveMobileTab("Feed")}>Feed</button>
+            <div className="floating-pill">
+              <button type="button" aria-label="Chats" title="Chats" className={activeMobileTab === "Chats" ? "floating-pill-item active" : "floating-pill-item"} onClick={() => setActiveMobileTab("Chats")}><span aria-hidden="true">◉</span></button>
+              <button type="button" aria-label="Feed" title="Feed" className={activeMobileTab === "Feed" ? "floating-pill-item active" : "floating-pill-item"} onClick={() => setActiveMobileTab("Feed")}><span aria-hidden="true">▤</span></button>
+            </div>
           </nav>
         )}
 
