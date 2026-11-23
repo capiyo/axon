@@ -67,6 +67,14 @@ pub fn app(state: AppState) -> Router {
             get(memory_routes::latest_epoch),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/memory/qoin-vector",
+            get(memory_routes::latest_qoin_vector),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/chats/:chat_id/memory-index/:entry_id/qoin",
+            post(memory_routes::index_memory_with_qoin),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-context",
             post(memory_routes::prepare_handover),
         )
