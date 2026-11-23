@@ -1265,15 +1265,15 @@ mod tests {
         let workspace_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
         let listing_id = store
-            .publish(
+.publish(PublishAgentRecord {
                 agent_id,
                 workspace_id,
                 owner_id,
-                "Agent",
-                "manual",
-                "Public description",
-                "General",
-            )
+                title: "Agent",
+                provider: "manual",
+                description: "Public description",
+                category: "General",
+            })
             .await
             .expect("publish")
             .expect("listing");
