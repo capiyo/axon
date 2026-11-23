@@ -458,3 +458,9 @@ body {
 .explore-comment-form input, .explore-reply-form input { flex: 1; }
 .explore-no-comments { margin: 0; color: var(--axon-color-text-muted); font-size: 10px; }
 @media (max-width: 560px) { .explore-publish-fields { grid-template-columns: 1fr; }.explore-agent-meta { flex-wrap: wrap; }.explore-social-actions { flex-wrap: wrap; } }
+
+.chat-card-actions { display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.chat-unread-count { min-width: 19px; height: 19px; display: inline-grid; place-items: center; padding: 0 5px; border-radius: 999px; background: #28583D; color: #E7F6EB; font: 800 9px "DM Mono",monospace; }
+.chat-card-like { color: var(--axon-color-accent); font-size: 15px; cursor: pointer; line-height: 1; }
+.chat-card-archive { color: var(--axon-color-text-muted); font-size: 9px; cursor: pointer; }
+.chat-card-like:focus-visible, .chat-card-archive:focus-visible { outline: 2px solid var(--axon-color-accent); outline-offset: 3px; border-radius: 4px; }
