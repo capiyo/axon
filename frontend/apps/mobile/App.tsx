@@ -239,7 +239,7 @@ function WorkspaceApp() {
           })
         }
       );
-      setQoinNotice(`Indexed ${receipt.memory_id.slice(0, 8)} with ${receipt.symbol}; available after the next hourly epoch.`);
+      setQoinNotice(`Indexed ${receipt.memory_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()}; available after the next hourly epoch.`);
     });
   }
 
