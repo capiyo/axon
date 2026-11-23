@@ -81,6 +81,7 @@ impl MemoryRecord {
                 Err(MemoryError::InvalidScope)
             }
             MemoryScope::Agent if self.owner_agent_id.is_none() => Err(MemoryError::InvalidScope),
+            MemoryScope::Execution if self.expires_at.is_none() => Err(MemoryError::InvalidScope),
             _ => Ok(()),
         }
     }
