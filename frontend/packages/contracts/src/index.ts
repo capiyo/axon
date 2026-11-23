@@ -214,3 +214,71 @@ export type ChatDetail = {
   memory: ProjectMemoryEntry[];
   resume_brief: string;
 };
+
+
+/** Qoin's six-dimensional attended market-state vector; not a text embedding. */
+export type QoinVector = {
+  values: number[];
+  model_version: string;
+};
+
+export type QoinVectorSnapshot = {
+  symbol: string;
+  vector: QoinVector;
+  features: Record<string, number>;
+  action: string;
+  reason: string;
+  decision_vector: [number, number] | null;
+  event_ts_ms: number | null;
+};
+
+export type MemoryEpoch = {
+  id: string;
+  workspace_id: string;
+  epoch_number: number;
+  published_at: string;
+  source_event_sequence: number;
+  indexed_memory_count: number;
+  snapshot_digest: string;
+};
+
+export type HandoverMemory = {
+  memory_id: string;
+  source_kind: string;
+  source_event_sequence: number;
+  payload_json: string;
+  attention_score: number;
+};
+
+export type HandoverContext = {
+  session_id: string;
+  epoch: MemoryEpoch;
+  initial: HandoverMemory[];
+  deferred_count: number;
+  achieved_coverage: number;
+  budget_exhausted: boolean;
+};
+
+export type ProgressiveMemoryContext = {
+  session_id: string;
+  memories: HandoverMemory[];
+  remaining_candidates: number;
+};
+
+export type QoinMemoryIndexReceipt = {
+  memory_id: string;
+  symbol: string;
+  model_version: string;
+  memory_context_timestamp_ms: number;
+  qoin_event_ts_ms: number;
+  indexed: boolean;
+};
+
+export type QoinChatMessageIndexReceipt = {
+  message_id: string;
+  symbol: string;
+  model_version: string;
+  context_timestamp_ms: number;
+  qoin_event_ts_ms: number;
+  indexed: boolean;
+};

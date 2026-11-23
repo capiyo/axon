@@ -115,7 +115,9 @@ pub fn qkv_attention(
     let mut logits = vec![vec![0.0_f64; memories.len()]; query.heads];
     for (index, memory) in memories.iter().enumerate() {
         memory.key.validate()?;
-        if memory.key.values.len() != query.query.values.len() {
+        if memory.key.values.len() != query.query.values.len()
+            || memory.key.model_version != query.query.model_version
+        {
             return Err(AttentionError::InvalidVector);
         }
         if !memory.outcome_score.is_finite()
@@ -295,6 +297,22 @@ mod tests {
         .unwrap();
         assert_eq!(ranked[0].memory_id, id);
     }
+    #[test]
+    fn attention_rejects_vectors_from_different_qoin_model_versions() {
+        let mut historical = memory(Uuid::new_v4(), vec![1.0, 0.0, 1.0, 0.0], 0.8);
+        historical.key.model_version = "edge-map-v0".into();
+        let query = AttentionQuery {
+            query: q(vec![1.0, 0.0, 1.0, 0.0]),
+            heads: 2,
+            tags: BTreeSet::new(),
+            dependency_ids: BTreeSet::new(),
+        };
+        assert_eq!(
+            qkv_attention(&query, &[historical]).unwrap_err(),
+            AttentionError::InvalidVector
+        );
+    }
+
     #[test]
     fn pareto_selection_respects_budget_and_reports_real_coverage() {
         let scores = (0..10)
@@ -497,6 +515,79 @@ pub struct HandoverRequest {
 }
 
 impl MemoryEpochCoordinator {
+    /// Read the original timestamp of a source chat message before mapping it
+    /// to the Qoin market state that existed at that moment.
+    pub async fn chat_message_context_timestamp_ms(
+        &self,
+        workspace_id: Uuid,
+        chat_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<i64, sqlx::Error> {
+        let created_at: Option<String> = sqlx::query_scalar(
+            "SELECT m.created_at FROM chat_messages m JOIN chats c ON c.id = m.chat_id WHERE c.workspace_id = ? AND m.chat_id = ? AND m.id = ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(chat_id.to_string())
+        .bind(message_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        let created_at = created_at.ok_or(sqlx::Error::RowNotFound)?;
+        let timestamp = DateTime::parse_from_rfc3339(&created_at)
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        Ok(timestamp.timestamp_millis())
+    }
+
+    /// Read the original creation time from the immutable approved-memory event.
+    /// Qoin history lookup uses this timestamp so old memories are never mapped
+    /// to the market state that happens to be current when someone indexes them.
+    pub async fn approved_memory_context_timestamp_ms(
+        &self,
+        workspace_id: Uuid,
+        chat_id: Uuid,
+        memory_id: Uuid,
+    ) -> Result<i64, sqlx::Error> {
+        let payload: Option<String> = sqlx::query_scalar(
+            "SELECT payload_json FROM memory_events WHERE workspace_id = ? AND chat_id = ? AND memory_entry_id = ? ORDER BY sequence DESC LIMIT 1",
+        )
+        .bind(workspace_id.to_string())
+        .bind(chat_id.to_string())
+        .bind(memory_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        let payload = payload.ok_or(sqlx::Error::RowNotFound)?;
+        let value: serde_json::Value =
+            serde_json::from_str(&payload).map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        if value.get("status").and_then(serde_json::Value::as_str) != Some("approved") {
+            return Err(sqlx::Error::Protocol(
+                "only approved memories can be mapped to historical Qoin vectors".into(),
+            ));
+        }
+        let context_timestamp = if let Some(source_message_id) = value
+            .get("source_message_id")
+            .and_then(serde_json::Value::as_str)
+        {
+            sqlx::query_scalar::<_, String>(
+                "SELECT created_at FROM chat_messages WHERE id = ? AND chat_id = ?",
+            )
+            .bind(source_message_id)
+            .bind(chat_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(sqlx::Error::RowNotFound)?
+        } else {
+            value
+                .get("created_at")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| {
+                    sqlx::Error::Protocol("memory creation timestamp is missing".into())
+                })?
+                .to_owned()
+        };
+        let timestamp = DateTime::parse_from_rfc3339(&context_timestamp)
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        Ok(timestamp.timestamp_millis())
+    }
+
     /// Accept only vectors attached to an approved, existing source memory.
     /// The original event payload remains in memory_events and is copied as a
     /// retrieval value only for convenient hydration.

@@ -10,6 +10,10 @@ Configure a Firebase project dedicated to Axon. Do not reuse Funspot's Firebase 
     export AXON_DATABASE_URL="sqlite://axon.db"
     export AXON_HOST="127.0.0.1"
     export AXON_PORT="8080"
+    # Optional: comma-separated browser origins for a separately hosted web client.
+    export AXON_ALLOWED_ORIGINS="https://axon.example.com"
+    # Optional: private service URL for the Qoin Axum research API.
+    export QOIN_API_URL="http://127.0.0.1:8081"
     # Simulator is disabled unless explicitly enabled for development:
     export AXON_ENABLE_SIMULATOR="false"
 
@@ -55,6 +59,29 @@ All other registered routes require a valid Firebase bearer token.
 - POST /api/v1/workspaces/{workspace_id}/tasks — JSON: {"title":"Review the fixture status bug","objective":"Inspect the event timing logic and report evidence.","assignee_agent_id":"<agent-uuid>","context_artifact_ids":[]}
 - POST /api/v1/tasks/{task_id}/submit
 - POST /api/v1/tasks/{task_id}/transitions
+
+## Qoin market-vector integration
+
+Axon can consume the current attended market-state vector from Qoin's authenticated-network/internal API. Configure the Axon backend with:
+
+    QOIN_API_URL=http://127.0.0.1:8081
+
+In a container deployment, use the Qoin service name and internal port, not localhost (for example, `http://qoin-api:8081`). Qoin must expose `GET /internal/vector?symbol=BTCUSDT` to the Axon backend over a private service network. In container deployments, configure Qoin to bind its internal listener to `0.0.0.0:8081` and set Axon's URL to the private Qoin service name (for example `http://qoin-api:8081`). Do not expose that internal route publicly.
+
+The Axon bridge requires six finite `attended_features` values and a non-empty `strategy_version`. Agent handovers use the latest vector. When an approved memory is indexed, Axon reads the original source chat-message timestamp when the memory references a message; otherwise it uses the memory's immutable `created_at`. It requests Qoin's `/internal/vector/history` endpoint at that event time. It never substitutes the current vector for an old memory. The model version is pinned to each indexed memory; QKV refuses to compare different Qoin strategy versions. Newly indexed entries start with neutral outcome/evidence scores (0.5) until an outcome/evidence evaluation pipeline supplies measured values. Project-shared indexing is not exposed through this bridge until Axon has a validated project-membership resource. If the strategy version changes, historical memories from the old version cannot be compared with current vectors. They require an explicit historical re-projection/rebuild into the new Qoin vector space; simply re-indexing the old stored vector is insufficient.
+
+Web and mobile users can load a Qoin symbol vector, index individual original chat messages and approved project memories against their original event-time market state, initialize an agent's first context using the 20% budget / measured 80% contribution target, and progressively retrieve deferred memories. For a separately hosted web client, set `VITE_AXON_API_URL` at build time and allow its exact origin in `AXON_ALLOWED_ORIGINS`; the API uses bearer-token authorization, not cookies. Memory indexing only adds to the live index; the hourly publisher remains the only path that creates a new immutable epoch. Newly indexed memories become available to handovers after the next hourly epoch publication.
+
+This integration maps historical decisions to similar Qoin market states. Qoin's six-dimensional market vector is **not** a semantic text embedding. It does not infer meaning from arbitrary chat prose; use a separate versioned text-embedding provider if semantic chat retrieval is required.
+
+## Qoin memory routes
+
+- GET `/api/v1/workspaces/{workspace_id}/memory/qoin-vector?symbol=BTCUSDT`
+- POST `/api/v1/workspaces/{workspace_id}/chats/{chat_id}/memory-index/{memory_id}/qoin`
+- POST `/api/v1/workspaces/{workspace_id}/chats/{chat_id}/messages/{message_id}/qoin-index`
+- GET `/api/v1/workspaces/{workspace_id}/memory/epoch`
+- POST `/api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-context`
+- POST `/api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-sessions/{session_id}/retrieve`
 
 ## Simulator routes
 

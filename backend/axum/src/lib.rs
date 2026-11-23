@@ -10,6 +10,7 @@ pub mod memory_architecture;
 pub mod memory_intelligence;
 mod memory_routes;
 mod model;
+pub mod qoin_vectors;
 pub mod robotics;
 mod robotics_routes;
 mod routes;
@@ -20,13 +21,31 @@ mod task_routes;
 pub use state::AppState;
 
 use axum::{
+    http::{header, HeaderValue, Method},
     middleware,
     routing::{get, patch, post},
     Router,
 };
-use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
+use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
+    limit::RequestBodyLimitLayer,
+    trace::TraceLayer,
+};
 
 pub fn app(state: AppState) -> Router {
+    let allowed_origins = std::env::var("AXON_ALLOWED_ORIGINS")
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|origin| HeaderValue::from_str(origin.trim()).ok())
+        .collect::<Vec<_>>();
+    let cors = if allowed_origins.is_empty() {
+        CorsLayer::new()
+    } else {
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::list(allowed_origins))
+            .allow_methods([Method::GET, Method::POST, Method::PATCH])
+            .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
+    };
     Router::new()
         .route("/health", get(routes::health))
         .route(
@@ -64,6 +83,18 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/v1/workspaces/:workspace_id/memory/epoch",
             get(memory_routes::latest_epoch),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memory/qoin-vector",
+            get(memory_routes::latest_qoin_vector),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/chats/:chat_id/memory-index/:entry_id/qoin",
+            post(memory_routes::index_memory_with_qoin),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/chats/:chat_id/messages/:message_id/qoin-index",
+            post(memory_routes::index_chat_message_with_qoin),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-context",
@@ -111,6 +142,7 @@ pub fn app(state: AppState) -> Router {
             auth_middleware::authenticate,
         ))
         .with_state(state)
+        .layer(cors)
         .layer(RequestBodyLimitLayer::new(1024 * 1024))
         .layer(TraceLayer::new_for_http())
 }

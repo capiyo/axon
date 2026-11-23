@@ -13,7 +13,7 @@ import { StatusBar } from "expo-status-bar";
 import { axonTheme } from "../../packages/theme/src";
 import { auth } from "./firebase";
 
-import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry } from "../../packages/contracts/src";
+import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext, QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt } from "../../packages/contracts/src";
 
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_AXON_API_URL ?? "http://127.0.0.1:8080";
@@ -72,6 +72,12 @@ function WorkspaceApp() {
   const [responseDrafts, setResponseDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [qoinSymbol, setQoinSymbol] = useState("BTCUSDT");
+  const [qoinVector, setQoinVector] = useState<QoinVectorSnapshot | null>(null);
+  const [handoverAgentId, setHandoverAgentId] = useState("");
+  const [handover, setHandover] = useState<HandoverContext | null>(null);
+  const [progressiveContext, setProgressiveContext] = useState<ProgressiveMemoryContext | null>(null);
+  const [qoinNotice, setQoinNotice] = useState("");
 
   async function refreshHome() {
     const [status, items] = await Promise.all([
@@ -98,6 +104,7 @@ function WorkspaceApp() {
       setChatDetail(null);
     }
     if (!agentItems.some(agent => agent.id === assignee)) setAssignee(agentItems[0]?.id ?? "");
+    if (!agentItems.some(agent => agent.id === handoverAgentId)) setHandoverAgentId(agentItems[0]?.id ?? "");
   }
 
   useEffect(() => {
@@ -106,6 +113,10 @@ function WorkspaceApp() {
 
   useEffect(() => {
     if (selected) {
+      setQoinVector(null);
+      setHandover(null);
+      setProgressiveContext(null);
+      setQoinNotice("");
       setSelectedArtifactIds([]);
       setResponseDrafts({});
       refreshWorkspace(selected).catch(cause => setError(cause instanceof Error ? cause.message : "Could not load workspace"));
@@ -193,6 +204,106 @@ function WorkspaceApp() {
     void perform(async () => {
       await request<ProjectMemoryEntry>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}/memory/${entry.id}/approve`, { method: "POST" });
       setChatDetail(await request<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`));
+    });
+  }
+
+
+  async function loadQoinVector() {
+    if (!selected || !qoinSymbol.trim()) return;
+    setQoinNotice("");
+    await perform(async () => {
+      const snapshot = await request<QoinVectorSnapshot>(
+        `/api/v1/workspaces/${selected.id}/memory/qoin-vector?symbol=${encodeURIComponent(qoinSymbol.trim())}`
+      );
+      setQoinVector(snapshot);
+      setQoinNotice(`Loaded ${snapshot.symbol} · ${snapshot.vector.model_version}`);
+      setHandover(null);
+      setProgressiveContext(null);
+    });
+  }
+
+  async function indexChatMessageWithQoin(message: ChatMessage) {
+    if (!selected || !activeChat || !qoinSymbol.trim()) return;
+    await perform(async () => {
+      const receipt = await request<QoinChatMessageIndexReceipt>(
+        `/api/v1/workspaces/${selected.id}/chats/${activeChat}/messages/${message.id}/qoin-index`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            symbol: qoinSymbol.trim(),
+            tags: [message.role, "source:chat_message", `symbol:${qoinSymbol.trim().toUpperCase()}`],
+            dependency_ids: [],
+            evidence_score: 0.5
+          })
+        }
+      );
+      setQoinNotice(`Indexed chat message ${receipt.message_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()}; available after the next hourly epoch.`);
+    });
+  }
+
+  async function indexMemoryWithQoin(entry: ProjectMemoryEntry) {
+    if (!selected || !activeChat || !qoinSymbol.trim()) return;
+    await perform(async () => {
+      const receipt = await request<QoinMemoryIndexReceipt>(
+        `/api/v1/workspaces/${selected.id}/chats/${activeChat}/memory-index/${entry.id}/qoin`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            symbol: qoinSymbol.trim(),
+            visibility: "workspace_shared",
+            tags: [entry.type, `symbol:${qoinSymbol.trim().toUpperCase()}`],
+            dependency_ids: [],
+            outcome_score: 0.5,
+            evidence_score: 0.5
+          })
+        }
+      );
+      setQoinNotice(`Indexed ${receipt.memory_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()}; available after the next hourly epoch.`);
+    });
+  }
+
+  async function prepareAgentHandover() {
+    if (!selected || !handoverAgentId || !qoinVector) return;
+    await perform(async () => {
+      const result = await request<HandoverContext>(
+        `/api/v1/workspaces/${selected.id}/agents/${handoverAgentId}/memory-context`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            workspace_id: selected.id,
+            agent_id: handoverAgentId,
+            task_id: null,
+            project_id: null,
+            query: qoinVector.vector,
+            heads: 2,
+            tags: [`symbol:${qoinVector.symbol}`],
+            dependency_ids: [],
+            pareto: { initial_share: 0.2, target_contribution_coverage: 0.8 }
+          })
+        }
+      );
+      setHandover(result);
+      setProgressiveContext(null);
+    });
+  }
+
+  async function retrieveMoreContext() {
+    if (!selected || !handoverAgentId || !handover || !qoinVector) return;
+    await perform(async () => {
+      const result = await request<ProgressiveMemoryContext>(
+        `/api/v1/workspaces/${selected.id}/agents/${handoverAgentId}/memory-sessions/${handover.session_id}/retrieve`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            query: qoinVector.vector,
+            heads: 2,
+            tags: [`symbol:${qoinVector.symbol}`],
+            dependency_ids: [],
+            limit: 10
+          })
+        }
+      );
+      setProgressiveContext(result);
     });
   }
 
@@ -334,7 +445,7 @@ function WorkspaceApp() {
                 <Text style={styles.fieldLabel}>RESUME BRIEF · APPROVED MEMORY ONLY</Text>\n                <ActionButton label="Archive chat" onPress={archiveChat} disabled={busy} secondary />
                 <Text style={styles.rowMeta}>{chatDetail.resume_brief || "No context yet. Add messages and approve useful memory."}</Text>
                 <View style={styles.listRow}>
-                  {chatDetail.messages.map(message => <View key={message.id} style={styles.contextChoice}><Text style={styles.rowTitle}>{message.role}{message.answered_by ? ` · ${message.answered_by}` : ""}</Text><Text style={styles.rowMeta}>{message.content}</Text></View>)}
+                  {chatDetail.messages.map(message => <View key={message.id} style={styles.contextChoice}><Text style={styles.rowTitle}>{message.role}{message.answered_by ? ` · ${message.answered_by}` : ""}</Text><Text style={styles.rowMeta}>{message.content}</Text><ActionButton label="Index with Qoin" onPress={() => indexChatMessageWithQoin(message)} disabled={busy} secondary /></View>)}
                 </View>
                 <TextInput value={messageDraft} onChangeText={setMessageDraft} placeholder="Write a message…" style={[styles.input, styles.multiline]} multiline />
                 <ActionButton label="Send message" onPress={sendChatMessage} disabled={!messageDraft.trim() || busy} />
@@ -344,8 +455,33 @@ function WorkspaceApp() {
                   {(["decision","fact","constraint","open_task","note"] as const).map(kind => <Pressable key={kind} onPress={() => setMemoryType(kind)} style={[styles.contextChoice, memoryType === kind && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{kind.replaceAll("_"," ")}</Text></Pressable>)}
                 </View>
                 <ActionButton label="Propose memory" onPress={proposeMemory} disabled={!memoryDraft.trim() || busy} />
-                {chatDetail.memory.map(entry => <View key={entry.id} style={styles.listRow}><Text style={styles.rowTitle}>{entry.type.replaceAll("_"," ")} · {entry.status}</Text>{editingMemoryId === entry.id ? <><TextInput value={editMemoryDraft} onChangeText={setEditMemoryDraft} style={styles.input} maxLength={4000} /><ActionButton label="Save edit" onPress={() => saveMemoryEdit(entry)} disabled={busy || !editMemoryDraft.trim()} /><ActionButton label="Cancel" onPress={() => setEditingMemoryId("")} secondary /></> : <Text style={styles.rowMeta}>{entry.text}</Text>}{entry.status === "proposed" ? <><ActionButton label="Approve memory" onPress={() => approveMemory(entry)} disabled={busy} secondary /><ActionButton label="Reject memory" onPress={() => changeMemory(entry, "reject")} disabled={busy} secondary /></> : null}<ActionButton label="Edit memory" onPress={() => { setEditingMemoryId(entry.id); setEditMemoryDraft(entry.text); }} disabled={busy} secondary /><ActionButton label="Delete memory" onPress={() => changeMemory(entry, "delete")} disabled={busy} secondary /></View>)}
+                {chatDetail.memory.map(entry => <View key={entry.id} style={styles.listRow}><Text style={styles.rowTitle}>{entry.type.replaceAll("_"," ")} · {entry.status}</Text>{editingMemoryId === entry.id ? <><TextInput value={editMemoryDraft} onChangeText={setEditMemoryDraft} style={styles.input} maxLength={4000} /><ActionButton label="Save edit" onPress={() => saveMemoryEdit(entry)} disabled={busy || !editMemoryDraft.trim()} /><ActionButton label="Cancel" onPress={() => setEditingMemoryId("")} secondary /></> : <Text style={styles.rowMeta}>{entry.text}</Text>}{entry.status === "proposed" ? <><ActionButton label="Approve memory" onPress={() => approveMemory(entry)} disabled={busy} secondary /><ActionButton label="Reject memory" onPress={() => changeMemory(entry, "reject")} disabled={busy} secondary /></> : null}<ActionButton label="Edit memory" onPress={() => { setEditingMemoryId(entry.id); setEditMemoryDraft(entry.text); }} disabled={busy} secondary /><ActionButton label="Index with Qoin" onPress={() => indexMemoryWithQoin(entry)} disabled={busy || entry.status !== "approved"} secondary /><ActionButton label="Delete memory" onPress={() => changeMemory(entry, "delete")} disabled={busy} secondary /></View>)}
               </> : <Text style={styles.muted}>Choose a chat to see its messages and resume brief. Only approved memory informs future briefs.</Text>}
+            </View>
+
+
+            <View style={styles.panel}>
+              <Text style={styles.panelTitle}>05 · Qoin × Axon · Market-aware memory</Text>
+              <Text style={styles.muted}>Qoin supplies its six-dimensional attended market-state vector. Axon uses it to rank historical memories; this is a market-state vector, not a text embedding.</Text>
+              <TextInput value={qoinSymbol} onChangeText={value => { setQoinSymbol(value.toUpperCase()); setQoinVector(null); setHandover(null); setProgressiveContext(null); }} placeholder="Market symbol (BTCUSDT)" autoCapitalize="characters" style={styles.input} />
+              <ActionButton label="Load latest Qoin vector" onPress={loadQoinVector} disabled={busy || !qoinSymbol.trim()} />
+              {qoinNotice ? <Text style={styles.responseNote}>{qoinNotice}</Text> : null}
+              {qoinVector ? <>
+                <Text style={styles.rowTitle}>{qoinVector.symbol} · {qoinVector.vector.model_version} · {qoinVector.action.toUpperCase()}</Text>
+                {Object.entries(qoinVector.features).map(([name, value]) => <Text key={name} style={styles.rowMeta}>{name.replaceAll("_", " ")}: {value.toFixed(3)}</Text>)}
+                <Text style={styles.rowMeta}>{qoinVector.reason}</Text>
+              </> : <Text style={styles.muted}>Load a current Qoin vector to index approved memories and prepare agent context.</Text>}
+              <Text style={styles.fieldLabel}>RECEIVING AGENT</Text>
+              {agents.map(agent => <Pressable key={agent.id} onPress={() => { setHandoverAgentId(agent.id); setHandover(null); setProgressiveContext(null); }} style={[styles.agentChoice, handoverAgentId === agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text></Pressable>)}
+              <ActionButton label="Prepare first 20% context" onPress={prepareAgentHandover} disabled={busy || !qoinVector || !handoverAgentId || agents.length === 0} />
+              {handover ? <>
+                <Text style={styles.fieldLabel}>PINNED EPOCH {handover.epoch.epoch_number} · {handover.initial.length} INITIAL MEMORIES</Text>
+                <Text style={styles.rowTitle}>{(handover.achieved_coverage * 100).toFixed(1)}% measured contribution coverage</Text>
+                <Text style={styles.rowMeta}>{handover.deferred_count} memories deferred{handover.budget_exhausted ? " · 20% budget reached before 80% target" : ""}</Text>
+                {handover.initial.map(item => <View key={item.memory_id} style={styles.listRow}><Text style={styles.rowTitle}>{item.source_kind} · {(item.attention_score * 100).toFixed(1)}% attention</Text><Text style={styles.rowMeta}>{item.payload_json}</Text></View>)}
+                <ActionButton label="Retrieve next 10 historical memories" onPress={retrieveMoreContext} disabled={busy || handover.deferred_count === 0} secondary />
+                {progressiveContext ? <><Text style={styles.fieldLabel}>ADDITIONAL CONTEXT · {progressiveContext.memories.length} ADDED · {progressiveContext.remaining_candidates} LEFT</Text>{progressiveContext.memories.map(item => <View key={item.memory_id} style={styles.listRow}><Text style={styles.rowTitle}>{item.source_kind} · {(item.attention_score * 100).toFixed(1)}% attention</Text><Text style={styles.rowMeta}>{item.payload_json}</Text></View>)}</> : null}
+              </> : null}
             </View>
 
             <View style={styles.panel}>

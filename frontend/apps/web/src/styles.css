@@ -213,3 +213,33 @@ body {
   .chat-compose, .memory-compose { flex-wrap: wrap; }
   .chat-compose textarea, .memory-compose input { flex-basis: 100%; }
 }
+
+
+.qoin-memory-panel { margin: 16px 0; }
+.qoin-bridge-controls, .handover-controls { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(200px, 1fr); gap: 12px; align-items: end; margin-top: 14px; }
+.qoin-bridge-controls label, .handover-controls label { display: flex; flex-direction: column; gap: 7px; color: var(--axon-color-text-muted); font-size: 11px; font-weight: 700; }
+.qoin-bridge-controls input, .handover-controls select { min-width: 0; border: 1px solid var(--axon-color-border); border-radius: 9px; padding: 10px 11px; background: var(--axon-color-surface-input); color: var(--axon-color-text); font: 12px "DM Sans", sans-serif; }
+.qoin-bridge-controls button, .handover-controls button, .handover-result > button { border: 0; border-radius: 9px; padding: 11px 14px; background: var(--axon-color-accent); color: var(--axon-color-accent-text); font-size: 11px; font-weight: 800; cursor: pointer; }
+.qoin-bridge-controls button:disabled, .handover-controls button:disabled, .handover-result > button:disabled { opacity: .45; cursor: not-allowed; }
+.qoin-snapshot, .handover-result { margin-top: 16px; padding: 14px; border: 1px solid var(--axon-color-border); border-radius: 12px; background: var(--axon-color-surface-raised); }
+.qoin-snapshot-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; color: var(--axon-color-text); font-size: 11px; }
+.qoin-snapshot-head span { color: var(--axon-color-text-muted); font-size: 10px; }
+.qoin-features { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.qoin-features span { padding: 6px 8px; border-radius: 7px; background: var(--axon-color-surface); color: var(--axon-color-text-muted); font-size: 9px; text-transform: capitalize; }
+.qoin-features strong { color: var(--axon-color-text); margin-left: 4px; font-family: "DM Mono", monospace; }
+.qoin-snapshot p { color: var(--axon-color-text-muted); font-size: 10px; margin: 10px 0 0; }
+.handover-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.handover-controls button { grid-column: 1 / -1; justify-self: start; }
+.qoin-coverage { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; margin: 10px 0 14px; color: var(--axon-color-text-muted); font-size: 10px; }
+.qoin-coverage strong { color: var(--axon-color-accent); font: 800 20px Manrope; }
+.qoin-coverage small { flex-basis: 100%; color: #d5a75a; }
+.handover-memory { padding: 9px 0; border-top: 1px solid var(--axon-color-border); }
+.handover-memory summary { display: flex; justify-content: space-between; gap: 10px; color: var(--axon-color-text); cursor: pointer; font-size: 10px; }
+.handover-memory summary span { color: var(--axon-color-text-muted); }
+.handover-memory code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; margin-top: 8px; color: var(--axon-color-text-muted); font: 10px/1.5 "DM Mono", monospace; }
+.progressive-result { margin-top: 14px; color: var(--axon-color-text); font-size: 10px; }
+@media (max-width: 560px) { .qoin-bridge-controls, .handover-controls { grid-template-columns: 1fr; }.handover-controls button { grid-column: auto; width: 100%; } }
+
+.qoin-notice { color: var(--axon-color-accent); font-size: 10px; margin: 10px 0 0; }
+
+.qoin-message-index { margin-top: 8px; }
