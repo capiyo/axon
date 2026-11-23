@@ -1,6 +1,6 @@
 use crate::{
     auth_middleware::AuthenticatedUser,
-    memory_architecture::{HandoverContext, HandoverRequest, IndexMemoryInput, MemoryEpoch},
+    memory_architecture::{HandoverContext, HandoverRequest, IndexMemoryInput, MemoryEpoch, ProgressiveRetrieval, ProgressiveRetrievalRequest},
     AppState,
 };
 use axum::{extract::{Extension, Path, State}, http::StatusCode, Json};
@@ -54,7 +54,7 @@ pub async fn prepare_handover(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, agent_id)): Path<(Uuid, Uuid)>,
-    Json(mut input): Json<HandoverRequest>,
+    Json(input): Json<HandoverRequest>,
 ) -> ApiResult<Json<HandoverContext>> {
     require_member(&state, user.user_id, workspace_id).await?;
     if input.workspace_id != workspace_id || input.agent_id != agent_id {
@@ -71,7 +71,6 @@ pub async fn prepare_handover(
             return Err(error(StatusCode::FORBIDDEN, "Task is not assigned to this agent in this workspace."));
         }
     }
-    input.workspace_id = workspace_id;
     let context = coordinator(&state)?.prepare_handover(input).await
         .map_err(|_| error(StatusCode::UNPROCESSABLE_ENTITY, "Could not construct a verified memory handover. Check the published epoch, Qoin model version, and vector dimensions."))?;
     Ok(Json(context))
@@ -86,4 +85,21 @@ pub async fn latest_epoch(
     let epoch = coordinator(&state)?.latest_epoch(workspace_id).await
         .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load memory epoch."))?;
     Ok(Json(epoch))
+}
+
+pub async fn progressive_retrieval(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, agent_id, session_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(input): Json<ProgressiveRetrievalRequest>,
+) -> ApiResult<Json<ProgressiveRetrieval>> {
+    require_member(&state, user.user_id, workspace_id).await?;
+    let agents = state.agents.read().await;
+    if !agents.get(&agent_id).is_some_and(|agent| agent.workspace_id == workspace_id) {
+        return Err(error(StatusCode::NOT_FOUND, "Agent not found in this workspace."));
+    }
+    drop(agents);
+    let result = coordinator(&state)?.retrieve_progressive(workspace_id, agent_id, session_id, input).await
+        .map_err(|_| error(StatusCode::UNPROCESSABLE_ENTITY, "Could not retrieve additional context from this agent's pinned memory epoch."))?;
+    Ok(Json(result))
 }
