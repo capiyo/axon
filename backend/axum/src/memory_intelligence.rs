@@ -268,7 +268,7 @@ mod tests {
         MemoryVector { semantic, context: 0.9, outcome: 0.8, failure: 0.9, evidence: 0.95 }
     }
     fn query(workspace_id: Uuid, semantic: Vec<f32>) -> MemoryQuery {
-        MemoryQuery { workspace_id, requester_agent_id: None, semantic, context: 0.9, outcome: 0.8,
+        MemoryQuery { workspace_id, requester_agent_id: None, task_id: None, project_id: None, semantic, context: 0.9, outcome: 0.8,
             failure: 0.9, evidence: 0.9, now_unix: 2_000_000, tags: BTreeSet::new(),
             dependency_ids: BTreeSet::new(), outcome_labels: BTreeSet::new(), limit: 10 }
     }
