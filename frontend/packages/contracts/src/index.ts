@@ -177,6 +177,23 @@ export type AxonAuditEvent = {
 };
 
 
+export type Notification = {
+  id: string;
+  workspace_id: string | null;
+  event_type: string;
+  entity_type: string;
+  entity_id: string;
+  title: string;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+};
+
+export type NotificationPage = {
+  items: Notification[];
+  unread_count: number;
+};
+
 export type ExploreAgent = {
   id: string;
   agent_id: string;
