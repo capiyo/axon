@@ -59,6 +59,8 @@ function WorkspaceApp() {
   const [handover, setHandover] = useState<HandoverContext | null>(null);
   const [progressiveContext, setProgressiveContext] = useState<ProgressiveMemoryContext | null>(null);
   const [qoinNotice, setQoinNotice] = useState("");
+  const [activeTab, setActiveTab] = useState<"chats" | "explore">("chats");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   async function refreshWorkspaces() {
     const [items, status] = await Promise.all([
@@ -66,6 +68,7 @@ function WorkspaceApp() {
       api<Health>("/health")
     ]);
     setWorkspaces(items);
+    setSelected(current => current ?? items[0] ?? null);
     setHealth(status);
     setError("");
   }
@@ -81,10 +84,7 @@ function WorkspaceApp() {
     setTasks(taskItems);
     const chatItems = await api<Chat[]>(`/api/v1/workspaces/${workspace.id}/chats`);
     setChats(chatItems);
-    if (activeChat && !chatItems.some(chat => chat.id === activeChat)) {
-      setActiveChat("");
-      setChatDetail(null);
-    }
+    setActiveChat(current => current && chatItems.some(chat => chat.id === current) ? current : chatItems[0]?.id ?? "");
     setAssignee(current => agentItems.some(agent => agent.id === current) ? current : agentItems[0]?.id ?? "");
     setHandoverAgentId(current => agentItems.some(agent => agent.id === current) ? current : agentItems[0]?.id ?? "");
   }
@@ -441,210 +441,86 @@ function WorkspaceApp() {
     accepted: "completed"
   };
 
+  const currentUser = auth?.currentUser;
+  const profileName = currentUser?.displayName || currentUser?.email?.split("@")[0] || "Your profile";
+  const avatarLetter = profileName.slice(0, 1).toUpperCase();
+
   return (
-    <main className="shell">
-      <aside className="rail">
-        <div className="brand-mark">A</div>
-        <span className="rail-label">WORKSPACES</span>
-        <div className="rail-dot active" aria-label="Workspace area" />
-        <div className="rail-bottom">0.1</div>
-      </aside>
-      <section className="content">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">THE AGENT COLLABORATION LAYER</p>
-            <h1>Work, connected.</h1>
+    <main className="axon-app">
+      <header className="axon-app-header">
+        <div className="axon-brand"><span className="axon-brand-mark">A</span><span>AXON</span></div>
+        <div className="axon-header-actions">
+          <span className={health?.status === "ok" ? "axon-connection online" : "axon-connection"}><i />{health?.status === "ok" ? "Connected" : "Offline"}</span>
+          <button type="button" className="axon-icon-button" aria-label="Open app menu" onClick={() => setMenuOpen(value => !value)}>☰</button>
+          <button type="button" className="axon-profile-button" aria-label="Profile menu" onClick={() => setMenuOpen(value => !value)}>{currentUser?.photoURL ? <img src={currentUser.photoURL} alt="" /> : avatarLetter}</button>
+        </div>
+        {menuOpen && <div className="axon-menu">
+          <strong>{profileName}</strong><small>{currentUser?.email ?? "Personal workspace"}</small>
+          <button type="button" onClick={() => { setActiveTab("explore"); setMenuOpen(false); }}>Explore workspace</button>
+          <button type="button" onClick={() => { setSelected(null); setMenuOpen(false); }}>Switch workspace</button>
+          <button type="button" onClick={() => { if (auth) void import("firebase/auth").then(({signOut}) => signOut(auth)); setMenuOpen(false); }}>Sign out</button>
+        </div>}
+      </header>
+
+      <nav className="axon-mobile-tabs" aria-label="Main navigation">
+        <button type="button" className={activeTab === "chats" ? "active" : ""} onClick={() => setActiveTab("chats")}><span>◉</span>Chats</button>
+        <button type="button" className={activeTab === "explore" ? "active" : ""} onClick={() => setActiveTab("explore")}><span>⌕</span>Explore</button>
+      </nav>
+
+      <section className="axon-desktop-layout">
+        <aside className="axon-profile-pane">
+          <div className="axon-profile-card">
+            <div className="axon-avatar">{currentUser?.photoURL ? <img src={currentUser.photoURL} alt="" /> : avatarLetter}</div>
+            <strong>{profileName}</strong><small>{currentUser?.email ?? "Axon member"}</small>
+            <span className="axon-presence"><i /> Available</span>
           </div>
-          <div className="status">
-            <span className={health?.status === "ok" ? "pulse online" : "pulse"} />
-            {health?.status === "ok" ? "API connected" : "API unavailable"}
+          <div className="axon-pane-section"><span className="axon-section-label">WORKSPACE</span>
+            {selected ? <button type="button" className="axon-workspace-choice active" onClick={() => setActiveTab("explore")}><span className="axon-workspace-glyph">{selected.name.slice(0,1).toUpperCase()}</span><span><strong>{selected.name}</strong><small>Personal workspace</small></span></button> : <p className="muted">Choose a workspace in Explore.</p>}
           </div>
-        </header>
+          <div className="axon-profile-footer"><span className={health?.status === "ok" ? "axon-health-dot online" : "axon-health-dot"} />{health?.status === "ok" ? "Axon is connected" : "Connecting to Axon"}</div>
+        </aside>
 
-        {!selected ? (
-          <>
-            <section className="intro">
-              <div>
-                <span className="kicker">YOUR SHARED WORKSPACE</span>
-                <h2>Give every agent the context it needs.</h2>
-                <p>Capture work once. Hand it off with its evidence, decisions and history intact.</p>
-              </div>
-              <div className="orbit" aria-hidden="true">
-                <span className="orbit-core">A</span>
-                <span className="orbit-node node-a">A</span>
-                <span className="orbit-node node-b">B</span>
-                <span className="orbit-node node-c">↗</span>
-              </div>
-            </section>
-            <section className="section-heading">
-              <div><span className="kicker">START HERE</span><h2>Projects and workspaces</h2></div>
-              <span className="count">{workspaces.length.toString().padStart(2, "0")} WORKSPACES</span>
-            </section>
-            <form className="create-card" onSubmit={createWorkspace}>
-              <div className="create-icon">＋</div>
-              <div className="create-copy">
-                <label htmlFor="workspace-name">Create a workspace</label>
-                <span>Start with a project, a problem, or a team of agents.</span>
-              </div>
-              <input id="workspace-name" value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Funspot engineering" maxLength={120} required />
-              <button disabled={!name.trim() || busy}>{busy ? "Creating…" : "Create workspace"}</button>
-            </form>
-            <div className="workspace-grid">
-              {workspaces.map(workspace => (
-                <button className="workspace-card workspace-button" key={workspace.id} onClick={() => setSelected(workspace)}>
-                  <div className="card-top"><span className="project-glyph">{workspace.name.slice(0, 1).toUpperCase()}</span><span className="arrow">↗</span></div>
-                  <h3>{workspace.name}</h3>
-                  <p>Created {new Date(workspace.created_at).toLocaleDateString()}</p>
-                  <div className="card-foot"><span>OPEN WORKSPACE</span><span className="quiet-dot" /></div>
-                </button>
-              ))}
-              {workspaces.length === 0 && !error && (
-                <div className="empty-state">
-                  <div className="empty-symbol">◎</div>
-                  <h3>Your first workspace starts here.</h3>
-                  <p>Create a space for Funspot, Qoin, or any problem where multiple agents need to work together.</p>
-                </div>
-              )}
+        <aside className={"axon-chats-pane" + (activeTab === "explore" ? " mobile-hidden" : "")}>
+          <div className="axon-pane-heading"><div><span className="axon-section-label">YOUR CONVERSATIONS</span><strong>Chats</strong></div><span className="axon-chat-count">{chats.length}</span></div>
+          <form className="axon-new-chat" onSubmit={createChat}><input aria-label="New chat title" value={chatTitle} onChange={event => setChatTitle(event.target.value)} placeholder="Start a new chat…" maxLength={160} required /><button disabled={!chatTitle.trim() || busy} aria-label="Create chat">＋</button></form>
+          <div className="axon-chat-list">
+            {chats.map(chat => <button type="button" key={chat.id} className={activeChat === chat.id ? "axon-chat-item active" : "axon-chat-item"} onClick={() => { setActiveChat(chat.id); setActiveTab("chats"); }}>
+              <span className="axon-chat-avatar">{chat.title.slice(0,1).toUpperCase()}</span><span className="axon-chat-copy"><strong>{chat.title}</strong><small>{new Date(chat.updated_at).toLocaleDateString()}</small></span><span className="axon-chat-chevron">›</span>
+            </button>)}
+            {chats.length === 0 && <div className="axon-empty-list"><span>◌</span><strong>No conversations yet</strong><small>Create a chat to begin working with your agents.</small></div>}
+          </div>
+        </aside>
+
+        <section className={"axon-conversation-pane" + (activeTab === "explore" ? " mobile-hidden" : "")}>
+          {!selected ? <div className="axon-empty-conversation"><span>✳</span><strong>Your workspace is ready when you are.</strong><p>Create or select a workspace from Explore to start a conversation.</p><button type="button" onClick={() => setActiveTab("explore")}>Explore workspaces</button></div> : !chatDetail ? <div className="axon-empty-conversation"><span>✳</span><strong>Start a conversation</strong><p>Select a chat or create a new one. Your most recent conversation will open here.</p></div> : <>
+            <div className="axon-conversation-header"><div className="axon-conversation-avatar">{chatDetail.chat.title.slice(0,1).toUpperCase()}</div><div><strong>{chatDetail.chat.title}</strong><small>{selected.name} · private workspace chat</small></div><button type="button" className="axon-more-button" onClick={() => void archiveChat()} disabled={busy} title="Archive conversation">•••</button></div>
+            <div className="axon-resume-brief"><span>CONTEXT BRIEF</span><p>{chatDetail.resume_brief || "Useful context approved in this conversation will appear here for future handovers."}</p></div>
+            <div className="axon-message-stream">
+              {chatDetail.messages.map(message => <article key={message.id} className={"axon-message-row " + (message.role === "user" ? "mine" : "theirs")}>
+                <div className="axon-message-avatar">{message.role === "user" ? avatarLetter : (message.answered_by || message.role).slice(0,1).toUpperCase()}</div>
+                <div className="axon-message-content"><div className="axon-message-meta"><strong>{message.role === "user" ? "You" : message.answered_by || message.role}</strong>{message.answered_by && message.role !== "user" ? <span>Agent response</span> : null}</div><div className="axon-message-bubble"><p>{message.content}</p></div><button type="button" className="axon-message-action" disabled={busy} onClick={() => void indexChatMessageWithQoin(message)}>Index with Qoin</button></div>
+              </article>)}
+              {chatDetail.messages.length === 0 && <div className="axon-empty-stream"><span>✧</span><strong>This conversation is new</strong><p>Send a message to start the working history.</p></div>}
             </div>
-          </>
-        ) : (
-          <>
-            <div className="workspace-header">
-              <button className="back-link" onClick={() => setSelected(null)}>← All workspaces</button>
-              <span className="count">PROJECT WORKSPACE</span>
-              <h2>{selected.name}</h2>
-              <p>Register agents, capture their work, and create explicit handoffs.</p>
-            </div>
-            <section className="panel chat-panel">
-              <div className="panel-heading"><div><span className="kicker">04 · PROJECT CONVERSATIONS</span><h3>Chats & memory</h3></div><span className="count">{chats.length} CHATS</span></div>
-              <div className="chat-layout">
-                <aside className="chat-sidebar">
-                  <form className="stack-form" onSubmit={createChat}>
-                    <label htmlFor="chat-title">New chat</label>
-                    <input id="chat-title" value={chatTitle} onChange={event => setChatTitle(event.target.value)} placeholder="What are we working on?" maxLength={160} required />
-                    <button disabled={!chatTitle.trim() || busy}>Create chat</button>
-                  </form>
-                  <div className="chat-list">
-                    {chats.map(chat => <button type="button" className={activeChat === chat.id ? "chat-list-item active" : "chat-list-item"} key={chat.id} onClick={() => setActiveChat(chat.id)}><strong>{chat.title}</strong><small>{new Date(chat.updated_at).toLocaleString()}</small></button>)}
-                    {chats.length === 0 && <p className="muted">Chats created in this workspace will appear here.</p>}
-                  </div>
-                </aside>
-                <div className="chat-main">
-                  {!chatDetail ? <div className="empty-state compact"><h3>Select a chat or create one.</h3><p>Each conversation keeps its own messages, approved memory and resume brief.</p></div> : <>
-                    <div className="resume-brief"><div className="panel-heading"><span className="kicker">RESUME BRIEF · APPROVED MEMORY ONLY</span><button type="button" className="secondary" disabled={busy} onClick={() => void archiveChat()}>Archive chat</button></div><p>{chatDetail.resume_brief || "No context yet. Add messages and approve useful memory to build a concise handoff."}</p></div>
-                    <div className="chat-messages">{chatDetail.messages.map(message => <article className={`chat-message message-${message.role}`} key={message.id}><div><strong>{message.role}</strong>{message.answered_by && <small> · {message.answered_by}</small>}</div><p>{message.content}</p><button type="button" className="secondary qoin-message-index" disabled={busy} onClick={() => void indexChatMessageWithQoin(message)}>Index with Qoin</button></article>)}{chatDetail.messages.length === 0 && <p className="muted">No messages yet.</p>}</div>
-                    <form className="chat-compose" onSubmit={sendChatMessage}><textarea value={messageDraft} onChange={event => setMessageDraft(event.target.value)} rows={3} maxLength={256000} placeholder="Write a message to this project chat…" required /><button disabled={!messageDraft.trim() || busy}>Send message</button></form>
-                    <div className="memory-section">
-                      <div className="panel-heading"><div><span className="kicker">PROJECT MEMORY</span><h3>Review proposed knowledge</h3></div></div>
-                      <form className="memory-compose" onSubmit={proposeMemory}><select value={memoryType} onChange={event => setMemoryType(event.target.value as ProjectMemoryEntry["type"])}><option value="decision">Decision</option><option value="fact">Fact</option><option value="constraint">Constraint</option><option value="open_task">Open task</option><option value="note">Note</option></select><input value={memoryDraft} onChange={event => setMemoryDraft(event.target.value)} placeholder="Capture a decision, fact, constraint or open task…" maxLength={4000} required /><button disabled={!memoryDraft.trim() || busy}>Propose memory</button></form>
-                      {chatDetail.memory.map(entry => <article className="memory-item" key={entry.id}><div><strong>{entry.type.replaceAll("_", " ")}</strong><small> · {entry.status}</small></div>{editingMemoryId === entry.id ? <div className="memory-compose"><input value={editMemoryDraft} onChange={event => setEditMemoryDraft(event.target.value)} maxLength={4000} /><button type="button" disabled={busy || !editMemoryDraft.trim()} onClick={() => void saveMemoryEdit(entry)}>Save</button><button type="button" className="secondary" onClick={() => setEditingMemoryId("")}>Cancel</button></div> : <p>{entry.text}</p>}<div className="memory-actions">{entry.status === "proposed" && <><button type="button" disabled={busy} onClick={() => void reviewMemory(entry, "approve")}>Approve</button><button type="button" className="secondary" disabled={busy} onClick={() => void reviewMemory(entry, "reject")}>Reject</button></>}<button type="button" className="secondary" disabled={busy} onClick={() => { setEditingMemoryId(entry.id); setEditMemoryDraft(entry.text); }}>Edit</button><button type="button" className="secondary" disabled={busy || entry.status !== "approved"} onClick={() => void indexMemoryWithQoin(entry)}>Index with Qoin</button><button type="button" className="secondary" disabled={busy} onClick={() => void reviewMemory(entry, "delete")}>Delete</button></div></article>)}
-                      {chatDetail.memory.length === 0 && <p className="muted">No project memory proposed yet. Only approved entries shape future resume briefs.</p>}
-                    </div>
-                  </>}
-                </div>
-              </div>
-            </section>
+            <form className="axon-composer" onSubmit={sendChatMessage}><textarea value={messageDraft} onChange={event => setMessageDraft(event.target.value)} rows={2} maxLength={256000} placeholder="Message your workspace…" required /><div className="axon-composer-footer"><span>Messages become part of this workspace's history.</span><button disabled={!messageDraft.trim() || busy}>{busy ? "Sending…" : "Send"} <span>↗</span></button></div></form>
+            <details className="axon-memory-drawer"><summary>Project memory <span>{chatDetail.memory.length} entries</span></summary>
+              <form className="axon-memory-form" onSubmit={proposeMemory}><select value={memoryType} onChange={event => setMemoryType(event.target.value as ProjectMemoryEntry["type"])}><option value="note">Note</option><option value="decision">Decision</option><option value="fact">Fact</option><option value="constraint">Constraint</option><option value="open_task">Open task</option></select><input value={memoryDraft} onChange={event => setMemoryDraft(event.target.value)} placeholder="Propose a useful memory…" maxLength={4000} required /><button disabled={!memoryDraft.trim() || busy}>Add</button></form>
+              {chatDetail.memory.map(entry => <div className="axon-memory-entry" key={entry.id}><div><strong>{entry.type.replaceAll("_"," ")}</strong><small>{entry.status}</small></div><p>{entry.text}</p>{entry.status === "proposed" && <div className="axon-memory-actions"><button type="button" onClick={() => void reviewMemory(entry,"approve")} disabled={busy}>Approve</button><button type="button" onClick={() => void reviewMemory(entry,"reject")} disabled={busy}>Reject</button></div>}</div>)}
+            </details>
+          </>}
+        </section>
 
-            <section className="panel qoin-memory-panel">
-              <div className="panel-heading">
-                <div><span className="kicker">05 · QOIN × AXON</span><h3>Market-aware historical memory</h3></div>
-                <span className="count">QKV + QOIN VECTOR</span>
-              </div>
-              <p className="muted">Qoin supplies its six-dimensional attended market-state vector. Axon uses it as the query/key context for historical decisions; it is a market-state vector, not a text embedding.</p>
-              <div className="qoin-bridge-controls">
-                <label>Market symbol<input value={qoinSymbol} onChange={event => { setQoinSymbol(event.target.value.toUpperCase()); setQoinVector(null); setHandover(null); setProgressiveContext(null); }} maxLength={32} placeholder="BTCUSDT" /></label>
-                <button type="button" disabled={busy || !qoinSymbol.trim()} onClick={() => void loadQoinVector()}>{busy ? "Loading…" : "Load latest Qoin vector"}</button>
-              </div>
-              {qoinNotice && <p className="qoin-notice" role="status">{qoinNotice}</p>}
-              {qoinVector && <div className="qoin-snapshot">
-                <div className="qoin-snapshot-head"><strong>{qoinVector.symbol}</strong><span>Model {qoinVector.vector.model_version}</span><span>Signal {qoinVector.action.toUpperCase()}</span></div>
-                <div className="qoin-features">{Object.entries(qoinVector.features).map(([name, value]) => <span key={name}>{name.replaceAll("_", " ")} <strong>{value.toFixed(3)}</strong></span>)}</div>
-                <p>{qoinVector.reason}</p>
-              </div>}
-              <div className="handover-controls">
-                <label>Receiving agent<select value={handoverAgentId} onChange={event => { setHandoverAgentId(event.target.value); setHandover(null); setProgressiveContext(null); }}><option value="">Choose an agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.display_name} · {agent.provider}</option>)}</select></label>
-                <label>Optional task scope<select value={handoverTaskId} onChange={event => setHandoverTaskId(event.target.value)}><option value="">Workspace-wide context</option>{tasks.filter(task => task.assignee_agent_id === handoverAgentId).map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
-                <button type="button" disabled={busy || !qoinVector || !handoverAgentId} onClick={() => void prepareAgentHandover()}>Prepare agent's first 20% context</button>
-              </div>
-              {handover && <div className="handover-result">
-                <div className="panel-heading"><div><span className="kicker">PINNED MEMORY EPOCH {handover.epoch.epoch_number}</span><h4>Initial context loaded</h4></div><span className="count">{handover.initial.length} MEMORIES</span></div>
-                <div className="qoin-coverage"><strong>{(handover.achieved_coverage * 100).toFixed(1)}%</strong><span>measured contribution coverage · {handover.deferred_count} deferred</span>{handover.budget_exhausted && <small>20% context budget reached before the 80% target.</small>}</div>
-                {handover.initial.map(item => <details className="handover-memory" key={item.memory_id}><summary><strong>{item.source_kind}</strong><span>Attention {(item.attention_score * 100).toFixed(1)}%</span></summary><code>{item.payload_json}</code></details>)}
-                <button type="button" className="secondary" disabled={busy || handover.deferred_count === 0} onClick={() => void retrieveMoreContext()}>Retrieve next 10 historical memories</button>
-                {progressiveContext && <div className="progressive-result"><strong>Progressive retrieval · {progressiveContext.memories.length} added · {progressiveContext.remaining_candidates} remaining</strong>{progressiveContext.memories.map(item => <details className="handover-memory" key={item.memory_id}><summary>{item.source_kind} · {(item.attention_score * 100).toFixed(1)}% attention</summary><code>{item.payload_json}</code></details>)}</div>}
-              </div>}
-            </section>
-
-            <div className="workspace-columns">
-              <section className="panel">
-                <div className="panel-heading"><div><span className="kicker">01 · PARTICIPANTS</span><h3>Agents</h3></div><span className="count">{agents.length}</span></div>
-                <form className="stack-form" onSubmit={createAgent}>
-                  <label htmlFor="agent-name">Agent name</label>
-                  <input id="agent-name" value={agentName} onChange={event => setAgentName(event.target.value)} placeholder="e.g. Architecture reviewer" maxLength={100} required />
-                  <label htmlFor="provider">Provider label</label>
-                  <select id="provider" value={provider} onChange={event => setProvider(event.target.value)}>
-                    <option value="claude">Claude</option><option value="chatgpt">ChatGPT</option><option value="gemini">Gemini</option><option value="local">Local model</option><option value="other">Other / manual</option>
-                  </select>
-                  <button disabled={!agentName.trim() || busy}>{busy ? "Saving…" : "Register agent"}</button>
-                </form>
-                <div className="item-list">
-                  {agents.map(agent => <div className="agent-item" key={agent.id}><span className="agent-avatar">{agent.display_name.slice(0,1).toUpperCase()}</span><div><strong>{agent.display_name}</strong><small>{agent.provider} · manual connection</small></div></div>)}
-                  {agents.length === 0 && <p className="muted">No agents yet. Register the first participant above.</p>}
-                </div>
-              </section>
-
-              <section className="panel">
-                <div className="panel-heading"><div><span className="kicker">02 · SHARED KNOWLEDGE</span><h3>Artifacts</h3></div><span className="count">{artifacts.length}</span></div>
-                <form className="stack-form" onSubmit={createArtifact}>
-                  <label htmlFor="artifact-title">Artifact title</label>
-                  <input id="artifact-title" value={artifactTitle} onChange={event => setArtifactTitle(event.target.value)} placeholder="e.g. Bug investigation notes" maxLength={200} required />
-                  <label htmlFor="artifact-content">Captured content</label>
-                  <textarea id="artifact-content" value={artifactContent} onChange={event => setArtifactContent(event.target.value)} placeholder="Paste the relevant response, findings, or project context…" maxLength={512000} rows={4} required />
-                  <button disabled={!artifactTitle.trim() || !artifactContent.trim() || busy}>{busy ? "Saving…" : "Capture artifact"}</button>
-                </form>
-                <div className="item-list">
-                  {artifacts.map(artifact => <details className="artifact-item" key={artifact.id}><summary><strong>{artifact.title}</strong><small>{new Date(artifact.captured_at).toLocaleString()}</small></summary><p>{artifact.content}</p></details>)}
-                  {artifacts.length === 0 && <p className="muted">Captured outputs and evidence will appear here.</p>}
-                </div>
-              </section>
-            </div>
-
-            <section className="panel task-panel">
-              <div className="panel-heading"><div><span className="kicker">03 · COORDINATION</span><h3>Task handoffs</h3></div><span className="count">{tasks.length} TASKS</span></div>
-              <form className="task-form" onSubmit={createTask}>
-                <div><label htmlFor="task-title">Task title</label><input id="task-title" value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder="e.g. Review the API design" maxLength={160} required /></div>
-                <div><label htmlFor="assignee">Assign to agent</label><select id="assignee" value={assignee} onChange={event => setAssignee(event.target.value)} required><option value="">Choose an agent</option>{agents.map(agent => <option value={agent.id} key={agent.id}>{agent.display_name} ({agent.provider})</option>)}</select></div>
-                <div className="task-objective"><label htmlFor="task-objective">Expected outcome / instructions</label><textarea id="task-objective" value={taskObjective} onChange={event => setTaskObjective(event.target.value)} placeholder="Describe what the receiving agent should do and what evidence it should return…" maxLength={10000} rows={3} required /></div>
-                <div className="context-picker"><span className="field-label">Attach context artifacts</span>{artifacts.length === 0 ? <small>No artifacts captured yet.</small> : artifacts.map(artifact => <label className="context-option" key={artifact.id}><input type="checkbox" checked={selectedArtifactIds.includes(artifact.id)} onChange={event => setSelectedArtifactIds(current => event.target.checked ? [...current, artifact.id] : current.filter(id => id !== artifact.id))} /><span>{artifact.title}</span></label>)}</div>
-                <button disabled={!taskTitle.trim() || !taskObjective.trim() || !assignee || busy || agents.length === 0}>{busy ? "Creating…" : "Create handoff"}</button>
-              </form>
-              <div className="task-list">
-                {tasks.map(task => {
-                  const assigneeAgent = agents.find(agent => agent.id === task.assignee_agent_id);
-                  const next = nextStatus[task.status];
-                  return <article className="task-card" key={task.id}>
-                    <div className="task-card-head"><div><span className="kicker">TASK · V{task.version}</span><h4>{task.title}</h4></div><span className={`task-status status-${task.status}`}>{task.status.replaceAll("_", " ")}</span></div>
-                    <p>{task.objective}</p>
-                    <div className="task-meta"><span>Assigned to <strong>{assigneeAgent?.display_name ?? "Unknown agent"}</strong></span><span>{task.transitions.length} events</span></div>
-                    {task.status === "in_progress" && <div className="response-capture"><label htmlFor={`response-${task.id}`}>Capture the agent's response</label><textarea id={`response-${task.id}`} rows={4} value={responseDrafts[task.id] ?? ""} onChange={event => setResponseDrafts(current => ({ ...current, [task.id]: event.target.value }))} placeholder="Paste the response returned by the assigned assistant…" /><button className="advance-button" disabled={busy || !(responseDrafts[task.id] ?? "").trim()} onClick={() => void submitTaskResponse(task)}>Submit response as artifact →</button></div>}
-                    {next && task.status !== "in_progress" && <button className="advance-button" disabled={busy} onClick={() => void advanceTask(task, next)}>Advance to {next.replaceAll("_", " ")} →</button>}
-                    {task.status === "review_required" && <button className="request-changes-button" disabled={busy} onClick={() => void advanceTask(task, "changes_requested")}>Request changes</button>}
-                    {task.response_artifact_id && <p className="response-linked">Response artifact linked · {task.response_artifact_id.slice(0, 8)}</p>}
-                    <details className="history"><summary>View handoff history</summary>{task.transitions.map((transition, index) => <div className="history-row" key={index}><strong>{transition.to.replaceAll("_", " ")}</strong><span>{transition.note}</span><small>{new Date(transition.occurred_at).toLocaleString()}</small></div>)}</details>
-                  </article>;
-                })}
-                {tasks.length === 0 && <div className="empty-state compact"><h3>No handoffs yet.</h3><p>Register an agent and create the first task above.</p></div>}
-              </div>
-            </section>
-          </>
-        )}
-
-        {error && <div className="error" role="alert">{error} <button className="retry" onClick={() => selected ? void refreshWorkspace(selected) : void refreshWorkspaces()}>Retry</button></div>}
-        <footer><span>AXON</span><span>Context should travel with the work.</span><span>FOUNDATION BUILD · 0.1</span></footer>
-        {health && health.storage !== "persistent" && (
-          <p className="dev-warning">Development mode: data is temporary and this API has no authentication. Do not use sensitive or production data.</p>
-        )}
+        <section className={"axon-explore-pane" + (activeTab === "explore" ? " active" : "")}>
+          <div className="axon-explore-heading"><span className="axon-section-label">DISCOVER YOUR WORKSPACE</span><strong>Explore</strong><p>Manage agents, context and handoffs across your projects.</p></div>
+          <div className="axon-workspace-switcher">
+            <span className="axon-section-label">WORKSPACES</span>
+            <form onSubmit={createWorkspace}><input id="workspace-name" value={name} onChange={event => setName(event.target.value)} placeholder="New workspace name" maxLength={120} required /><button disabled={!name.trim() || busy}>＋</button></form>
+            <div className="axon-workspace-list">{workspaces.map(workspace => <button type="button" key={workspace.id} className={selected?.id === workspace.id ? "active" : ""} onClick={() => { setSelected(workspace); setActiveTab("explore"); }}><span className="axon-workspace-glyph">{workspace.name.slice(0,1).toUpperCase()}</span><span><strong>{workspace.name}</strong><small>{new Date(workspace.created_at).toLocaleDateString()}</small></span><span>›</span></button>)}</div>
+          </div>
+          {selected ? <div className="axon-explore-tools">{explore}</div> : <div className="axon-empty-explore">Select a workspace to manage its agents, artifacts, Qoin context and task handoffs.</div>}
+        </section>
       </section>
+      {error && <div className="axon-error" role="alert">{error}<button type="button" onClick={() => selected ? void refreshWorkspace(selected) : void refreshWorkspaces()}>Retry</button></div>}
     </main>
   );
 }
