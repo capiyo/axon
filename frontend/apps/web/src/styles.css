@@ -324,7 +324,7 @@ body { background:#0b1020; color:#edf3ff; }
   .axon-explore-tools .workspace-columns { grid-template-columns:1fr; }.axon-explore-tools .task-form { grid-template-columns:1fr; }.axon-explore-tools .qoin-bridge-controls,.axon-explore-tools .handover-controls { grid-template-columns:1fr; }
   .axon-memory-form { flex-wrap:wrap; }.axon-memory-form input { flex-basis:100%; }.axon-composer-footer span { max-width:55%; line-height:1.4; }
 }
-@media (min-width:761px) { .axon-explore-pane.active { display:block; grid-column:1 / -1; } .axon-desktop-layout:has(.axon-explore-pane.active) { grid-template-columns:248px minmax(0,1fr); }.axon-desktop-layout:has(.axon-explore-pane.active) .axon-chats-pane,.axon-desktop-layout:has(.axon-explore-pane.active) .axon-conversation-pane { display:none; } }
+@media (min-width:761px) { .axon-profile-button { display:none; } .axon-explore-pane.active { display:block; grid-column:1 / -1; } .axon-desktop-layout:has(.axon-explore-pane.active) { grid-template-columns:248px minmax(0,1fr); }.axon-desktop-layout:has(.axon-explore-pane.active) .axon-chats-pane,.axon-desktop-layout:has(.axon-explore-pane.active) .axon-conversation-pane { display:none; } }
 
 /* Axon identity: cyan highlights over a deep-indigo workspace, not Funspot green. */
 .axon-app { background: var(--axon-color-canvas, #0b1020); color: var(--axon-color-text, #edf3ff); }
