@@ -49,6 +49,7 @@ function WorkspaceApp() {
   const [busy, setBusy] = useState(false);
   const [adminAvailable, setAdminAvailable] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState<"Chats" | "Feed">("Chats");
 
   async function refreshWorkspaces() {
     const [items, status] = await Promise.all([
@@ -306,26 +307,51 @@ function WorkspaceApp() {
 
   return (
     <main className="shell">
-      <aside className="rail">
+      <aside className="rail profile-sidebar">
         <div className="brand-mark">A</div>
-        <span className="rail-label">WORKSPACES</span>
-        <div className="rail-dot active" aria-label="Workspace area" />
-        <div className="rail-bottom">0.1</div>
+        <div className="axon-profile">
+          <div className="profile-avatar">{(auth?.currentUser?.email ?? "A").slice(0, 1).toUpperCase()}</div>
+          <h2>{auth?.currentUser?.email ?? "Your workspace"}</h2>
+          <p className="muted">Personal workspace</p>
+        </div>
+        <div className="sidebar-divider" />
+        <span className="rail-label sidebar-label">WORKSPACES</span>
+        <div className="axon-workspace-list">
+          {workspaces.map(workspace => (
+            <button type="button" key={workspace.id} className={selected?.id === workspace.id ? "sidebar-channel selected" : "sidebar-channel"} onClick={() => { setShowAdmin(false); setSelected(workspace); }}>
+              <span className="quiet-dot" />{workspace.name}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="sidebar-channel sidebar-join" onClick={() => { setShowAdmin(false); setSelected(null); }}>
+          + All workspaces
+        </button>
+        <div className="rail-bottom">AXON</div>
       </aside>
-      <section className="content">
+      <section className="content" data-mobile-tab={activeMobileTab}>
         <header className="topbar">
-          <div>
-            <p className="eyebrow">THE AGENT COLLABORATION LAYER</p>
-            <h1>Work, connected.</h1>
+          <div className="axon-navbar-brand">
+            <span className="axon-wordmark">AXON</span>
+            <div className="axon-navbar-context">
+              <p className="eyebrow">THE AGENT COLLABORATION LAYER</p>
+              <h1>{selected?.name ?? (showAdmin ? "Model administration" : "Workspaces")}</h1>
+            </div>
           </div>
-          <div className="topbar-actions">
+          <div className="topbar-actions navbar-actions">
             <div className="status">
               <span className={health?.status === "ok" ? "pulse online" : "pulse"} />
               {health?.status === "ok" ? "API connected" : "API unavailable"}
             </div>
-            {adminAvailable && <button type="button" className="admin-entry" onClick={() => setShowAdmin(true)}>Model administration</button>}
+            {adminAvailable && <button type="button" className="admin-entry" onClick={() => setShowAdmin(current => !current)}>{showAdmin ? "Back to workspace" : "Model administration"}</button>}
+            <button type="button" className="button button-quiet" onClick={() => { if (auth) void signOut(auth); }}>Sign out</button>
           </div>
         </header>
+        {selected && !showAdmin && (
+          <nav className="mobile-home-tabs" aria-label="Workspace sections">
+            <button type="button" className={activeMobileTab === "Chats" ? "mobile-tab active" : "mobile-tab"} onClick={() => setActiveMobileTab("Chats")}>Chats</button>
+            <button type="button" className={activeMobileTab === "Feed" ? "mobile-tab active" : "mobile-tab"} onClick={() => setActiveMobileTab("Feed")}>Feed</button>
+          </nav>
+        )}
 
         {showAdmin ? <ModelAdmin onClose={() => setShowAdmin(false)} /> : !selected ? (
           <>
@@ -381,7 +407,9 @@ function WorkspaceApp() {
               <h2>{selected.name}</h2>
               <p>Register agents, capture their work, and create explicit handoffs.</p>
             </div>
-            <section className="panel chat-panel">
+            <div className="column-heading chats-heading"><span className="eyebrow">01 · WORKSPACE</span><h2>Chats</h2></div>
+            <div className="column-heading feed-heading"><span className="eyebrow">02 · SHARED WORK</span><h2>Feed</h2></div>
+            <section className="panel chat-panel axon-chat-column">
               <div className="panel-heading"><div><span className="kicker">04 · PROJECT CONVERSATIONS</span><h3>Chats & memory</h3></div><span className="count">{chats.length} CHATS</span></div>
               <div className="chat-layout">
                 <aside className="chat-sidebar">
@@ -410,7 +438,7 @@ function WorkspaceApp() {
                 </div>
               </div>
             </section>
-            <div className="workspace-columns">
+            <div className="workspace-columns axon-feed-column">
               <section className="panel">
                 <div className="panel-heading"><div><span className="kicker">01 · PARTICIPANTS</span><h3>Agents</h3></div><span className="count">{agents.length}</span></div>
                 <form className="stack-form" onSubmit={createAgent}>
@@ -444,7 +472,7 @@ function WorkspaceApp() {
               </section>
             </div>
 
-            <section className="panel task-panel">
+            <section className="panel task-panel axon-feed-column">
               <div className="panel-heading"><div><span className="kicker">03 · COORDINATION</span><h3>Task handoffs</h3></div><span className="count">{tasks.length} TASKS</span></div>
               <form className="task-form" onSubmit={createTask}>
                 <div><label htmlFor="task-title">Task title</label><input id="task-title" value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder="e.g. Review the API design" maxLength={160} required /></div>
