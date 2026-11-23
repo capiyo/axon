@@ -446,12 +446,22 @@ function WorkspaceApp() {
         </View>
       </View>
 
-      {menuOpen ? <View style={{position:"absolute",top:62,right:12,zIndex:20,width:245,padding:14,borderRadius:15,backgroundColor:"#111a2e",borderWidth:1,borderColor:"#2a392c"}}>
-        <Text style={{color:"#edf3ff",fontSize:13,fontWeight:"800"}}>{displayName}</Text>
-        <Text style={{color:"#788cac",fontSize:10,marginTop:4,marginBottom:12}}>{user?.email ?? "Axon member"}</Text>
-        <Text style={{color:"#788cac",fontSize:9,letterSpacing:1,marginBottom:7}}>SWITCH WORKSPACE</Text>
+      {menuOpen ? <View style={{position:"absolute",top:62,right:12,zIndex:20,width:270,padding:14,borderRadius:15,backgroundColor:"#111a2e",borderWidth:1,borderColor:"rgba(150,190,255,0.13)"}}>
+        <View style={{flexDirection:"row",alignItems:"center",gap:11,paddingBottom:13,borderBottomWidth:1,borderBottomColor:"rgba(150,190,255,0.10)"}}>
+          <View style={{width:46,height:46,borderRadius:23,backgroundColor:"#22314c",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+            {user?.photoURL ? <Image source={{uri:user.photoURL}} style={{width:46,height:46,borderRadius:23}} /> : <Text style={{color:"#9ae9f7",fontSize:16,fontWeight:"900"}}>{initial}</Text>}
+          </View>
+          <View style={{flex:1,minWidth:0}}>
+            <Text numberOfLines={1} style={{color:"#edf3ff",fontSize:13,fontWeight:"800"}}>{displayName}</Text>
+            <Text numberOfLines={2} style={{color:"#8295b5",fontSize:10,marginTop:3}}>{user?.email ?? "Axon member"}</Text>
+            <View style={{flexDirection:"row",alignItems:"center",gap:6,marginTop:5}}><View style={{width:6,height:6,borderRadius:3,backgroundColor:"#63d7bd"}}/><Text style={{color:"#9bb3c9",fontSize:9}}>Available</Text></View>
+          </View>
+        </View>
+        <Text style={{color:"#8295b5",fontSize:9,letterSpacing:1,marginTop:12,marginBottom:5}}>CURRENT WORKSPACE</Text>
+        <Text numberOfLines={1} style={{color:"#dce8f8",fontSize:11,fontWeight:"700",marginBottom:8}}>{selected?.name ?? "No workspace selected"}</Text>
+        <Text style={{color:"#8295b5",fontSize:9,letterSpacing:1,marginBottom:5}}>SWITCH WORKSPACE</Text>
         {workspaces.map(workspace=><Pressable key={workspace.id} onPress={()=>{setSelected(workspace);setMenuOpen(false);setActiveTab("chats");}} style={{paddingVertical:9,flexDirection:"row",alignItems:"center",gap:9}}><Text style={{color:"#67d8f0",fontWeight:"800"}}>{workspace.name.slice(0,1).toUpperCase()}</Text><Text numberOfLines={1} style={{color:"#edf3ff",fontSize:11,flex:1}}>{workspace.name}</Text>{selected?.id===workspace.id?<Text style={{color:"#67d8f0"}}>✓</Text>:null}</Pressable>)}
-        <Pressable onPress={()=>{setMenuOpen(false);if(auth)void signOut(auth);}} style={{paddingTop:12,borderTopWidth:1,borderTopColor:"#2a392c",marginTop:5}}><Text style={{color:"#e6b0a7",fontSize:11,fontWeight:"700"}}>Sign out</Text></Pressable>
+        <Pressable onPress={()=>{setMenuOpen(false);if(auth)void signOut(auth);}} style={{paddingTop:12,borderTopWidth:1,borderTopColor:"rgba(150,190,255,0.10)",marginTop:5}}><Text style={{color:"#e6b0a7",fontSize:11,fontWeight:"700"}}>Sign out</Text></Pressable>
       </View> : null}
 
       <View style={{flex:1,backgroundColor:"#0b1020"}}>
