@@ -230,7 +230,7 @@ function WorkspaceApp() {
             tags: [entry.type, `symbol:${qoinSymbol.trim().toUpperCase()}`],
             dependency_ids: [],
             outcome_score: 0.5,
-            evidence_score: 0.75
+            evidence_score: 0.5
           })
         }
       );
