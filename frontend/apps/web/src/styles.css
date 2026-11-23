@@ -497,3 +497,5 @@ body {
 
 .chat-card-progress { display: block; width: 100%; height: 4px; overflow: hidden; border-radius: 999px; background: #294A35; }
 .chat-card-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--axon-color-accent); transition: width .2s ease; }
+
+.explore-load-more { justify-self: start; border: 0; padding: 6px 0; background: transparent; color: var(--axon-color-accent); font-size: 10px; font-weight: 700; cursor: pointer; }
