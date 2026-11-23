@@ -35,6 +35,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [chatPreviews, setChatPreviews] = useState<Record<string, ChatDetail>>({});
   const [activeView, setActiveView] = useState<"chats" | "explore">("chats");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
   const [exploreAgents, setExploreAgents] = useState<ExploreAgent[]>([]);
   const [exploreComments, setExploreComments] = useState<Record<string, ExploreComment[]>>({});
@@ -588,7 +589,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       <section className="content">
         <header className="topbar">
           <div className="topbar-brand"><span className="brand-mark">A</span><div><p className="eyebrow">AXON WORKSPACE</p><h1>{selected?.name ?? "Your workspace"}</h1></div></div>
-          <div className="topbar-actions"><div className="status"><span className={health?.status === "ok" ? "pulse online" : "pulse"} />{health?.status === "ok" ? "Connected" : "API unavailable"}</div><button type="button" className="topbar-action" onClick={() => setActiveView(activeView === "explore" ? "chats" : "explore")}>{activeView === "explore" ? "Chats" : "Explore"}</button><button type="button" className="topbar-profile" onClick={() => setProfileOpen(true)} aria-label="Open profile">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</button></div>
+          <div className="topbar-actions"><div className="status"><span className={health?.status === "ok" ? "pulse online" : "pulse"} />{health?.status === "ok" ? "Connected" : "API unavailable"}</div><div className="app-menu-anchor"><button type="button" className="topbar-action" onClick={() => setMenuOpen(value => !value)} aria-expanded={menuOpen}>Menu</button>{menuOpen && <div className="app-menu"><button type="button" onClick={() => {setActiveView("explore");setMenuOpen(false);}}>Explore agents</button><button type="button" onClick={() => {setProfileOpen(true);setMenuOpen(false);}}>Profile & workspace</button><button type="button" onClick={() => {setActiveView("chats");setMenuOpen(false);}}>Chats</button></div>}</div><button type="button" className="topbar-profile" onClick={() => setProfileOpen(true)} aria-label="Open profile">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</button></div>
         </header>
 
         {!selected ? (
