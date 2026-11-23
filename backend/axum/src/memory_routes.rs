@@ -15,9 +15,9 @@ use serde::Serialize;
 use std::sync::Arc;
 use uuid::Uuid;
 
-type ApiResult<T> = Result<T, (StatusCode, Json<ApiError>)>;
+pub type ApiResult<T> = Result<T, (StatusCode, Json<ApiError>)>;
 #[derive(Debug, Serialize)]
-struct ApiError {
+pub struct ApiError {
     error: String,
 }
 fn error(status: StatusCode, message: &str) -> (StatusCode, Json<ApiError>) {
