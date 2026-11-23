@@ -367,6 +367,7 @@ function WorkspaceApp() {
               {health?.status === "ok" ? "API connected" : "API unavailable"}
             </div>
             {adminAvailable && <button type="button" className="admin-entry" onClick={() => setShowAdmin(current => !current)}>{showAdmin ? "Back to workspace" : "Model administration"}</button>}
+            <span className="mobile-profile-avatar" aria-label="Signed-in profile">{(auth?.currentUser?.email ?? "A").slice(0, 1).toUpperCase()}</span>
             <button type="button" className="button button-quiet" onClick={() => { if (auth) void signOut(auth); }}>Sign out</button>
           </div>
         </header>
