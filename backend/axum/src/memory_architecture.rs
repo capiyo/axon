@@ -101,8 +101,10 @@ pub fn qkv_attention(query: &AttentionQuery, memories: &[AttentionMemory]) -> Re
     if query.heads == 0 || query.query.values.len() % query.heads != 0 {
         return Err(AttentionError::InvalidHeadCount);
     }
-    let mut scored = Vec::with_capacity(memories.len());
-    for memory in memories {
+    if memories.is_empty() { return Ok(Vec::new()); }
+    let width = query.query.values.len() / query.heads;
+    let mut logits = vec![vec![0.0_f64; memories.len()]; query.heads];
+    for (index, memory) in memories.iter().enumerate() {
         memory.key.validate()?;
         if memory.key.values.len() != query.query.values.len() {
             return Err(AttentionError::InvalidVector);
@@ -111,27 +113,37 @@ pub fn qkv_attention(query: &AttentionQuery, memories: &[AttentionMemory]) -> Re
             || !memory.evidence_score.is_finite() || !(0.0..=1.0).contains(&memory.evidence_score) {
             return Err(AttentionError::InvalidScoreMetadata);
         }
-        let width = query.query.values.len() / query.heads;
-        let mut attention = 0.0;
-        for head in 0..query.heads {
+        for (head, head_logits) in logits.iter_mut().enumerate() {
             let start = head * width;
             let end = start + width;
             let dot = query.query.values[start..end].iter()
                 .zip(&memory.key.values[start..end])
                 .map(|(q, k)| *q as f64 * *k as f64).sum::<f64>();
-            attention += dot / (width as f64).sqrt();
+            head_logits[index] = dot / (width as f64).sqrt();
         }
-        attention /= query.heads as f64;
+    }
+    // True scaled dot-product attention: normalize each head across all
+    // candidate keys, then average the head probabilities.
+    let mut attention = vec![0.0_f64; memories.len()];
+    for head_logits in logits {
+        let max_logit = head_logits.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let exponentials = head_logits.iter().map(|logit| (logit - max_logit).exp()).collect::<Vec<_>>();
+        let denominator: f64 = exponentials.iter().sum();
+        for (index, weight) in exponentials.iter().enumerate() {
+            attention[index] += if denominator > 0.0 { weight / denominator } else { 0.0 };
+        }
+    }
+    for weight in &mut attention { *weight /= query.heads as f64; }
+
+    let mut scored = Vec::with_capacity(memories.len());
+    for (index, memory) in memories.iter().enumerate() {
         let tag_overlap = jaccard(&query.tags, &memory.tags);
         let dependency_overlap = jaccard(&query.dependency_ids, &memory.dependency_ids);
-        // Attention is a logit; sigmoid maps it to [0, 1] before combining
-        // independently observed outcome and evidence signals.
-        let attention = sigmoid(attention);
         let outcome = memory.outcome_score as f64;
         let evidence = memory.evidence_score as f64;
-        let total = 0.65 * attention + 0.15 * outcome + 0.10 * evidence
+        let total = 0.65 * attention[index] + 0.15 * outcome + 0.10 * evidence
             + 0.05 * tag_overlap + 0.05 * dependency_overlap;
-        scored.push(AttentionScore { memory_id: memory.memory_id, attention, outcome, evidence,
+        scored.push(AttentionScore { memory_id: memory.memory_id, attention: attention[index], outcome, evidence,
             tag_overlap, dependency_overlap, total, source_event_sequence: memory.source_event_sequence });
     }
     scored.sort_by(|a,b| b.total.total_cmp(&a.total)
