@@ -164,6 +164,12 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     setExploreComments(Object.fromEntries(commentEntries));
   }
 
+  async function loadMoreExploreComments(listingId: string) {
+    const current = exploreComments[listingId] ?? [];
+    const next = await api<ExploreComment[]>(`/api/v1/explore/agents/${listingId}/comments?limit=50&offset=${current.length}`);
+    setExploreComments(value => ({ ...value, [listingId]: [...(value[listingId] ?? []), ...next] }));
+  }
+
   async function publishExploreAgent(event: FormEvent<HTMLFormElement>) {
     if (!selected || !publishAgentId || !publishDescription.trim() || !publishCategory.trim()) return;
     await runForm(event, async () => {
@@ -795,7 +801,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                           {replyTarget?.listingId === listing.id && replyTarget.parentId === comment.id && <form className="explore-reply-form" onSubmit={event => { event.preventDefault(); void submitExploreComment(listing.id, comment.id); }}><input value={exploreDrafts[listing.id] ?? ""} onChange={event => setExploreDrafts(current => ({...current,[listing.id]:event.target.value}))} placeholder="Write a reply…" maxLength={5000}/><button disabled={busy || !(exploreDrafts[listing.id] ?? "").trim()}>Reply</button></form>}
                         </div></div>)}
                       {roots.length === 0 && <p className="explore-no-comments">No community comments yet. Start the discussion.</p>}
-                      <form className="explore-comment-form" onSubmit={event => { event.preventDefault(); void submitExploreComment(listing.id); }}><input value={replyTarget?.listingId === listing.id ? "" : exploreDrafts[listing.id] ?? ""} onChange={event => setExploreDrafts(current => ({...current,[listing.id]:event.target.value}))} placeholder="Write a comment…" maxLength={5000}/><button disabled={busy || !(exploreDrafts[listing.id] ?? "").trim()}>Post</button></form>
+                      {comments.length >= 50 && <button type="button" className="explore-load-more" onClick={() => void loadMoreExploreComments(listing.id)} disabled={busy}>Load more comments</button>}<form className="explore-comment-form" onSubmit={event => { event.preventDefault(); void submitExploreComment(listing.id); }}><input value={replyTarget?.listingId === listing.id ? "" : exploreDrafts[listing.id] ?? ""} onChange={event => setExploreDrafts(current => ({...current,[listing.id]:event.target.value}))} placeholder="Write a comment…" maxLength={5000}/><button disabled={busy || !(exploreDrafts[listing.id] ?? "").trim()}>Post</button></form>
                     </div>
                   </article>;
                 })}
