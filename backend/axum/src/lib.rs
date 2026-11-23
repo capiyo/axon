@@ -24,7 +24,7 @@ pub use state::AppState;
 use axum::{
     http::{header, HeaderValue, Method},
     middleware,
-    routing::{delete, get, patch, post},
+    routing::{get, patch, post},
     Router,
 };
 use tower_http::{
