@@ -92,6 +92,14 @@ pub fn app(state: AppState) -> Router {
             patch(chat_memory_routes::archive_chat),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/chats/:chat_id/read",
+            post(chat_memory_routes::mark_chat_read),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/chats/:chat_id/like",
+            post(chat_memory_routes::toggle_chat_like),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/chats/:chat_id/memory",
             post(chat_memory_routes::create_memory_entry),
         )
