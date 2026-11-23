@@ -125,7 +125,6 @@ fn qoin_error(error_value: QoinVectorError) -> (StatusCode, Json<ApiError>) {
     }
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct IndexQoinChatMessageRequest {
     pub symbol: String,
