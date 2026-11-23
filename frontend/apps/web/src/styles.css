@@ -469,3 +469,10 @@ body {
 .app-menu { position: absolute; z-index: 40; top: calc(100% + 9px); right: 0; width: 190px; padding: 7px; display: grid; gap: 4px; border-radius: 14px; background: var(--axon-color-surface-raised); box-shadow: 0 14px 36px #0006; }
 .app-menu button { width: 100%; border: 0; border-radius: 9px; padding: 11px 12px; background: transparent; color: var(--axon-color-text); text-align: left; font-size: 11px; cursor: pointer; }
 .app-menu button:hover { background: var(--axon-color-selected); color: var(--axon-color-accent); }
+
+.profile-overlay { position: fixed; z-index: 50; inset: 0; display: flex; flex-direction: column; background: var(--axon-color-canvas); padding: 24px; overflow-y: auto; }
+.profile-overlay-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 18px; }
+.profile-overlay-header strong { color: var(--axon-color-text); font-size: 15px; }
+.profile-overlay-header button, .signout-button { border: 0; border-radius: 999px; padding: 9px 13px; background: var(--axon-color-selected); color: var(--axon-color-accent); }
+.profile-overlay-body { width: min(760px,100%); margin: 0 auto; display: grid; gap: 20px; }
+.profile-overlay-email { color: var(--axon-color-text-muted); font-size: 11px; }
