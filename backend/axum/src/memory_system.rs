@@ -203,7 +203,11 @@ pub fn lexical_relevance(query: &str, content: &str) -> f64 {
     let content_terms = terms(content);
     let overlap = query_terms.intersection(&content_terms).count() as f64;
     let coverage = overlap / query_terms.len() as f64;
-    let phrase_bonus = if content.to_lowercase().contains(&query.to_lowercase()) { 0.25 } else { 0.0 };
+    let phrase_bonus = if content.to_lowercase().contains(&query.to_lowercase()) {
+        0.25
+    } else {
+        0.0
+    };
     (coverage + phrase_bonus).min(1.0)
 }
 
@@ -262,7 +266,14 @@ pub fn allocate_context(
             continue;
         }
         let utility = score_memory(record, relevance, context.now).utility();
-        ranked.push((record.id, record.token_cost, utility, record.content.clone(), record.source.clone(), record.verification));
+        ranked.push((
+            record.id,
+            record.token_cost,
+            utility,
+            record.content.clone(),
+            record.source.clone(),
+            record.verification,
+        ));
     }
     // Greedy utility density is deterministic and bounded. Stable UUID tie
     // breaking makes identical inputs produce byte-for-byte equivalent plans.
@@ -378,7 +389,13 @@ mod tests {
             now: Utc::now(),
         };
         let relevance = vec![(first.id, 1.0), (second.id, 0.9)];
-        let a = allocate_context(&[first.clone(), second.clone()], &context, &relevance, 200).unwrap();
+        let a = allocate_context(
+            &[first.clone(), second.clone()],
+            &context,
+            &relevance,
+            200,
+        )
+        .unwrap();
         let b = allocate_context(&[second, first], &context, &relevance, 200).unwrap();
         assert!(a.tokens_allocated <= a.token_budget);
         assert_eq!(a, b);
