@@ -125,7 +125,12 @@ pub async fn propose(
     let store = state
         .memory_store
         .as_ref()
-        .ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
+        .ok_or_else(|| {
+            error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Persistent memory is unavailable.",
+            )
+        })?;
     store.put(record.clone(), &format!("human:{}", user.user_id)).await.map_err(store_error)?;
     Ok((
         StatusCode::CREATED,
@@ -150,7 +155,15 @@ pub async fn review(
         "reject" => false,
         _ => return Err(error(StatusCode::BAD_REQUEST, "Decision must be approve or reject.")),
     };
-    let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
+    let store = state
+        .memory_store
+        .as_ref()
+        .ok_or_else(|| {
+            error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Persistent memory is unavailable.",
+            )
+        })?;
     let record = store
         .review(
             workspace_id,
@@ -204,7 +217,10 @@ pub async fn revoke(
     require_member(&state, &user, workspace_id).await?;
     let agents = state.agents.read().await;
     if !agents.get(&agent_id).is_some_and(|agent| agent.workspace_id == workspace_id) {
-        return Err(error(StatusCode::BAD_REQUEST, "Recipient agent must belong to this workspace."));
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "Recipient agent must belong to this workspace.",
+        ));
     }
     drop(agents);
     let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
