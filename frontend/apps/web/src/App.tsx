@@ -36,7 +36,6 @@ function WorkspaceApp() {
   const [editMemoryDraft, setEditMemoryDraft] = useState("");
   const [name, setName] = useState("");
   const [agentName, setAgentName] = useState("");
-  const [provider, setProvider] = useState("claude");
   const [artifactTitle, setArtifactTitle] = useState("");
   const [artifactContent, setArtifactContent] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
@@ -228,7 +227,7 @@ function WorkspaceApp() {
     await runForm(event, async () => {
       await api<Agent>(`/api/v1/workspaces/${selected.id}/agents`, {
         method: "POST",
-        body: JSON.stringify({ display_name: agentName.trim(), provider: provider.trim() })
+        body: JSON.stringify({ display_name: agentName.trim(), provider: "manual" })
       });
       setAgentName("");
       await refreshWorkspace(selected);
@@ -471,14 +470,11 @@ function WorkspaceApp() {
                 <form className="stack-form" onSubmit={createAgent}>
                   <label htmlFor="agent-name">Agent name</label>
                   <input id="agent-name" value={agentName} onChange={event => setAgentName(event.target.value)} placeholder="e.g. Architecture reviewer" maxLength={100} required />
-                  <label htmlFor="provider">Provider label</label>
-                  <select id="provider" value={provider} onChange={event => setProvider(event.target.value)}>
-                    <option value="claude">Claude</option><option value="chatgpt">ChatGPT</option><option value="gemini">Gemini</option><option value="local">Local model</option><option value="other">Other / manual</option>
-                  </select>
+                  <p className="muted">Register a teammate or external participant for a workspace handoff.</p>
                   <button disabled={!agentName.trim() || busy}>{busy ? "Saving…" : "Register agent"}</button>
                 </form>
                 <div className="item-list">
-                  {agents.map(agent => <div className="agent-item" key={agent.id}><span className="agent-avatar">{agent.display_name.slice(0,1).toUpperCase()}</span><div><strong>{agent.display_name}</strong><small>{agent.provider} · manual connection</small></div></div>)}
+                  {agents.map(agent => <div className="agent-item" key={agent.id}><span className="agent-avatar">{agent.display_name.slice(0,1).toUpperCase()}</span><div><strong>{agent.display_name}</strong><small>Workspace participant</small></div></div>)}
                   {agents.length === 0 && <p className="muted">No agents yet. Register the first participant above.</p>}
                 </div>
               </section>
@@ -503,7 +499,7 @@ function WorkspaceApp() {
               <div className="panel-heading"><div><span className="kicker">03 · COORDINATION</span><h3>Task handoffs</h3></div><span className="count">{tasks.length} TASKS</span></div>
               <form className="task-form" onSubmit={createTask}>
                 <div><label htmlFor="task-title">Task title</label><input id="task-title" value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder="e.g. Review the API design" maxLength={160} required /></div>
-                <div><label htmlFor="assignee">Assign to agent</label><select id="assignee" value={assignee} onChange={event => setAssignee(event.target.value)} required><option value="">Choose an agent</option>{agents.map(agent => <option value={agent.id} key={agent.id}>{agent.display_name} ({agent.provider})</option>)}</select></div>
+                <div><label htmlFor="assignee">Assign to agent</label><select id="assignee" value={assignee} onChange={event => setAssignee(event.target.value)} required><option value="">Choose an agent</option>{agents.map(agent => <option value={agent.id} key={agent.id}>{agent.display_name}</option>)}</select></div>
                 <div className="task-objective"><label htmlFor="task-objective">Expected outcome / instructions</label><textarea id="task-objective" value={taskObjective} onChange={event => setTaskObjective(event.target.value)} placeholder="Describe what the receiving agent should do and what evidence it should return…" maxLength={10000} rows={3} required /></div>
                 <div className="context-picker"><span className="field-label">Attach context artifacts</span>{artifacts.length === 0 ? <small>No artifacts captured yet.</small> : artifacts.map(artifact => <label className="context-option" key={artifact.id}><input type="checkbox" checked={selectedArtifactIds.includes(artifact.id)} onChange={event => setSelectedArtifactIds(current => event.target.checked ? [...current, artifact.id] : current.filter(id => id !== artifact.id))} /><span>{artifact.title}</span></label>)}</div>
                 <button disabled={!taskTitle.trim() || !taskObjective.trim() || !assignee || busy || agents.length === 0}>{busy ? "Creating…" : "Create handoff"}</button>
