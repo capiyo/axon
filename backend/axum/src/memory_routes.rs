@@ -99,7 +99,7 @@ pub struct QoinMemoryIndexReceipt {
     pub memory_id: Uuid,
     pub symbol: String,
     pub model_version: String,
-    pub memory_created_at_ms: i64,
+    pub memory_context_timestamp_ms: i64,
     pub qoin_event_ts_ms: i64,
     pub indexed: bool,
 }
@@ -189,7 +189,7 @@ pub async fn index_memory_with_qoin(
         )
     })?;
     let memory_created_at_ms = coordinator(&state)?
-        .approved_memory_created_at_ms(workspace_id, chat_id, memory_id)
+        .approved_memory_context_timestamp_ms(workspace_id, chat_id, memory_id)
         .await
         .map_err(|_| {
             error(
