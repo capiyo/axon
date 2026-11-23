@@ -648,6 +648,86 @@ pub async fn record_checks(
     ))
 }
 
+async fn update_model_outcomes(
+    state: &AppState,
+    user: &AuthenticatedUser,
+    run: &SupervisorRun,
+    accepted: bool,
+) -> ApiResult<()> {
+    let Some(category) = run.assignment_category.as_deref() else {
+        return Ok(());
+    };
+    let decisions = state
+        .list_entities(EntityKind::AssignmentDecision, None)
+        .await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Assignment outcomes could not be loaded."))?;
+    let stats = state
+        .list_entities(EntityKind::ModelStat, None)
+        .await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Model statistics could not be loaded."))?;
+    let mut updated_keys = Vec::new();
+    for entity in decisions {
+        let StoredEntity::AssignmentDecision(decision) = entity else {
+            continue;
+        };
+        if decision.run_id != run.id
+            || updated_keys.iter().any(|(model_id, role)| {
+                *model_id == decision.chosen_model_id && *role == decision.role
+            })
+        {
+            continue;
+        }
+        let Some(StoredEntity::ModelStat(mut stat)) = stats.iter().find(|entity| {
+            matches!(entity, StoredEntity::ModelStat(item)
+                if item.model_id == decision.chosen_model_id
+                    && item.category == category
+                    && item.role == decision.role)
+        }).cloned() else {
+            // Cold-start models retain their curated prior until an actual
+            // evaluation or enough observed history exists.
+            continue;
+        };
+        let next_runs = stat.runs.saturating_add(1);
+        if next_runs == stat.runs {
+            continue;
+        }
+        let prior_runs = stat.runs as f64;
+        let total_runs = next_runs as f64;
+        let outcome = if accepted { 1.0 } else { 0.0 };
+        stat.completion_rate =
+            ((stat.completion_rate.clamp(0.0, 1.0) * prior_runs) + outcome) / total_runs;
+        stat.supervisor_pass_rate =
+            ((stat.supervisor_pass_rate.clamp(0.0, 1.0) * prior_runs) + outcome) / total_runs;
+        // Retry rate, provider latency and actual billed cost are deliberately
+        // untouched: this workflow does not observe those measurements.
+        stat.runs = next_runs;
+        stat.last_updated = Utc::now();
+        state
+            .persist_entity(
+                StoredEntity::ModelStat(stat.clone()),
+                Vec::new(),
+                AuditEvent::attributed(
+                    format!("human:{}", user.user_id),
+                    Some(run.workspace_id),
+                    "model_stat.supervisor_outcome_recorded",
+                    "model_stat",
+                    stat.id.to_string(),
+                    json!({
+                        "run_id": run.id,
+                        "model_id": stat.model_id,
+                        "category": category,
+                        "accepted": accepted,
+                        "runs": stat.runs
+                    }),
+                ),
+            )
+            .await
+            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Model outcome statistics could not be persisted."))?;
+        updated_keys.push((decision.chosen_model_id, decision.role));
+    }
+    Ok(())
+}
+
 pub async fn submit_review(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,
@@ -657,7 +737,8 @@ pub async fn submit_review(
     let _guard = state.supervisor_run_lock.lock().await;
     let mut run = find_run(&state, workspace_id, run_id).await?;
     let decision = run.submit_review(review).map_err(supervisor_error)?;
-    let event = match decision.map(|item| item.outcome) {
+    let outcome = decision.as_ref().map(|item| item.outcome.clone());
+    let event = match outcome {
         Some(crate::supervisor::SupervisionOutcome::Accepted) => "supervisor_run.accepted",
         Some(crate::supervisor::SupervisionOutcome::RepairRequired) => {
             "supervisor_run.repair_required"
@@ -665,7 +746,17 @@ pub async fn submit_review(
         Some(crate::supervisor::SupervisionOutcome::Failed) => "supervisor_run.failed",
         None => "supervisor_run.review_submitted",
     };
-    Ok(Json(persist_run(&state, &user, run, event).await?))
+    let persisted = persist_run(&state, &user, run, event).await?;
+    match outcome {
+        Some(crate::supervisor::SupervisionOutcome::Accepted) => {
+            update_model_outcomes(&state, &user, &persisted, true).await?;
+        }
+        Some(crate::supervisor::SupervisionOutcome::Failed) => {
+            update_model_outcomes(&state, &user, &persisted, false).await?;
+        }
+        _ => {}
+    }
+    Ok(Json(persisted))
 }
 
 pub async fn start_repair(
