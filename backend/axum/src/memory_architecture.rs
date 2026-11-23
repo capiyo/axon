@@ -600,6 +600,16 @@ mod persistence_tests {
             }).await.unwrap();
         }
         assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
+        // Re-indexing after publication must not rewrite the already-published
+        // epoch. New agents still read the frozen vector until the next epoch.
+        coordinator.index_approved_memory(IndexMemoryInput {
+            workspace_id: account.workspace.id, chat_id: chat.id, memory_id: first.id,
+            task_id: None, project_id: None, owner_agent_id: None,
+            visibility: "workspace_shared".into(),
+            vector: QoinVector { values: vec![-1.0, 0.0, -1.0, 0.0], model_version: "qoin-v1".into() },
+            tags: BTreeSet::new(), dependency_ids: BTreeSet::new(),
+            outcome_score: 0.0, evidence_score: 0.0,
+        }).await.unwrap();
         let agent_id = Uuid::new_v4();
         let handover = coordinator.prepare_handover(HandoverRequest {
             workspace_id: account.workspace.id, agent_id, task_id: None, project_id: None,
