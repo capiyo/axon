@@ -57,6 +57,8 @@ pub struct CreateArtifact {
 pub struct Task {
     pub id: Uuid,
     pub workspace_id: Uuid,
+    #[serde(default)]
+    pub created_by: Uuid,
     pub title: String,
     pub objective: String,
     pub assignee_agent_id: Uuid,
