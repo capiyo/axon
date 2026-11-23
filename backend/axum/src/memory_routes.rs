@@ -31,7 +31,9 @@ fn error(status: StatusCode, message: impl Into<String>) -> (StatusCode, Json<Ap
 fn store_error(err: MemoryStoreError) -> (StatusCode, Json<ApiError>) {
     match err {
         MemoryStoreError::NotFound => error(StatusCode::NOT_FOUND, "Memory record not found."),
-        MemoryStoreError::Policy(_) => error(StatusCode::BAD_REQUEST, "Memory record failed validation."),
+        MemoryStoreError::Policy(_) => {
+            error(StatusCode::BAD_REQUEST, "Memory record failed validation.")
+        }
         _ => error(StatusCode::INTERNAL_SERVER_ERROR, "Memory operation failed."),
     }
 }
@@ -42,7 +44,12 @@ async fn require_member(
     workspace_id: Uuid,
 ) -> ApiResult<()> {
     let member = state.is_workspace_member(user.user_id, workspace_id).await
-        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be checked."))?;
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Workspace access could not be checked.",
+            )
+        })?;
     if !member {
         return Err(error(StatusCode::FORBIDDEN, "Workspace membership is required."));
     }
@@ -67,22 +74,32 @@ pub async fn propose(
     Json(input): Json<ProposeMemory>,
 ) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
     require_member(&state, &user, workspace_id).await?;
-    if input.content.trim().is_empty() || input.content.len() > 100_000
-        || input.source.trim().is_empty() || input.source.len() > 2_000
-
+    if input.content.trim().is_empty()
+        || input.content.len() > 100_000
+        || input.source.trim().is_empty()
+        || input.source.len() > 2_000
     {
         return Err(error(StatusCode::BAD_REQUEST, "Memory content or provenance is invalid."));
     }
     if let Some(agent_id) = input.owner_agent_id {
         let agents = state.agents.read().await;
         if !agents.get(&agent_id).is_some_and(|agent| agent.workspace_id == workspace_id) {
-            return Err(error(StatusCode::BAD_REQUEST, "Agent scope must reference an agent in this workspace."));
+            return Err(error(
+                StatusCode::BAD_REQUEST,
+                "Agent scope must reference an agent in this workspace.",
+            ));
         }
     }
-    if let Some(task_id) = input.scope_id.filter(|_| matches!(input.scope, MemoryScope::Task | MemoryScope::Execution)) {
+    if let Some(task_id) = input
+        .scope_id
+        .filter(|_| matches!(input.scope, MemoryScope::Task | MemoryScope::Execution))
+    {
         let tasks = state.tasks.read().await;
         if !tasks.get(&task_id).is_some_and(|task| task.workspace_id == workspace_id) {
-            return Err(error(StatusCode::BAD_REQUEST, "Task scope must reference a task in this workspace."));
+            return Err(error(
+                StatusCode::BAD_REQUEST,
+                "Task scope must reference a task in this workspace.",
+            ));
         }
     }
     let token_cost = ((input.content.chars().count() + 3) / 4).max(1);
@@ -105,9 +122,15 @@ pub async fn propose(
         version: 1,
         token_cost,
     };
-    let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
+    let store = state
+        .memory_store
+        .as_ref()
+        .ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
     store.put(record.clone(), &format!("human:{}", user.user_id)).await.map_err(store_error)?;
-    Ok((StatusCode::CREATED, Json(json!({"memory_id": record.id, "verification": "proposed", "version": 1}))))
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({"memory_id": record.id, "verification": "proposed", "version": 1})),
+    ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -128,7 +151,15 @@ pub async fn review(
         _ => return Err(error(StatusCode::BAD_REQUEST, "Decision must be approve or reject.")),
     };
     let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
-    let record = store.review(workspace_id, memory_id, approved, &format!("human:{}", user.user_id)).await.map_err(store_error)?;
+    let record = store
+        .review(
+            workspace_id,
+            memory_id,
+            approved,
+            &format!("human:{}", user.user_id),
+        )
+        .await
+        .map_err(store_error)?;
     Ok(Json(record))
 }
 
@@ -146,11 +177,22 @@ pub async fn share(
     require_member(&state, &user, workspace_id).await?;
     let agents = state.agents.read().await;
     if !agents.get(&input.agent_id).is_some_and(|agent| agent.workspace_id == workspace_id) {
-        return Err(error(StatusCode::BAD_REQUEST, "Recipient agent must belong to this workspace."));
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "Recipient agent must belong to this workspace.",
+        ));
     }
     drop(agents);
     let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
-    store.grant(workspace_id, memory_id, input.agent_id, &format!("human:{}", user.user_id)).await.map_err(store_error)?;
+    store
+        .grant(
+            workspace_id,
+            memory_id,
+            input.agent_id,
+            &format!("human:{}", user.user_id),
+        )
+        .await
+        .map_err(store_error)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -166,7 +208,15 @@ pub async fn revoke(
     }
     drop(agents);
     let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
-    store.revoke(workspace_id, memory_id, agent_id, &format!("human:{}", user.user_id)).await.map_err(store_error)?;
+    store
+        .revoke(
+            workspace_id,
+            memory_id,
+            agent_id,
+            &format!("human:{}", user.user_id),
+        )
+        .await
+        .map_err(store_error)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -185,8 +235,15 @@ pub async fn allocate(
     Json(input): Json<AllocateMemory>,
 ) -> ApiResult<Json<crate::memory_system::MemoryAllocation>> {
     require_member(&state, &user, workspace_id).await?;
-    if input.token_budget == 0 || input.token_budget > 2_000_000 || input.query.trim().is_empty() || input.query.len() > 20_000 {
-        return Err(error(StatusCode::BAD_REQUEST, "Context token budget is outside the supported range."));
+    if input.token_budget == 0
+        || input.token_budget > 2_000_000
+        || input.query.trim().is_empty()
+        || input.query.len() > 20_000
+    {
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "Context token budget or query is outside the supported range.",
+        ));
     }
     let agents = state.agents.read().await;
     if !agents.get(&input.agent_id).is_some_and(|agent| agent.workspace_id == workspace_id) {
@@ -195,8 +252,13 @@ pub async fn allocate(
     drop(agents);
     if let Some(task_id) = input.task_id {
         let tasks = state.tasks.read().await;
-        if !tasks.get(&task_id).is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == input.agent_id) {
-            return Err(error(StatusCode::FORBIDDEN, "Only the task's assigned agent may receive task-scoped memory."));
+        if !tasks.get(&task_id).is_some_and(|task| {
+            task.workspace_id == workspace_id && task.assignee_agent_id == input.agent_id
+        }) {
+            return Err(error(
+                StatusCode::FORBIDDEN,
+                "Only the task's assigned agent may receive task-scoped memory.",
+            ));
         }
     }
     let context = RetrievalContext {
@@ -210,6 +272,9 @@ pub async fn allocate(
         now: Utc::now(),
     };
     let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
-    let allocation = store.allocate(&context, &input.query, input.token_budget).await.map_err(store_error)?;
+    let allocation = store
+        .allocate(&context, &input.query, input.token_budget)
+        .await
+        .map_err(store_error)?;
     Ok(Json(allocation))
 }
