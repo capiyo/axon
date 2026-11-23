@@ -1496,32 +1496,6 @@ mod tests {
             .expect("read notifications");
         assert_eq!(read_page.unread_count, 0);
     }
-}
-
-pub async fn list_reports(
-    State(state): State<AppState>,
-    Extension(user): Extension<Arc<AuthenticatedUser>>,
-    Path(listing_id): Path<Uuid>,
-    Query(query): Query<ExploreQuery>,
-) -> ApiResult<Json<Vec<ModerationReport>>> {
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Moderation storage is unavailable."))?;
-    let reports = store.list_reports(listing_id, user.user_id, query.limit.unwrap_or(50), query.offset.unwrap_or(0))
-        .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load moderation reports."))?
-        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Listing not found or caller is not its publisher."))?;
-    Ok(Json(reports))
-}
-
-pub async fn resolve_report(
-    State(state): State<AppState>,
-    Extension(user): Extension<Arc<AuthenticatedUser>>,
-    Path(report_id): Path<Uuid>,
-    Json(input): Json<ResolveReportInput>,
-) -> ApiResult<Json<serde_json::Value>> {
-    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Moderation storage is unavailable."))?;
-    let status = store.resolve_report(report_id, user.user_id, input.action.trim())
-        .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not resolve report."))?
-        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Pending report not found or caller is not its publisher."))?;
-    Ok(Json(serde_json::json!({ "status": status })))
     #[tokio::test]
     async fn listing_owner_can_review_reports_and_hide_reported_comments() {
         let storage = SqliteStorage::connect_in_memory().await.expect("in-memory storage");
@@ -1550,6 +1524,33 @@ pub async fn resolve_report(
         let comments = store.list_comments(listing_id, owner_id, 50, 0).await.expect("comments");
         assert!(comments.is_empty());
     }
+}
+
+pub async fn list_reports(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path(listing_id): Path<Uuid>,
+    Query(query): Query<ExploreQuery>,
+) -> ApiResult<Json<Vec<ModerationReport>>> {
+    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Moderation storage is unavailable."))?;
+    let reports = store.list_reports(listing_id, user.user_id, query.limit.unwrap_or(50), query.offset.unwrap_or(0))
+        .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load moderation reports."))?
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Listing not found or caller is not its publisher."))?;
+    Ok(Json(reports))
+}
+
+pub async fn resolve_report(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path(report_id): Path<Uuid>,
+    Json(input): Json<ResolveReportInput>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Moderation storage is unavailable."))?;
+    let status = store.resolve_report(report_id, user.user_id, input.action.trim())
+        .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not resolve report."))?
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Pending report not found or caller is not its publisher."))?;
+    Ok(Json(serde_json::json!({ "status": status })))
+
 
 
 }
