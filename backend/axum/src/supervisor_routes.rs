@@ -81,6 +81,35 @@ fn is_low_risk_quick(level: &TaskLevel, title: &str, objective: &str) -> bool {
     !high_risk_terms.iter().any(|term| text.contains(term))
 }
 
+
+fn task_risk_score(title: &str, objective: &str) -> f64 {
+    let text = format!("{title} {objective}").to_ascii_lowercase();
+    let high_risk_terms = [
+        "delete", "drop table", "truncate", "migration", "deploy", "production",
+        "security", "authentication", "authorization", "password", "secret",
+        "payment", "financial", "medical", "legal", "shell", "database",
+        "credential", "account access",
+    ];
+    if high_risk_terms.iter().any(|term| text.contains(term)) {
+        0.95
+    } else {
+        0.25
+    }
+}
+
+fn task_ambiguity(title: &str, objective: &str) -> f64 {
+    let text = format!("{title} {objective}").to_ascii_lowercase();
+    let vague_terms = ["somehow", "maybe", "some stuff", "etc", "as needed", "make it better", "figure it out"];
+    let vague_count = vague_terms.iter().filter(|term| text.contains(**term)).count();
+    if vague_count >= 2 || objective.len() > 8_000 {
+        0.85
+    } else if vague_count == 1 || objective.len() > 4_000 {
+        0.65
+    } else {
+        0.20
+    }
+}
+
 fn configured_curated_models(category: &str) -> Vec<Uuid> {
     let suffix: String = category
         .chars()
@@ -350,8 +379,37 @@ pub async fn create_run(
             .unwrap_or(10),
         curated_model_ids,
     };
+    let risk = task_risk_score(&run.title, &run.objective);
+    let risk_escalated = profile.level == TaskLevel::Quick && risk >= 0.80;
+    if risk_escalated {
+        // A user-selected Quick tier cannot bypass supervision for a risky task.
+        profile.level = TaskLevel::Important;
+    }
     let assignment_engine = state.assignment_engine();
     let mut assignment = assignment_engine.assign(&profile, &providers, &models, &stats);
+    let ambiguity = task_ambiguity(&run.title, &run.objective);
+    let has_alternative = assignment.as_ref().is_ok_and(|plan| {
+        plan.decisions.iter().any(|decision| decision.candidates_considered.len() > 1)
+    });
+    let action = crate::vector_decision::VectorDecisionEngine.choose_action(
+        crate::vector_decision::DecisionContext {
+            capability_fit: if assignment.is_ok() { 0.90 } else { 0.10 },
+            evidence_completeness: 1.0,
+            ambiguity,
+            risk,
+            eligible_alternative_exists: has_alternative,
+            can_split: ambiguity >= 0.75,
+        },
+        crate::vector_decision::DecisionThresholds::default(),
+    );
+    let action_notice = match action {
+        crate::vector_decision::AgentAction::Execute => None,
+        crate::vector_decision::AgentAction::Delegate => Some("Vector policy recommends delegation.".to_string()),
+        crate::vector_decision::AgentAction::Split => Some("Vector policy recommends splitting this ambiguous task before execution.".to_string()),
+        crate::vector_decision::AgentAction::RequestEvidence => Some("Vector policy requires more evidence before execution.".to_string()),
+        crate::vector_decision::AgentAction::Escalate => Some("Vector policy escalated this task to higher supervision.".to_string()),
+        crate::vector_decision::AgentAction::Abstain => Some("Vector policy abstained because no eligible agent assignment was available.".to_string()),
+    };
     if let Ok(plan) = &assignment {
         let reserved = state
             .reserve_model_spend(
@@ -407,18 +465,29 @@ pub async fn create_run(
             if plan.level == TaskLevel::Quick {
                 run.status = SupervisorRunStatus::ReadyForWorkers;
             }
-            run.assignment_notice = if plan.notices.is_empty() {
-                None
-            } else {
-                Some(plan.notices.join(" "))
-            };
+            let mut notices = plan.notices;
+            if risk_escalated {
+                notices.push("Risk policy upgraded Quick to Important supervision.".into());
+            }
+            if let Some(notice) = action_notice.clone() {
+                notices.push(notice);
+            }
+            run.assignment_notice = if notices.is_empty() { None } else { Some(notices.join(" ")) };
             run.assignment_decisions = plan.decisions;
         }
         Err(error) => {
             run.assignment_level = None;
-            run.assignment_notice = Some(format!(
+            let mut notice = format!(
                 "No AI assignment was made: {error}. This run remains available for manual work."
-            ));
+            );
+            if let Some(action_notice) = action_notice {
+                notice.push(' ');
+                notice.push_str(&action_notice);
+            }
+            if risk_escalated {
+                notice.push_str(" Risk policy requires Important supervision.");
+            }
+            run.assignment_notice = Some(notice);
         }
     }
     let run = persist_created_run(&state, &user, run).await?;
