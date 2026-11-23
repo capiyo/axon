@@ -216,6 +216,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setChatTitle("");
       setChats(current => [chat, ...current]);
       setActiveChat(chat.id);
+      setMobileChatOpen(true);
     });
   }
 
@@ -721,6 +722,19 @@ const styles = StyleSheet.create({
   memoryTypeChip: { paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, backgroundColor: "#17271D" },
   newChatRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 13 },
   newChatInput: { flex: 1, marginBottom: 0 },
+
+  exploreSortRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 12 },
+  exploreSortChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, backgroundColor: "#17271D" },
+  exploreActions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 15, marginTop: 9 },
+  exploreActionText: { color: "#9DE4B0", fontSize: 10, fontWeight: "700" },
+  exploreDiscussionMobile: { borderTopWidth: 1, borderTopColor: "#294034", paddingTop: 12, marginTop: 4, gap: 12 },
+  exploreCommentMobile: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
+  exploreCommentAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#28583D", alignItems: "center", justifyContent: "center" },
+  exploreCommentAuthor: { color: "#9AAFA1", fontSize: 9, fontWeight: "700" },
+  exploreCommentBody: { color: "#E7F6EB", fontSize: 11, lineHeight: 17, marginTop: 4 },
+  exploreReplyMobile: { marginTop: 10, marginLeft: 10, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: "#244B33" },
+  exploreCommentInputRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 8 },
+  exploreCommentInput: { flex: 1, marginBottom: 0 },
 });
 
 
