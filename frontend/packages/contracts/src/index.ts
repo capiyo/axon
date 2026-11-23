@@ -206,6 +206,7 @@ export type ExploreComment = {
   like_count: number;
   reply_count: number;
   is_liked: boolean;
+  is_mine: boolean;
 };
 
 export type Chat = {
