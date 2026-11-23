@@ -456,9 +456,49 @@ pub async fn create_run(
     let has_alternative = assignment.as_ref().is_ok_and(|plan| {
         plan.decisions.iter().any(|decision| decision.candidates_considered.len() > 1)
     });
+    let capability_fit = assignment
+        .as_ref()
+        .ok()
+        .map(|plan| {
+            let scores = plan
+                .decisions
+                .iter()
+                .filter_map(|decision| {
+                    let model = models
+                        .iter()
+                        .find(|model| model.id == decision.chosen_model_id)?;
+                    let stat = stats.iter().find(|stat| {
+                        stat.model_id == decision.chosen_model_id
+                            && stat.category == profile.category
+                            && stat.role == decision.role
+                    });
+                    let curated_rank = profile
+                        .curated_model_ids
+                        .iter()
+                        .position(|id| *id == decision.chosen_model_id)
+                        .map(|rank| rank as u16)
+                        .or_else(|| model.curated_rank.get(&profile.category).copied())
+                        .unwrap_or(0);
+                    Some(
+                        crate::model_registry::score_candidate(
+                            stat,
+                            &plan.level,
+                            profile.minimum_history_runs,
+                            curated_rank,
+                        ) / 1000.0,
+                    )
+                })
+                .collect::<Vec<_>>();
+            if scores.is_empty() {
+                0.10
+            } else {
+                scores.iter().sum::<f64>() / scores.len() as f64
+            }
+        })
+        .unwrap_or(0.10);
     let action = crate::vector_decision::VectorDecisionEngine.choose_action(
         crate::vector_decision::DecisionContext {
-            capability_fit: if assignment.is_ok() { 0.90 } else { 0.10 },
+            capability_fit,
             evidence_completeness: 1.0,
             ambiguity,
             risk,
