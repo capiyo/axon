@@ -492,7 +492,7 @@ function WorkspaceApp() {
           <div className="axon-chat-list">
             {chats.map(chat => {
               const isActive = activeChat === chat.id;
-              const latestMessage = isActive && chatDetail?.chat.id === chat.id ? chatDetail.messages.at(-1) : undefined;
+              const latestMessage = isActive && chatDetail?.chat.id === chat.id ? chatDetail.messages[chatDetail.messages.length - 1] : undefined;
               const messageCount = isActive && chatDetail?.chat.id === chat.id ? chatDetail.messages.length : null;
               return <button type="button" key={chat.id} className={isActive ? "axon-chat-item active" : "axon-chat-item"} onClick={() => { setActiveChat(chat.id); setActiveTab("chats"); }} aria-label={`Open conversation: ${chat.title}`}>
                 <span className="axon-chat-meta"><span className="axon-chat-kind">WORKSPACE CHAT</span><time dateTime={chat.updated_at}>{new Date(chat.updated_at).toLocaleDateString([], { month: "short", day: "numeric" })}</time></span>
