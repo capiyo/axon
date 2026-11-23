@@ -644,8 +644,8 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 </View>
                 <View style={styles.profileMetricsMobile}>
                   <Text style={styles.fieldLabel}>MEMORY & CONTEXT</Text>
-                  <Text style={styles.rowMeta}>Approved memory entries · {(chatDetail?.memory.filter(entry=>entry.status==="approved").length ?? 0)}</Text>
-                  <Text style={styles.rowMeta}>Messages across conversations · {chats.reduce((total,chat)=>total+chat.message_count,0)}</Text>
+                  <Text style={styles.rowMeta}>Selected chat approved memory entries · {(chatDetail?.memory.filter(entry=>entry.status==="approved").length ?? 0)}</Text>
+                  <Text style={styles.rowMeta}>Messages across active chats · {chats.reduce((total,chat)=>total+chat.message_count,0)}</Text>
                   <Text style={styles.rowMeta}>Captured artifacts · {artifacts.length}</Text>
                   <Text style={styles.fieldLabel}>EXECUTION & HEALTH</Text>
                   <Text style={styles.rowMeta}>Awaiting review · {tasks.filter(task=>task.status==="review_required" || task.status==="submitted").length}</Text>
