@@ -14,7 +14,7 @@ import { StatusBar } from "expo-status-bar";
 import { axonTheme } from "../../packages/theme/src";
 import { auth } from "./firebase";
 
-import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext, QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt } from "../../packages/contracts/src";
+import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext, QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt, ExploreAgent, ExploreComment } from "../../packages/contracts/src";
 
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_AXON_API_URL ?? "http://127.0.0.1:8080";
@@ -57,6 +57,14 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [activeTab, setActiveTab] = useState<"chats" | "explore">("chats");
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [exploreAgents, setExploreAgents] = useState<ExploreAgent[]>([]);
+  const [exploreComments, setExploreComments] = useState<Record<string, ExploreComment[]>>({});
+  const [exploreSort, setExploreSort] = useState<"recent" | "popular" | "discussed">("recent");
+  const [exploreDrafts, setExploreDrafts] = useState<Record<string, string>>({});
+  const [replyTarget, setReplyTarget] = useState<{ listingId: string; parentId: string } | null>(null);
+  const [publishAgentId, setPublishAgentId] = useState("");
+  const [publishDescription, setPublishDescription] = useState("");
+  const [publishCategory, setPublishCategory] = useState("Productivity");
   const [activeChat, setActiveChat] = useState("");
   const [chatDetail, setChatDetail] = useState<ChatDetail | null>(null);
   const [chatTitle, setChatTitle] = useState("");
@@ -119,6 +127,12 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   useEffect(() => {
     refreshHome().catch(cause => setError(cause instanceof Error ? cause.message : "API unavailable"));
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "explore") {
+      refreshExplore().catch(cause => setError(cause instanceof Error ? cause.message : "Could not load Explore."));
+    }
+  }, [activeTab, exploreSort, selected?.id]);
 
   useEffect(() => {
     if (selected) {
