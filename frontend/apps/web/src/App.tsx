@@ -188,8 +188,13 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
 
   useEffect(() => {
     if (!selected || !activeChat) { setChatDetail(null); return; }
-    api<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`)
-      .then(setChatDetail)
+    const chatId = activeChat;
+    void api(`/api/v1/workspaces/${selected.id}/chats/${chatId}/read`, { method: "POST" })
+      .then(() => Promise.all([
+        api<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${chatId}`),
+        api<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`)
+      ]))
+      .then(([detail, items]) => { setChatDetail(detail); setChats(items); })
       .catch(cause => setError(cause instanceof Error ? cause.message : "Could not load chat."));
   }, [selected?.id, activeChat]);
 
@@ -217,6 +222,28 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setMobileConversationOpen(false);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not archive chat."); }
     finally { setBusy(false); }
+  }
+
+  async function toggleChatLike(chatId: string) {
+    if (!selected) return;
+    try {
+      await api(`/api/v1/workspaces/${selected.id}/chats/${chatId}/like`, { method: "POST" });
+      setChats(await api<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not update chat reaction.");
+    }
+  }
+
+  async function archiveChatById(chatId: string) {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/workspaces/${selected.id}/chats/${chatId}/archive`, { method: "PATCH" });
+      await refreshWorkspace(selected);
+      if (activeChat === chatId) setMobileConversationOpen(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not archive chat.");
+    } finally { setBusy(false); }
   }
 
   async function sendChatMessage(event: FormEvent<HTMLFormElement>) {
@@ -608,7 +635,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                   </form>
                   <div className="chat-list">
                     {chats.map(chat => { const preview = chatPreviews[chat.id]; const lastMessage = preview?.messages[preview.messages.length - 1]; return <button type="button" className={activeChat === chat.id ? "chat-list-item active" : "chat-list-item"} key={chat.id} onClick={() => { setActiveChat(chat.id); setMobileConversationOpen(true); }}>
-                      <span className="chat-card-avatar">{(lastMessage?.answered_by || chat.title || "A").slice(0,1).toUpperCase()}</span><span className="chat-card-content"><span className="chat-card-heading"><strong>{chat.title}</strong><small>{new Date(chat.updated_at).toLocaleString()}</small></span><small className="chat-card-agent">{lastMessage?.answered_by || "Workspace conversation"}</small><span className="chat-card-preview">{lastMessage?.content || "No messages yet. Open this conversation to begin."}</span><span className="chat-card-footer"><small>{preview ? `${preview.messages.length} messages` : "Loading conversation"} · {lastMessage?.role === "assistant" ? "Agent replied" : lastMessage?.role === "user" ? "Your message" : "New conversation"}</small><span className="chat-card-open">{activeChat === chat.id ? "OPEN" : "VIEW"}</span></span></span>
+                      <span className="chat-card-avatar">{(lastMessage?.answered_by || chat.title || "A").slice(0,1).toUpperCase()}</span><span className="chat-card-content"><span className="chat-card-heading"><strong>{chat.title}</strong><small>{new Date(chat.updated_at).toLocaleString()}</small></span><small className="chat-card-agent">{lastMessage?.answered_by || "Workspace conversation"}</small><span className="chat-card-preview">{lastMessage?.content || "No messages yet. Open this conversation to begin."}</span><span className="chat-card-footer"><small>{preview ? `${preview.messages.length} messages` : "Loading conversation"} · {lastMessage?.role === "assistant" ? "Agent replied" : lastMessage?.role === "user" ? "Your message" : "New conversation"}</small><span className="chat-card-actions">{chat.unread_count > 0 && <span className="chat-unread-count">{chat.unread_count}</span>}<span role="button" tabIndex={0} className="chat-card-like" onClick={event => {event.stopPropagation();void toggleChatLike(chat.id);}} onKeyDown={event => {if(event.key==="Enter" || event.key===" "){event.preventDefault();event.stopPropagation();void toggleChatLike(chat.id);}}}>{chat.is_liked ? "♥" : "♡"}</span><span role="button" tabIndex={0} className="chat-card-archive" onClick={event => {event.stopPropagation();void archiveChatById(chat.id);}} onKeyDown={event => {if(event.key==="Enter" || event.key===" "){event.preventDefault();event.stopPropagation();void archiveChatById(chat.id);}}}>Archive</span></span></span></span>
                     </button>; })}
                     {chats.length === 0 && <div className="chat-list-empty"><span className="chat-empty-mark">＋</span><strong>No conversations yet</strong><p>Create a titled conversation to start capturing project discussions and decisions.</p></div>}
                   </div>
