@@ -1522,4 +1522,34 @@ pub async fn resolve_report(
         .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not resolve report."))?
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Pending report not found or caller is not its publisher."))?;
     Ok(Json(serde_json::json!({ "status": status })))
+    #[tokio::test]
+    async fn listing_owner_can_review_reports_and_hide_reported_comments() {
+        let storage = SqliteStorage::connect_in_memory().await.expect("in-memory storage");
+        let store = storage.explore_store();
+        let owner_id = Uuid::new_v4();
+        let reporter_id = Uuid::new_v4();
+        let workspace_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+        let listing_id = store.publish(PublishAgentRecord {
+            agent_id,
+            workspace_id,
+            owner_id,
+            title: "Agent",
+            provider: "manual",
+            description: "Public description",
+            category: "General",
+        }).await.expect("publish").expect("listing");
+        let comment = store.create_comment(listing_id, reporter_id, None, "Spam comment.")
+            .await.expect("comment").expect("visible comment");
+        assert!(store.report(listing_id, Some(comment.id), reporter_id, "Spam or abuse.")
+            .await.expect("report"));
+        let reports = store.list_reports(listing_id, owner_id, 20, 0).await.expect("reports").expect("owner access");
+        assert_eq!(reports.len(), 1);
+        assert!(store.list_reports(listing_id, reporter_id, 20, 0).await.expect("non-owner reports").is_none());
+        assert_eq!(store.resolve_report(reports[0].id, owner_id, "hide_comment").await.expect("resolve").as_deref(), Some("actioned"));
+        let comments = store.list_comments(listing_id, owner_id, 50, 0).await.expect("comments");
+        assert!(comments.is_empty());
+    }
+
+
 }
