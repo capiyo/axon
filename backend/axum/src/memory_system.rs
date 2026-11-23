@@ -58,7 +58,13 @@ pub struct MemoryRecord {
 
 impl MemoryRecord {
     pub fn validate(&self) -> Result<(), MemoryError> {
-        if self.content.trim().is_empty() || self.source.trim().is_empty() || self.token_cost == 0 {
+        if self.content.trim().is_empty()
+            || self.source.trim().is_empty()
+            || self.token_cost == 0
+            || self.token_cost > i64::MAX as usize
+            || self.version == 0
+            || self.version > i64::MAX as u64
+        {
             return Err(MemoryError::InvalidRecord);
         }
         if !self.confidence.is_finite() || !self.authority.is_finite()
@@ -232,7 +238,7 @@ pub fn allocate_context(
     relevance: &[(Uuid, f64)],
     token_budget: usize,
 ) -> Result<MemoryAllocation, MemoryError> {
-    if token_budget == 0 {
+    if token_budget == 0 || token_budget > i64::MAX as usize {
         return Err(MemoryError::InvalidBudget);
     }
     let relevance_map: std::collections::BTreeMap<_, _> = relevance.iter().copied().collect();
