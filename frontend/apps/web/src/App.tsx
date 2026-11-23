@@ -161,6 +161,24 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     await toggleExploreAction(`/api/v1/explore/comments/${commentId}/like`);
   }
 
+  async function startExploreConversation(listing: ExploreAgent) {
+    if (!selected) return;
+    setBusy(true);
+    setError("");
+    try {
+      const chat = await api<Chat>(`/api/v1/workspaces/${selected.id}/chats`, {
+        method: "POST",
+        body: JSON.stringify({ title: listing.title })
+      });
+      setChats(current => [chat, ...current]);
+      setActiveChat(chat.id);
+      setActiveView("chats");
+      setMobileConversationOpen(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not start a workspace conversation.");
+    } finally { setBusy(false); }
+  }
+
   useEffect(() => {
     void refreshWorkspaces().catch(cause => setError(cause instanceof Error ? cause.message : "Could not reach the Axon API."));
   }, []);
@@ -675,7 +693,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                     <div className="explore-agent-top"><span className="chat-card-avatar">{listing.title.slice(0,1).toUpperCase()}</span><div><strong>{listing.title}</strong><small>{listing.category} · {listing.provider}</small></div><span className="agent-availability">Published</span></div>
                     <p>{listing.description}</p>
                     <div className="explore-agent-meta"><span>{listing.like_count} likes · {listing.comment_count} comments</span><span>Updated {new Date(listing.updated_at).toLocaleDateString()}</span></div>
-                    <div className="explore-social-actions"><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/like`)} disabled={busy}>{listing.is_liked ? "♥ Liked" : "♡ Like"}</button><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/follow`)} disabled={busy}>{listing.is_following ? "Following" : "Follow"}</button><span>Public listing</span></div>
+                    <div className="explore-social-actions"><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/like`)} disabled={busy}>{listing.is_liked ? "♥ Liked" : "♡ Like"}</button><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/follow`)} disabled={busy}>{listing.is_following ? "Following" : "Follow"}</button><button type="button" onClick={() => void startExploreConversation(listing)} disabled={busy}>Start workspace chat</button><span>Public listing</span></div>
                     <div className="explore-discussion"><strong>Community discussion</strong>
                       {roots.map(comment => <div className="explore-comment" key={comment.id}>
                         <span className="explore-comment-avatar">A</span><div className="explore-comment-body"><div className="explore-comment-heading"><strong>{comment.author_label}</strong><small>{new Date(comment.created_at).toLocaleString()}</small></div><p>{comment.body}</p><div className="explore-comment-actions"><button type="button" onClick={() => void toggleCommentLike(comment.id)} disabled={busy}>{comment.is_liked ? "♥" : "♡"} {comment.like_count}</button><button type="button" onClick={() => setReplyTarget(replyTarget?.parentId === comment.id ? null : { listingId: listing.id, parentId: comment.id })}>Reply · {comment.reply_count}</button></div>
