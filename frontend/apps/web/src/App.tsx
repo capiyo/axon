@@ -237,6 +237,15 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     finally { setBusy(false); }
   }
 
+  async function unpublishExploreAgent(listing: ExploreAgent) {
+    setBusy(true);
+    try {
+      await api(`/api/v1/workspaces/${listing.workspace_id}/agents/${listing.agent_id}/publish`, { method: "DELETE" });
+      await refreshExplore();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not unpublish agent."); }
+    finally { setBusy(false); }
+  }
+
   async function startExploreConversation(listing: ExploreAgent) {
     if (!selected) return;
     setBusy(true);
@@ -774,7 +783,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                     <div className="explore-agent-top"><span className="chat-card-avatar">{listing.title.slice(0,1).toUpperCase()}</span><div><strong>{listing.title}</strong><small>{listing.category} · {listing.provider}</small></div><span className="agent-availability">Published</span></div>
                     <p>{listing.description}</p>
                     <div className="explore-agent-meta"><span>{listing.like_count} likes · {listing.comment_count} comments</span><span>Updated {new Date(listing.updated_at).toLocaleDateString()}</span></div>
-                    <div className="explore-social-actions"><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/like`)} disabled={busy}>{listing.is_liked ? "♥ Liked" : "♡ Like"}</button><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/follow`)} disabled={busy}>{listing.is_following ? "Following" : "Follow"}</button><button type="button" onClick={() => void startExploreConversation(listing)} disabled={busy}>Start workspace chat</button><button type="button" onClick={() => {setReportTarget({listingId:listing.id});setReportReason("");}}>Report</button><span>Public listing</span></div>
+                    <div className="explore-social-actions"><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/like`)} disabled={busy}>{listing.is_liked ? "♥ Liked" : "♡ Like"}</button><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/follow`)} disabled={busy}>{listing.is_following ? "Following" : "Follow"}</button><button type="button" onClick={() => void startExploreConversation(listing)} disabled={busy}>Start workspace chat</button>{listing.is_owner && <button type="button" onClick={() => void unpublishExploreAgent(listing)} disabled={busy}>Unpublish</button>}<button type="button" onClick={() => {setReportTarget({listingId:listing.id});setReportReason("");}}>Report</button><span>{listing.is_owner ? "Your listing" : "Public listing"}</span></div>
                     <div className="explore-discussion"><strong>Community discussion</strong>{reportTarget?.listingId === listing.id && <form className="explore-edit-form" onSubmit={event => {event.preventDefault();void submitExploreReport();}}><textarea value={reportReason} onChange={event => setReportReason(event.target.value)} placeholder="Why are you reporting this content?" rows={2}/><button disabled={busy || !reportReason.trim()}>Submit report</button><button type="button" onClick={() => setReportTarget(null)}>Cancel</button></form>}
                       {roots.map(comment => <div className="explore-comment" key={comment.id}>
                         <span className="explore-comment-avatar">A</span><div className="explore-comment-body"><div className="explore-comment-heading"><strong>{comment.author_label}</strong><small>{new Date(comment.created_at).toLocaleString()}</small></div>{editingCommentId === comment.id ? <form className="explore-edit-form" onSubmit={event => {event.preventDefault();void saveExploreComment(comment.id);}}><textarea value={editingCommentDraft} onChange={event => setEditingCommentDraft(event.target.value)} rows={3}/><button disabled={busy || !editingCommentDraft.trim()}>Save</button><button type="button" onClick={() => setEditingCommentId(null)}>Cancel</button></form> : <p>{comment.body}</p>}<div className="explore-comment-actions"><button type="button" onClick={() => void toggleCommentLike(comment.id)} disabled={busy}>{comment.is_liked ? "♥" : "♡"} {comment.like_count}</button><button type="button" onClick={() => setReplyTarget(replyTarget?.parentId === comment.id ? null : { listingId: listing.id, parentId: comment.id })}>Reply · {comment.reply_count}</button><button type="button" onClick={() => {setReportTarget({listingId:listing.id,commentId:comment.id});setReportReason("");}}>Report</button>{comment.is_mine && <><button type="button" onClick={() => {setEditingCommentId(comment.id);setEditingCommentDraft(comment.body);}}>Edit</button><button type="button" onClick={() => void deleteExploreComment(comment.id)} disabled={busy}>Delete</button></>}</div>
