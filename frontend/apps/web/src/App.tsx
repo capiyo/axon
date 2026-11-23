@@ -573,6 +573,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           title: taskTitle.trim(),
           objective: taskObjective.trim(),
           assignee_agent_id: assignee,
+          source_chat_id: activeChat || null,
           context_artifact_ids: selectedArtifactIds
         })
       });
