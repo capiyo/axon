@@ -14,7 +14,7 @@ pub enum QoinVectorError {
     Request(#[from] reqwest::Error),
     #[error("Qoin vector service returned HTTP {0}")]
     HttpStatus(reqwest::StatusCode),
-    #[error("Qoin has no current vector for this symbol")]
+    #[error("Qoin has no vector for this symbol and timestamp")]
     MissingVector,
     #[error("Qoin vector must contain exactly {QOIN_VECTOR_DIMENSION} finite attended features")]
     InvalidVector,
@@ -30,6 +30,7 @@ pub struct QoinVectorSnapshot {
     pub action: String,
     pub reason: String,
     pub decision_vector: Option<[f64; 2]>,
+    pub event_ts_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +56,8 @@ struct QoinDecision {
     reason: Option<String>,
     #[serde(default)]
     decision_vector: Option<[f64; 2]>,
+    #[serde(default)]
+    event_ts_ms: Option<i64>,
 }
 
 impl QoinVectorClient {
@@ -80,23 +83,57 @@ impl QoinVectorClient {
         })
     }
 
+    /// Current market state for a live agent query.
     pub async fn latest(&self, symbol: &str) -> Result<QoinVectorSnapshot, QoinVectorError> {
+        self.fetch(symbol, None).await
+    }
+
+    /// Event-time market state for a historical memory. No current-vector
+    /// fallback is permitted when Qoin has no snapshot at or before at_ms.
+    pub async fn at(
+        &self,
+        symbol: &str,
+        at_ms: i64,
+    ) -> Result<QoinVectorSnapshot, QoinVectorError> {
+        if at_ms <= 0 {
+            return Err(QoinVectorError::MissingVector);
+        }
+        self.fetch(symbol, Some(at_ms)).await
+    }
+
+    async fn fetch(
+        &self,
+        symbol: &str,
+        at_ms: Option<i64>,
+    ) -> Result<QoinVectorSnapshot, QoinVectorError> {
         let symbol = symbol.trim().to_ascii_uppercase();
         if symbol.is_empty() || symbol.len() > 32 {
             return Err(QoinVectorError::MissingVector);
         }
-        let response = self
-            .http
-            .get(self.endpoint.clone())
-            .query(&[("symbol", symbol.as_str())])
-            .send()
-            .await?;
+        let mut endpoint = self.endpoint.clone();
+        if at_ms.is_some() {
+            endpoint.set_path(&format!("{}/history", endpoint.path().trim_end_matches('/')));
+        }
+        let mut request = self.http.get(endpoint).query(&[("symbol", symbol.as_str())]);
+        if let Some(timestamp) = at_ms {
+            request = request.query(&[("at_ms", timestamp)]);
+        }
+        let response = request.send().await?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Err(QoinVectorError::MissingVector);
+        }
         if !response.status().is_success() {
             return Err(QoinVectorError::HttpStatus(response.status()));
         }
         let decision: QoinDecision = response.json().await?;
         if decision.symbol.trim().to_ascii_uppercase() != symbol {
             return Err(QoinVectorError::InvalidVector);
+        }
+        let event_ts_ms = decision.event_ts_ms;
+        if let Some(requested_at) = at_ms {
+            if event_ts_ms.is_none_or(|event_time| event_time > requested_at) {
+                return Err(QoinVectorError::InvalidVector);
+            }
         }
         let values = decision
             .attended_features
@@ -130,6 +167,7 @@ impl QoinVectorClient {
             action: decision.action.unwrap_or_else(|| "wait".into()),
             reason: decision.reason.unwrap_or_default(),
             decision_vector: decision.decision_vector,
+            event_ts_ms,
         })
     }
 }
@@ -147,7 +185,8 @@ mod tests {
             "features": {"order_flow_imbalance": 0.1},
             "action": "wait",
             "reason": "outside threshold",
-            "decision_vector": [0.0, 0.0]
+            "decision_vector": [0.0, 0.0],
+            "event_ts_ms": 1_800_000_000_000_i64
         }))
         .unwrap();
         assert_eq!(decision.symbol, "BTCUSDT");
@@ -156,6 +195,7 @@ mod tests {
             decision.attended_features.unwrap().len(),
             QOIN_VECTOR_DIMENSION
         );
+        assert_eq!(decision.event_ts_ms, Some(1_800_000_000_000));
     }
 
     #[test]
