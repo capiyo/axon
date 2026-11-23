@@ -35,6 +35,8 @@ mod tests {
             Task {
                 id: task_id,
                 workspace_id: first.workspace.id,
+                created_by: first.user_id,
+                source_chat_id: None,
                 title: "Private task".into(),
                 objective: "Test resource isolation".into(),
                 assignee_agent_id: Uuid::new_v4(),
