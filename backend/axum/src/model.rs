@@ -60,6 +60,8 @@ pub struct Task {
     pub title: String,
     pub objective: String,
     pub assignee_agent_id: Uuid,
+    #[serde(default)]
+    pub source_chat_id: Option<Uuid>,
     pub context_artifact_ids: Vec<Uuid>,
     pub response_artifact_id: Option<Uuid>,
     pub status: TaskStatus,
@@ -89,6 +91,8 @@ pub struct CreateTask {
     pub title: String,
     pub objective: String,
     pub assignee_agent_id: Uuid,
+    #[serde(default)]
+    pub source_chat_id: Option<Uuid>,
     #[serde(default)]
     pub context_artifact_ids: Vec<Uuid>,
 }
