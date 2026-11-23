@@ -409,6 +409,37 @@ mod tests {
         assert!(lexical_relevance("portfolio risk model", "portfolio risk model design") > 0.7);
     }
 
+
+    #[test]
+    fn task_memory_is_confined_to_its_task() {
+        let workspace = Uuid::new_v4();
+        let task_id = Uuid::new_v4();
+        let mut item = record(workspace, MemoryScope::Task, MemorySensitivity::Internal);
+        item.scope_id = Some(task_id);
+        let mut context = RetrievalContext {
+            workspace_id: workspace,
+            task_id: Some(task_id),
+            agent_id: Uuid::new_v4(),
+            allowed_sensitivity: MemorySensitivity::Internal,
+            granted_memory_ids: BTreeSet::new(),
+            now: Utc::now(),
+        };
+        assert!(can_read(&item, &context));
+        context.task_id = Some(Uuid::new_v4());
+        assert!(!can_read(&item, &context));
+    }
+
+    #[test]
+    fn execution_memory_requires_an_expiry() {
+        let mut item = record(
+            Uuid::new_v4(),
+            MemoryScope::Execution,
+            MemorySensitivity::Internal,
+        );
+        item.expires_at = None;
+        assert_eq!(item.validate(), Err(MemoryError::InvalidScope));
+    }
+
     #[test]
     fn invalid_scores_are_rejected() {
         let mut item = record(Uuid::new_v4(), MemoryScope::Workspace, MemorySensitivity::Public);
