@@ -1,4 +1,5 @@
 use crate::auth_middleware::AuthenticatedUser;
+use crate::explore::NotificationInput;
 use crate::{
     audit::AuditEvent,
     model::{Artifact, CreateTask, SubmitTask, Task, TaskStatus, TaskTransition, TransitionTask},
@@ -261,15 +262,16 @@ pub async fn submit_task(
     if task.created_by != user.user_id {
         if let Some(notifications) = state.explore.as_ref() {
             let _ = notifications
-                .notify_task_event(
-                    task.created_by,
-                    task.workspace_id,
-                    task.id,
-                    user.user_id,
-                    "task.response_submitted",
-                    "Task response submitted",
-                    &format!("A response was submitted for {}.", task.title),
-                )
+                .notify_task_event(NotificationInput {
+                    recipient_id: task.created_by,
+                    workspace_id: Some(task.workspace_id),
+                    entity_id: task.id,
+                    actor_id: user.user_id,
+                    event_type: "task.response_submitted",
+                    entity_type: "task",
+                    title: "Task response submitted",
+                    body: &format!("A response was submitted for {}.", task.title),
+                })
                 .await;
         }
     }
@@ -359,21 +361,20 @@ pub async fn transition_task(
                 _ => ("task.updated", "Task status updated"),
             };
             let _ = notifications
-                .notify_task_event(
-                    task.created_by,
-                    task.workspace_id,
-                    task.id,
-                    user.user_id,
+                .notify_task_event(NotificationInput {
+                    recipient_id: task.created_by,
+                    workspace_id: Some(task.workspace_id),
+                    entity_id: task.id,
+                    actor_id: user.user_id,
                     event_type,
+                    entity_type: "task",
                     title,
-                    &format!(
+                    body: &format!(
                         "{} is now {}.",
                         task.title,
-                        format!("{:?}", task.status)
-                            .to_lowercase()
-                            .replace('_', " ")
+                        format!("{:?}", task.status).to_lowercase().replace('_', " ")
                     ),
-                )
+                })
                 .await;
         }
     }
