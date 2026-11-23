@@ -8,9 +8,9 @@ pub mod firebase_auth;
 pub mod identity;
 pub mod memory_architecture;
 pub mod memory_intelligence;
-pub mod qoin_vectors;
 mod memory_routes;
 mod model;
+pub mod qoin_vectors;
 pub mod robotics;
 mod robotics_routes;
 mod routes;
@@ -26,7 +26,11 @@ use axum::{
     routing::{get, patch, post},
     Router,
 };
-use tower_http::{cors::{AllowOrigin, CorsLayer}, limit::RequestBodyLimitLayer, trace::TraceLayer};
+use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
+    limit::RequestBodyLimitLayer,
+    trace::TraceLayer,
+};
 
 pub fn app(state: AppState) -> Router {
     let allowed_origins = std::env::var("AXON_ALLOWED_ORIGINS")
