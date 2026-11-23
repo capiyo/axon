@@ -51,6 +51,7 @@ export type Task = {
   title: string;
   objective: string;
   assignee_agent_id: string;
+  source_chat_id: string | null;
   context_artifact_ids: string[];
   response_artifact_id: string | null;
   status: TaskStatus;
