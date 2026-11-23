@@ -210,6 +210,7 @@ export type ExploreAgent = {
   comment_count: number;
   is_liked: boolean;
   is_following: boolean;
+  is_owner: boolean;
 };
 
 export type ExploreComment = {
