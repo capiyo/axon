@@ -50,6 +50,7 @@ impl AppState {
         let state = Self {
             storage: Some(storage.clone()),
             chat_memory,
+            memory_store,
             firebase_verifier: None,
             simulator_enabled: false,
             ..Self::default()
