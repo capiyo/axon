@@ -1,6 +1,7 @@
 //! SQLite persistence for scoped agent memory and allocation audit records.
 use crate::memory_system::{
-    allocate_context, lexical_relevance, MemoryAllocation, MemoryError, MemoryRecord, RetrievalContext,
+    allocate_context, lexical_relevance, MemoryAllocation, MemoryError, MemoryRecord,
+    RetrievalContext,
 };
 use chrono::Utc;
 use serde_json::json;
@@ -123,7 +124,14 @@ impl MemoryStore {
             .bind(if existing { "agent_memory.revised" } else { "agent_memory.proposed" })
             .bind(record.id.to_string())
             .bind(Utc::now().to_rfc3339())
-            .bind(json!({"scope": record.scope, "verification": record.verification, "version": record.version}).to_string())
+            .bind(
+                json!({
+                    "scope": record.scope,
+                    "verification": record.verification,
+                    "version": record.version
+                })
+                .to_string(),
+            )
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
