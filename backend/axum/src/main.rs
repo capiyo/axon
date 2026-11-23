@@ -1,4 +1,4 @@
-use axon_api::{app, firebase_auth::FirebaseVerifier, storage::SqliteStorage, AppState};
+use axon_api::{app, firebase_auth::FirebaseVerifier, qoin_vectors::QoinVectorClient, storage::SqliteStorage, AppState};
 use std::{env, net::SocketAddr};
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -31,8 +31,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let simulator_enabled = env::var("AXON_ENABLE_SIMULATOR")
         .map(|value| value.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
+    let qoin_vectors = env::var("QOIN_API_URL")
+        .ok()
+        .map(|url| QoinVectorClient::new(&url))
+        .transpose()?;
     let state = AppState::with_storage(storage.shared())
         .await?
+        .with_qoin_vector_client(qoin_vectors)
         .with_firebase_verifier(verifier, simulator_enabled);
 
     let listener = TcpListener::bind(address).await?;
@@ -40,6 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         %address,
         storage = "sqlite",
         simulator_enabled,
+        qoin_vectors = env::var("QOIN_API_URL").is_ok(),
         "Axon API listening with Firebase authentication and durable SQLite storage"
     );
     axum::serve(listener, app(state))
