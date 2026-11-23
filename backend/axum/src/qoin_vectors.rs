@@ -127,12 +127,18 @@ mod tests {
     #[test]
     fn qoin_endpoint_is_built_from_service_base_url() {
         let client = QoinVectorClient::new("http://127.0.0.1:8081/").unwrap();
-        assert_eq!(client.endpoint.as_str(), "http://127.0.0.1:8081/internal/vector");
+        assert_eq!(
+            client.endpoint.as_str(),
+            "http://127.0.0.1:8081/internal/vector"
+        );
     }
 
     #[test]
     fn qoin_endpoint_preserves_a_service_prefix() {
         let client = QoinVectorClient::new("http://qoin:8081/research/").unwrap();
-        assert_eq!(client.endpoint.as_str(), "http://qoin:8081/research/internal/vector");
+        assert_eq!(
+            client.endpoint.as_str(),
+            "http://qoin:8081/research/internal/vector"
+        );
     }
 }
