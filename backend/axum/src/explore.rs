@@ -51,6 +51,22 @@ pub struct ExploreComment {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct ModerationReport {
+    pub id: Uuid,
+    pub listing_id: Uuid,
+    pub comment_id: Option<Uuid>,
+    pub reporter_id: Uuid,
+    pub reason: String,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ResolveReportInput {
+    pub action: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct Notification {
     pub id: Uuid,
     pub workspace_id: Option<Uuid>,
@@ -510,6 +526,59 @@ impl ExploreStore {
         Ok(liked)
     }
 
+    pub async fn list_reports(
+        &self,
+        listing_id: Uuid,
+        owner_id: Uuid,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Option<Vec<ModerationReport>>, sqlx::Error> {
+        let owned: Option<i64> = sqlx::query_scalar("SELECT 1 FROM agent_listings WHERE id = ? AND owner_id = ?")
+            .bind(listing_id.to_string()).bind(owner_id.to_string()).fetch_optional(&self.pool).await?;
+        if owned.is_none() { return Ok(None); }
+        let rows = sqlx::query(
+            "SELECT id, listing_id, comment_id, reporter_id, reason, status, created_at
+             FROM agent_reports WHERE listing_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        )
+        .bind(listing_id.to_string()).bind(limit.clamp(1, 100)).bind(offset.max(0))
+        .fetch_all(&self.pool).await?;
+        let reports = rows.iter().map(parse_report).collect::<Result<Vec<_>, _>>()?;
+        Ok(Some(reports))
+    }
+
+    pub async fn resolve_report(
+        &self,
+        report_id: Uuid,
+        owner_id: Uuid,
+        action: &str,
+    ) -> Result<Option<String>, sqlx::Error> {
+        if action != "dismiss" && action != "hide_comment" {
+            return Ok(None);
+        }
+        let row = sqlx::query(
+            "SELECT r.listing_id, r.comment_id FROM agent_reports r
+             JOIN agent_listings l ON l.id = r.listing_id
+             WHERE r.id = ? AND l.owner_id = ? AND r.status = 'pending'"
+        )
+        .bind(report_id.to_string()).bind(owner_id.to_string()).fetch_optional(&self.pool).await?;
+        let Some(row) = row else { return Ok(None); };
+        let listing_id = Uuid::parse_str(&row.try_get::<String, _>("listing_id")?).unwrap_or_default();
+        let comment_id = row.try_get::<Option<String>, _>("comment_id")?
+            .and_then(|value| Uuid::parse_str(&value).ok());
+        if action == "hide_comment" {
+            let Some(comment_id) = comment_id else { return Ok(None); };
+            let now = Utc::now().to_rfc3339();
+            sqlx::query("UPDATE agent_comments SET body = '[removed by listing owner]', status = 'deleted', updated_at = ? WHERE id = ? AND listing_id = ?")
+                .bind(&now).bind(comment_id.to_string()).bind(listing_id.to_string()).execute(&self.pool).await?;
+            sqlx::query("UPDATE agent_comments SET body = '[removed by listing owner]', status = 'deleted', updated_at = ? WHERE parent_comment_id = ? AND status = 'visible'")
+                .bind(now).bind(comment_id.to_string()).execute(&self.pool).await?;
+        }
+        let status = if action == "dismiss" { "dismissed" } else { "actioned" };
+        sqlx::query("UPDATE agent_reports SET status = ? WHERE id = ? AND status = 'pending'")
+            .bind(status).bind(report_id.to_string()).execute(&self.pool).await?;
+        Ok(Some(status.to_owned()))
+    }
+
     pub async fn notify_task_event(
         &self,
         notification: NotificationInput<'_>,
@@ -591,6 +660,14 @@ impl ExploreStore {
             .bind(Uuid::new_v4().to_string()).bind(listing_id.to_string())
             .bind(comment_id.map(|id| id.to_string())).bind(reporter_id.to_string())
             .bind(reason).bind(Utc::now().to_rfc3339()).execute(&self.pool).await?;
+        notify_listing_owner(
+            &self.pool,
+            listing_id,
+            reporter_id,
+            "explore.reported",
+            "Your agent listing received a report",
+            reason,
+        ).await?;
         Ok(true)
     }
 }
@@ -680,6 +757,22 @@ async fn notify_listing_owner(
         .await?;
     }
     Ok(())
+}
+
+fn parse_report(row: &sqlx::sqlite::SqliteRow) -> Result<ModerationReport, sqlx::Error> {
+    let created_at: String = row.try_get("created_at")?;
+    let comment_id: Option<String> = row.try_get("comment_id")?;
+    Ok(ModerationReport {
+        id: Uuid::parse_str(&row.try_get::<String, _>("id")?).unwrap_or_default(),
+        listing_id: Uuid::parse_str(&row.try_get::<String, _>("listing_id")?).unwrap_or_default(),
+        comment_id: comment_id.and_then(|value| Uuid::parse_str(&value).ok()),
+        reporter_id: Uuid::parse_str(&row.try_get::<String, _>("reporter_id")?).unwrap_or_default(),
+        reason: row.try_get("reason")?,
+        status: row.try_get("status")?,
+        created_at: DateTime::parse_from_rfc3339(&created_at)
+            .map(|time| time.with_timezone(&Utc))
+            .map_err(|_| sqlx::Error::ColumnDecode { index: "created_at".into(), source: Box::new(std::io::Error::other("invalid timestamp")) })?,
+    })
 }
 
 fn parse_notification(row: &sqlx::sqlite::SqliteRow) -> Result<Notification, sqlx::Error> {
