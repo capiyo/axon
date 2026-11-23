@@ -152,6 +152,12 @@ impl ChatMemoryStore {
         .bind(now.to_rfc3339())
         .execute(&mut *tx)
         .await?;
+        sqlx::query("UPDATE notifications SET read_at = ? WHERE recipient_id = ? AND entity_type = 'chat' AND entity_id = ? AND read_at IS NULL")
+            .bind(now.to_rfc3339())
+            .bind(user_id.to_string())
+            .bind(chat_id.to_string())
+            .execute(&mut *tx)
+            .await?;
         insert_audit(
             &mut tx,
             workspace_id,
