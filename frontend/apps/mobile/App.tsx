@@ -540,6 +540,11 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 <TextInput value={provider} onChangeText={setProvider} placeholder="Provider" style={styles.input}/>
                 <ActionButton label="Register agent" onPress={registerAgent} disabled={!agentName.trim() || busy}/>
                 {agents.map(agent => <View key={agent.id} style={styles.listRow}><Text style={styles.rowTitle}>{agent.display_name}</Text><Text style={styles.rowMeta}>{agent.provider} · manually registered</Text></View>)}
+                <Text style={styles.fieldLabel}>PUBLISH TO EXPLORE</Text>
+                {agents.map(agent => <Pressable key={agent.id} onPress={() => setPublishAgentId(agent.id)} style={[styles.agentChoice,publishAgentId===agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text><Text style={styles.rowMeta}>{publishAgentId===agent.id ? "Selected for publishing" : "Select to publish"}</Text></Pressable>)}
+                <TextInput value={publishCategory} onChangeText={setPublishCategory} placeholder="Category" style={styles.input} maxLength={80}/>
+                <TextInput value={publishDescription} onChangeText={setPublishDescription} placeholder="Public agent description…" style={[styles.input,styles.multiline]} multiline maxLength={4000}/>
+                <ActionButton label="Publish selected agent" onPress={publishExploreAgent} disabled={!publishAgentId || !publishDescription.trim() || !publishCategory.trim() || busy} secondary/>
                 <Text style={styles.fieldLabel}>CAPTURED CONTEXT</Text>
                 <TextInput value={artifactTitle} onChangeText={setArtifactTitle} placeholder="Artifact title" style={styles.input}/>
                 <TextInput value={artifactContent} onChangeText={setArtifactContent} placeholder="Capture findings and evidence…" style={[styles.input,styles.multiline]} multiline/>
