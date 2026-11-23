@@ -1,0 +1,33 @@
+name: Format Rust sources
+on:
+  push:
+    branches: [feature/memory-vector-reconstruction-v1]
+    paths:
+      - "backend/axum/src/**/*.rs"
+permissions:
+  contents: write
+jobs:
+  format:
+    if: github.event.head_commit.message != 'chore: rustfmt memory architecture'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Format Rust workspace
+        run: cargo fmt --all
+      - name: Commit formatting changes
+        run: |
+          if git diff --quiet; then
+            echo "Rust sources already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/axum/src
+          git commit -m "chore: rustfmt memory architecture"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
