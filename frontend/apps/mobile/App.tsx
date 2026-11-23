@@ -62,6 +62,8 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [exploreComments, setExploreComments] = useState<Record<string, ExploreComment[]>>({});
   const [exploreSort, setExploreSort] = useState<"recent" | "popular" | "discussed">("recent");
   const [exploreDrafts, setExploreDrafts] = useState<Record<string, string>>({});
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentDraft, setEditingCommentDraft] = useState("");
   const [replyTarget, setReplyTarget] = useState<{ listingId: string; parentId: string } | null>(null);
   const [publishAgentId, setPublishAgentId] = useState("");
   const [publishDescription, setPublishDescription] = useState("");
@@ -165,6 +167,23 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       });
       setExploreDrafts(current => ({ ...current, [listingId]: "" }));
       setReplyTarget(null);
+      await refreshExplore();
+    });
+  }
+
+  function saveExploreComment(commentId: string) {
+    if (!editingCommentDraft.trim()) return;
+    void perform(async () => {
+      await request(`/api/v1/explore/comments/${commentId}`, { method: "PATCH", body: JSON.stringify({ body: editingCommentDraft.trim() }) });
+      setEditingCommentId(null);
+      setEditingCommentDraft("");
+      await refreshExplore();
+    });
+  }
+
+  function deleteExploreComment(commentId: string) {
+    void perform(async () => {
+      await request(`/api/v1/explore/comments/${commentId}`, { method: "DELETE" });
       await refreshExplore();
     });
   }
@@ -619,8 +638,8 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                   <View style={styles.exploreMeta}><Text style={styles.rowMeta}>{listing.like_count} likes · {listing.comment_count} comments</Text><Text style={styles.rowMeta}>{new Date(listing.updated_at).toLocaleDateString()}</Text></View>
                   <View style={styles.exploreActions}><Pressable onPress={() => toggleExploreAction(`/api/v1/explore/agents/${listing.id}/like`)}><Text style={styles.exploreActionText}>{listing.is_liked ? "♥ Liked" : "♡ Like"}</Text></Pressable><Pressable onPress={() => toggleExploreAction(`/api/v1/explore/agents/${listing.id}/follow`)}><Text style={styles.exploreActionText}>{listing.is_following ? "Following" : "Follow"}</Text></Pressable><Pressable onPress={() => startExploreConversation(listing)}><Text style={styles.exploreActionText}>Start workspace chat</Text></Pressable></View>
                   <View style={styles.exploreDiscussionMobile}><Text style={styles.fieldLabel}>COMMUNITY DISCUSSION</Text>
-                    {roots.map(comment => <View key={comment.id} style={styles.exploreCommentMobile}><View style={styles.exploreCommentAvatar}><Text style={styles.exploreAvatarText}>A</Text></View><View style={{flex:1}}><Text style={styles.exploreCommentAuthor}>{comment.author_label} · {new Date(comment.created_at).toLocaleString()}</Text><Text style={styles.exploreCommentBody}>{comment.body}</Text><View style={styles.exploreActions}><Pressable onPress={() => toggleExploreAction(`/api/v1/explore/comments/${comment.id}/like`)}><Text style={styles.exploreActionText}>{comment.is_liked ? "♥" : "♡"} {comment.like_count}</Text></Pressable><Pressable onPress={() => setReplyTarget(replyTarget?.parentId===comment.id ? null : {listingId:listing.id,parentId:comment.id})}><Text style={styles.exploreActionText}>Reply · {comment.reply_count}</Text></Pressable></View>
-                      {comments.filter(reply => reply.parent_comment_id===comment.id).map(reply => <View key={reply.id} style={styles.exploreReplyMobile}><Text style={styles.exploreCommentAuthor}>{reply.author_label} · {new Date(reply.created_at).toLocaleString()}</Text><Text style={styles.exploreCommentBody}>{reply.body}</Text><Pressable onPress={() => toggleExploreAction(`/api/v1/explore/comments/${reply.id}/like`)}><Text style={styles.exploreActionText}>{reply.is_liked ? "♥" : "♡"} {reply.like_count}</Text></Pressable></View>)}
+                    {roots.map(comment => <View key={comment.id} style={styles.exploreCommentMobile}><View style={styles.exploreCommentAvatar}><Text style={styles.exploreAvatarText}>A</Text></View><View style={{flex:1}}><Text style={styles.exploreCommentAuthor}>{comment.author_label} · {new Date(comment.created_at).toLocaleString()}</Text>{editingCommentId===comment.id ? <><TextInput value={editingCommentDraft} onChangeText={setEditingCommentDraft} style={[styles.input,styles.multiline]} multiline/><View style={styles.exploreActions}><Pressable onPress={() => saveExploreComment(comment.id)}><Text style={styles.exploreActionText}>Save</Text></Pressable><Pressable onPress={() => setEditingCommentId(null)}><Text style={styles.exploreActionText}>Cancel</Text></Pressable></View></> : <Text style={styles.exploreCommentBody}>{comment.body}</Text>}<View style={styles.exploreActions}><Pressable onPress={() => toggleExploreAction(`/api/v1/explore/comments/${comment.id}/like`)}><Text style={styles.exploreActionText}>{comment.is_liked ? "♥" : "♡"} {comment.like_count}</Text></Pressable><Pressable onPress={() => setReplyTarget(replyTarget?.parentId===comment.id ? null : {listingId:listing.id,parentId:comment.id})}><Text style={styles.exploreActionText}>Reply · {comment.reply_count}</Text></Pressable>{comment.is_mine ? <><Pressable onPress={() => {setEditingCommentId(comment.id);setEditingCommentDraft(comment.body);}}><Text style={styles.exploreActionText}>Edit</Text></Pressable><Pressable onPress={() => deleteExploreComment(comment.id)}><Text style={styles.exploreActionText}>Delete</Text></Pressable></> : null}</View>
+                      {comments.filter(reply => reply.parent_comment_id===comment.id).map(reply => <View key={reply.id} style={styles.exploreReplyMobile}><Text style={styles.exploreCommentAuthor}>{reply.author_label} · {new Date(reply.created_at).toLocaleString()}</Text>{editingCommentId===reply.id ? <><TextInput value={editingCommentDraft} onChangeText={setEditingCommentDraft} style={[styles.input,styles.multiline]} multiline/><View style={styles.exploreActions}><Pressable onPress={() => saveExploreComment(reply.id)}><Text style={styles.exploreActionText}>Save</Text></Pressable><Pressable onPress={() => setEditingCommentId(null)}><Text style={styles.exploreActionText}>Cancel</Text></Pressable></View></> : <Text style={styles.exploreCommentBody}>{reply.body}</Text>}<View style={styles.exploreActions}><Pressable onPress={() => toggleExploreAction(`/api/v1/explore/comments/${reply.id}/like`)}><Text style={styles.exploreActionText}>{reply.is_liked ? "♥" : "♡"} {reply.like_count}</Text></Pressable>{reply.is_mine ? <><Pressable onPress={() => {setEditingCommentId(reply.id);setEditingCommentDraft(reply.body);}}><Text style={styles.exploreActionText}>Edit</Text></Pressable><Pressable onPress={() => deleteExploreComment(reply.id)}><Text style={styles.exploreActionText}>Delete</Text></Pressable></> : null}</View></View>)}
                       {replyTarget?.listingId===listing.id && replyTarget.parentId===comment.id ? <View style={styles.exploreCommentInputRow}><TextInput value={exploreDrafts[listing.id] ?? ""} onChangeText={value => setExploreDrafts(current => ({...current,[listing.id]:value}))} placeholder="Write a reply…" style={[styles.input,styles.exploreCommentInput]}/><ActionButton label="Reply" onPress={() => submitExploreComment(listing.id,comment.id)} disabled={! (exploreDrafts[listing.id] ?? "").trim() || busy}/></View> : null}
                     </View></View>)}
                     {roots.length===0 ? <Text style={styles.muted}>No comments yet. Start the discussion.</Text> : null}
