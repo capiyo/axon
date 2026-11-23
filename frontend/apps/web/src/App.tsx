@@ -628,7 +628,38 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                   </>}
                 </div>
               </div>
-            </section> : <section className="panel explore-panel"><div className="panel-heading"><div><span className="kicker">AGENT DISCOVERY</span><h3>Explore agents</h3></div><span className="count">{agents.length} WORKSPACE AGENTS</span></div><p className="muted">Explore currently shows agents registered in this private workspace. Public listings and community discussions will be backed by a separate opt-in publishing API; private agents and conversations are never exposed automatically.</p><div className="explore-card-list">{agents.map(agent => <article className="explore-agent-card" key={agent.id}><div className="explore-agent-top"><span className="chat-card-avatar">{agent.display_name.slice(0,1).toUpperCase()}</span><div><strong>{agent.display_name}</strong><small>{agent.provider} · Manually registered</small></div><span className="agent-availability">Registered</span></div><p>Agent registered in {selected?.name}. Provider connection and autonomous execution are not implied by registration.</p><div className="explore-agent-meta"><span>Workspace-private</span><span>Created {new Date(agent.created_at).toLocaleDateString()}</span></div></article>)}{agents.length === 0 && <div className="chat-list-empty"><strong>No agents registered yet</strong><p>Register an agent in the workspace to make it available to your team.</p></div>}</div></section>}
+            </section> : <section className="panel explore-panel">
+              <div className="panel-heading"><div><span className="kicker">PUBLIC AGENT DISCOVERY</span><h3>Explore agents</h3></div><label className="explore-sort">Sort <select value={exploreSort} onChange={event => setExploreSort(event.target.value as "recent" | "popular" | "discussed")}><option value="recent">Newest</option><option value="popular">Most liked</option><option value="discussed">Most discussed</option></select></label></div>
+              <form className="explore-publish-form" onSubmit={publishExploreAgent}>
+                <strong>Publish one of your agents</strong>
+                <p>Publishing is explicit. Only the selected agent's public description and provider label are exposed; workspace chats, artifacts and memory remain private.</p>
+                <div className="explore-publish-fields"><select value={publishAgentId} onChange={event => setPublishAgentId(event.target.value)} required><option value="">Choose your agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.display_name}</option>)}</select><input value={publishCategory} onChange={event => setPublishCategory(event.target.value)} placeholder="Category" maxLength={80} required /></div>
+                <textarea value={publishDescription} onChange={event => setPublishDescription(event.target.value)} placeholder="Describe what this agent does and who it helps…" maxLength={4000} rows={3} required />
+                <button disabled={busy || !publishAgentId || !publishDescription.trim()}>Publish agent</button>
+              </form>
+              <div className="explore-card-list">
+                {exploreAgents.map(listing => {
+                  const comments = exploreComments[listing.id] ?? [];
+                  const roots = comments.filter(comment => !comment.parent_comment_id);
+                  return <article className="explore-agent-card" key={listing.id}>
+                    <div className="explore-agent-top"><span className="chat-card-avatar">{listing.title.slice(0,1).toUpperCase()}</span><div><strong>{listing.title}</strong><small>{listing.category} · {listing.provider}</small></div><span className="agent-availability">Published</span></div>
+                    <p>{listing.description}</p>
+                    <div className="explore-agent-meta"><span>{listing.like_count} likes · {listing.comment_count} comments</span><span>Updated {new Date(listing.updated_at).toLocaleDateString()}</span></div>
+                    <div className="explore-social-actions"><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/like`)} disabled={busy}>{listing.is_liked ? "♥ Liked" : "♡ Like"}</button><button type="button" onClick={() => void toggleExploreAction(`/api/v1/explore/agents/${listing.id}/follow`)} disabled={busy}>{listing.is_following ? "Following" : "Follow"}</button><span>{listing.owner_id === user.uid ? "Your listing" : "Community listing"}</span></div>
+                    <div className="explore-discussion"><strong>Community discussion</strong>
+                      {roots.map(comment => <div className="explore-comment" key={comment.id}>
+                        <span className="explore-comment-avatar">A</span><div className="explore-comment-body"><div className="explore-comment-heading"><strong>{comment.author_label}</strong><small>{new Date(comment.created_at).toLocaleString()}</small></div><p>{comment.body}</p><div className="explore-comment-actions"><button type="button" onClick={() => void toggleCommentLike(comment.id)} disabled={busy}>{comment.is_liked ? "♥" : "♡"} {comment.like_count}</button><button type="button" onClick={() => setReplyTarget(replyTarget?.parentId === comment.id ? null : { listingId: listing.id, parentId: comment.id })}>Reply · {comment.reply_count}</button></div>
+                          {comments.filter(reply => reply.parent_comment_id === comment.id).map(reply => <div className="explore-reply" key={reply.id}><div className="explore-comment-heading"><strong>{reply.author_label}</strong><small>{new Date(reply.created_at).toLocaleString()}</small></div><p>{reply.body}</p><button type="button" onClick={() => void toggleCommentLike(reply.id)} disabled={busy}>{reply.is_liked ? "♥" : "♡"} {reply.like_count}</button></div>)}
+                          {replyTarget?.listingId === listing.id && replyTarget.parentId === comment.id && <form className="explore-reply-form" onSubmit={event => { event.preventDefault(); void submitExploreComment(listing.id, comment.id); }}><input value={exploreDrafts[listing.id] ?? ""} onChange={event => setExploreDrafts(current => ({...current,[listing.id]:event.target.value}))} placeholder="Write a reply…" maxLength={5000}/><button disabled={busy || !(exploreDrafts[listing.id] ?? "").trim()}>Reply</button></form>}
+                        </div></div>)}
+                      {roots.length === 0 && <p className="explore-no-comments">No community comments yet. Start the discussion.</p>}
+                      <form className="explore-comment-form" onSubmit={event => { event.preventDefault(); void submitExploreComment(listing.id); }}><input value={replyTarget?.listingId === listing.id ? "" : exploreDrafts[listing.id] ?? ""} onChange={event => setExploreDrafts(current => ({...current,[listing.id]:event.target.value}))} placeholder="Write a comment…" maxLength={5000}/><button disabled={busy || !(exploreDrafts[listing.id] ?? "").trim()}>Post</button></form>
+                    </div>
+                  </article>;
+                })}
+                {exploreAgents.length === 0 && <div className="chat-list-empty"><strong>No public agents yet</strong><p>Publish an agent from this workspace to make it discoverable to the Axon community.</p></div>}
+              </div>
+            </section>}
 
             <section className="panel qoin-memory-panel">
               <div className="panel-heading">
