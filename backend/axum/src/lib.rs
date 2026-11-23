@@ -17,13 +17,14 @@ mod routes;
 mod state;
 pub mod storage;
 mod task_routes;
+pub mod explore;
 
 pub use state::AppState;
 
 use axum::{
     http::{header, HeaderValue, Method},
     middleware,
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 use tower_http::{
@@ -43,11 +44,37 @@ pub fn app(state: AppState) -> Router {
     } else {
         CorsLayer::new()
             .allow_origin(AllowOrigin::list(allowed_origins))
-            .allow_methods([Method::GET, Method::POST, Method::PATCH])
+            .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
             .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
     };
     Router::new()
         .route("/health", get(routes::health))
+        .route("/api/v1/explore/agents", get(explore::list_agents))
+        .route(
+            "/api/v1/workspaces/:workspace_id/agents/:agent_id/publish",
+            post(explore::publish_agent).delete(explore::unpublish_agent),
+        )
+        .route(
+            "/api/v1/explore/agents/:listing_id/comments",
+            get(explore::list_comments).post(explore::create_comment),
+        )
+        .route(
+            "/api/v1/explore/comments/:comment_id",
+            patch(explore::edit_comment).delete(explore::delete_comment),
+        )
+        .route(
+            "/api/v1/explore/agents/:listing_id/like",
+            post(explore::like_listing),
+        )
+        .route(
+            "/api/v1/explore/agents/:listing_id/follow",
+            post(explore::follow_listing),
+        )
+        .route(
+            "/api/v1/explore/comments/:comment_id/like",
+            post(explore::like_comment),
+        )
+        .route("/api/v1/explore/reports", post(explore::report_content))
         .route(
             "/api/v1/workspaces/:workspace_id/chats",
             get(chat_memory_routes::list_chats).post(chat_memory_routes::create_chat),
