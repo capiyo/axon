@@ -5,7 +5,7 @@ import { auth } from "./firebase";
 import type {
   Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage,
   ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext,
-  QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt, ExploreAgent, ExploreComment
+  QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt, ExploreAgent, ExploreComment, Notification, NotificationPage
 } from "../../../packages/contracts/src";
 
 
@@ -49,6 +49,9 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [publishAgentId, setPublishAgentId] = useState("");
   const [publishDescription, setPublishDescription] = useState("");
   const [publishCategory, setPublishCategory] = useState("Productivity");
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationUnread, setNotificationUnread] = useState(0);
+  const [notificationOpen, setNotificationOpen] = useState(false);
   const [activeChat, setActiveChat] = useState<string>("");
   const [chatDetail, setChatDetail] = useState<ChatDetail | null>(null);
   const [chatTitle, setChatTitle] = useState("");
@@ -109,6 +112,34 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     if (activeChat && !chatItems.some(chat => chat.id === activeChat)) setChatDetail(null);
     setAssignee(current => agentItems.some(agent => agent.id === current) ? current : agentItems[0]?.id ?? "");
     setHandoverAgentId(current => agentItems.some(agent => agent.id === current) ? current : agentItems[0]?.id ?? "");
+  }
+
+  async function refreshNotifications() {
+    const page = await api<NotificationPage>("/api/v1/notifications?limit=30&offset=0");
+    setNotifications(page.items);
+    setNotificationUnread(page.unread_count);
+  }
+
+  async function openNotification(item: Notification) {
+    await api(`/api/v1/notifications/${item.id}/read`, { method: "POST" });
+    setNotificationOpen(false);
+    if (item.entity_type === "chat" && item.workspace_id) {
+      const workspace = workspaces.find(candidate => candidate.id === item.workspace_id);
+      if (workspace) {
+        setSelected(workspace);
+        setActiveChat(item.entity_id);
+        setActiveView("chats");
+        setMobileConversationOpen(true);
+      }
+    } else {
+      setActiveView("explore");
+    }
+    await refreshNotifications();
+  }
+
+  async function markAllNotificationsRead() {
+    await api("/api/v1/notifications/read-all", { method: "POST" });
+    await refreshNotifications();
   }
 
   async function refreshExplore() {
@@ -215,6 +246,10 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setError(cause instanceof Error ? cause.message : "Could not start a workspace conversation.");
     } finally { setBusy(false); }
   }
+
+  useEffect(() => {
+    void refreshNotifications().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     void refreshWorkspaces().catch(cause => setError(cause instanceof Error ? cause.message : "Could not reach the Axon API."));
@@ -625,7 +660,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       <section className="content">
         <header className="topbar">
           <div className="topbar-brand"><span className="brand-mark">A</span><div><p className="eyebrow">AXON WORKSPACE</p><h1>{selected?.name ?? "Your workspace"}</h1></div></div>
-          <div className="topbar-actions"><div className="status"><span className={health?.status === "ok" ? "pulse online" : "pulse"} />{health?.status === "ok" ? "Connected" : "API unavailable"}</div><div className="app-menu-anchor"><button type="button" className="topbar-action" onClick={() => setMenuOpen(value => !value)} aria-expanded={menuOpen}>Menu</button>{menuOpen && <div className="app-menu"><button type="button" onClick={() => {setActiveView("explore");setMenuOpen(false);}}>Explore agents</button><button type="button" onClick={() => {setProfileOpen(true);setMenuOpen(false);}}>Profile & workspace</button><button type="button" onClick={() => {setActiveView("chats");setMenuOpen(false);}}>Chats</button></div>}</div><button type="button" className="topbar-profile" onClick={() => setProfileOpen(true)} aria-label="Open profile">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</button></div>
+          <div className="topbar-actions"><div className="notification-anchor"><button type="button" className="notification-bell" onClick={() => {setNotificationOpen(value => !value);void refreshNotifications();}} aria-label="Notifications">♧{notificationUnread > 0 && <span>{notificationUnread}</span>}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-header"><strong>Notifications</strong><button type="button" onClick={() => void markAllNotificationsRead()}>Mark all read</button></div>{notifications.map(item => <button type="button" className={item.read_at ? "notification-item read" : "notification-item"} key={item.id} onClick={() => void openNotification(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString()}</small></button>)}{notifications.length === 0 && <p className="notification-empty">You are all caught up.</p>}</div>}</div><div className="status"><span className={health?.status === "ok" ? "pulse online" : "pulse"} />{health?.status === "ok" ? "Connected" : "API unavailable"}</div><div className="app-menu-anchor"><button type="button" className="topbar-action" onClick={() => setMenuOpen(value => !value)} aria-expanded={menuOpen}>Menu</button>{menuOpen && <div className="app-menu"><button type="button" onClick={() => {setActiveView("explore");setMenuOpen(false);}}>Explore agents</button><button type="button" onClick={() => {setProfileOpen(true);setMenuOpen(false);}}>Profile & workspace</button><button type="button" onClick={() => {setActiveView("chats");setMenuOpen(false);}}>Chats</button></div>}</div><button type="button" className="topbar-profile" onClick={() => setProfileOpen(true)} aria-label="Open profile">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</button></div>
         </header>
 
         {!selected ? (
