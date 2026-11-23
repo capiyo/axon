@@ -58,6 +58,10 @@ pub fn app(state: AppState) -> Router {
             post(memory_routes::index_memory),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/chats/:chat_id/messages/:message_id/memory-index",
+            post(memory_routes::index_chat_message),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/memory/epoch",
             get(memory_routes::latest_epoch),
         )
