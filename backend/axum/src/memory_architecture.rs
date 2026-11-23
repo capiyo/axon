@@ -473,3 +473,82 @@ impl MemoryEpochCoordinator {
             achieved_coverage: selection.achieved_coverage, budget_exhausted: selection.budget_exhausted })
     }
 }
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProgressiveRetrievalRequest {
+    pub query: QoinVector,
+    pub heads: usize,
+    pub tags: BTreeSet<String>,
+    pub dependency_ids: BTreeSet<Uuid>,
+    pub limit: usize,
+}
+#[derive(Debug, Clone, Serialize)]
+pub struct ProgressiveRetrieval {
+    pub session_id: Uuid,
+    pub memories: Vec<HandoverMemory>,
+    pub remaining_candidates: usize,
+}
+
+impl MemoryEpochCoordinator {
+    /// Fetch additional context from the agent's pinned epoch. Results are
+    /// recorded in a separate append-only table and never rewrite initial
+    /// context or the global memory snapshot.
+    pub async fn retrieve_progressive(
+        &self,
+        workspace_id: Uuid,
+        agent_id: Uuid,
+        session_id: Uuid,
+        request: ProgressiveRetrievalRequest,
+    ) -> Result<ProgressiveRetrieval, sqlx::Error> {
+        request.query.validate().map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let session = sqlx::query(
+            "SELECT memory_epoch_id, task_id, project_id FROM agent_memory_sessions WHERE session_id = ? AND workspace_id = ? AND agent_id = ?"
+        ).bind(session_id.to_string()).bind(workspace_id.to_string()).bind(agent_id.to_string())
+            .fetch_optional(&self.pool).await?.ok_or(sqlx::Error::RowNotFound)?;
+        let epoch_id: String = session.try_get("memory_epoch_id")?;
+        let task_id: Option<String> = session.try_get("task_id")?;
+        let project_id: Option<String> = session.try_get("project_id")?;
+        let rows = sqlx::query(
+            "SELECT e.memory_id, e.qoin_vector_json, e.value_payload_json, e.tags_json, e.dependency_ids_json, e.outcome_score, e.evidence_score, e.source_event_sequence FROM memory_epoch_items e JOIN memory_vector_index live ON live.memory_id = e.memory_id AND live.status = 'approved' WHERE e.epoch_id = ? AND e.workspace_id = ? AND (e.visibility = 'workspace_shared' OR (e.visibility = 'agent_private' AND e.owner_agent_id = ?) OR (e.visibility = 'task_shared' AND e.task_id = ?) OR (e.visibility = 'project_shared' AND e.project_id = ?)) AND NOT EXISTS (SELECT 1 FROM agent_memory_sessions s, json_each(s.initial_memory_ids_json) j WHERE s.session_id = ? AND j.value = e.memory_id) AND NOT EXISTS (SELECT 1 FROM agent_memory_session_retrievals r WHERE r.session_id = ? AND r.memory_id = e.memory_id) ORDER BY e.source_event_sequence DESC"
+        ).bind(&epoch_id).bind(workspace_id.to_string()).bind(agent_id.to_string())
+            .bind(task_id).bind(project_id).bind(session_id.to_string()).bind(session_id.to_string())
+            .fetch_all(&self.pool).await?;
+        let mut candidates = Vec::with_capacity(rows.len());
+        let mut payloads = std::collections::HashMap::new();
+        for row in rows {
+            let id_text: String = row.try_get("memory_id")?;
+            let id = Uuid::parse_str(&id_text).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let vector_json: String = row.try_get("qoin_vector_json")?;
+            let vector: QoinVector = serde_json::from_str(&vector_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            if vector.model_version != request.query.model_version { continue; }
+            let tags_json: String = row.try_get("tags_json")?;
+            let tags: BTreeSet<String> = serde_json::from_str(&tags_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let deps_json: String = row.try_get("dependency_ids_json")?;
+            let dependencies: Vec<Uuid> = serde_json::from_str(&deps_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let payload: String = row.try_get("value_payload_json")?;
+            let outcome: f32 = row.try_get("outcome_score")?;
+            let evidence: f32 = row.try_get("evidence_score")?;
+            let sequence: i64 = row.try_get("source_event_sequence")?;
+            payloads.insert(id, (payload, sequence));
+            candidates.push(AttentionMemory { memory_id: id, key: vector, value: id.to_string(),
+                outcome_score: outcome, evidence_score: evidence, source_event_sequence: sequence,
+                tags, dependency_ids: dependencies.into_iter().collect() });
+        }
+        let ranked = qkv_attention(&AttentionQuery { query: request.query, heads: request.heads,
+            tags: request.tags, dependency_ids: request.dependency_ids }, &candidates)
+            .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let remaining_candidates = ranked.len().saturating_sub(request.limit);
+        let selected = ranked.into_iter().take(request.limit.max(1)).collect::<Vec<_>>();
+        let mut memories = Vec::with_capacity(selected.len());
+        for score in selected {
+            if let Some((payload, sequence)) = payloads.get(&score.memory_id) {
+                sqlx::query("INSERT OR IGNORE INTO agent_memory_session_retrievals (session_id, memory_id, retrieved_at) VALUES (?, ?, ?)")
+                    .bind(session_id.to_string()).bind(score.memory_id.to_string())
+                    .bind(Utc::now().to_rfc3339()).execute(&self.pool).await?;
+                memories.push(HandoverMemory { memory_id: score.memory_id,
+                    source_event_sequence: *sequence, payload_json: payload.clone(), attention_score: score.total });
+            }
+        }
+        Ok(ProgressiveRetrieval { session_id, memories, remaining_candidates })
+    }
+}
