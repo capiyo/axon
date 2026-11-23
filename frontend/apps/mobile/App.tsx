@@ -664,7 +664,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           )}
         </ScrollView>
 
-        {!profileOpen && <View style={styles.mobileBottomNav}><Pressable onPress={() => {setActiveTab("chats");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="chats" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>◌</Text><Text style={styles.mobileNavText}>Chats</Text></Pressable><Pressable onPress={() => {setActiveTab("explore");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="explore" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>⌕</Text><Text style={styles.mobileNavText}>Explore</Text></Pressable></View>}
+        {!profileOpen && <View style={styles.mobileBottomNav}><Pressable onPress={() => {setActiveTab("chats");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="chats" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>◌</Text><Text style={styles.mobileNavText}>Chats</Text>{chats.reduce((total,chat)=>total+chat.unread_count,0)>0 ? <Text style={styles.mobileNavBadge}>{chats.reduce((total,chat)=>total+chat.unread_count,0)}</Text> : null}</Pressable><Pressable onPress={() => {setActiveTab("explore");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="explore" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>⌕</Text><Text style={styles.mobileNavText}>Explore</Text></Pressable></View>}
         {error ? <View style={styles.mobileError}><Text style={styles.errorText}>{error}</Text></View> : null}
       </View>
     </SafeAreaView>
@@ -758,6 +758,7 @@ const styles = StyleSheet.create({
   mobileNavItemActive: { backgroundColor: "#244B33" },
   mobileNavIcon: { color: "#9AAFA1", fontSize: 17 },
   mobileNavText: { color: "#9AAFA1", fontSize: 11, fontWeight: "700" },
+  mobileNavBadge: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, backgroundColor: "#28583D", color: "#E7F6EB", fontSize: 9, fontWeight: "900", textAlign: "center", textAlignVertical: "center" },
   mobileError: { marginHorizontal: 14, marginBottom: 72, padding: 10, borderRadius: 10, backgroundColor: "#43292d" },
   exploreCardMobile: { width: "100%", padding: 16, borderRadius: 17, backgroundColor: "#14231B", marginBottom: 12, gap: 12 },
   exploreCardHeader: { flexDirection: "row", alignItems: "center", gap: 11 },
