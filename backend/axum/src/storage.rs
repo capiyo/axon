@@ -182,7 +182,11 @@ impl SqliteStorage {
         Ok(Self { pool })
     }
 
-    pub fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator {\n        MemoryEpochCoordinator::new(self.pool.clone())\n    }\n\n    pub fn shared(self) -> Arc<dyn Storage> {
+    pub fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator {\n        MemoryEpochCoordinator::new(self.pool.clone())\n    }\n\n    pub fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator {
+        MemoryEpochCoordinator::new(self.pool.clone())
+    }
+
+    pub fn shared(self) -> Arc<dyn Storage> {
         Arc::new(self)
     }
 }
