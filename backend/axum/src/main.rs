@@ -26,6 +26,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let database_url =
         env::var("AXON_DATABASE_URL").unwrap_or_else(|_| "sqlite://axon.db".to_owned());
     let storage = SqliteStorage::connect(&database_url).await?;
+    let memory_epochs = storage.memory_epoch_coordinator();
+    tokio::spawn(memory_epochs.run_hourly());
     let simulator_enabled = env::var("AXON_ENABLE_SIMULATOR")
         .map(|value| value.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
