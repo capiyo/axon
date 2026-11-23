@@ -24,13 +24,17 @@ const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
-function WorkspaceApp() {
+function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selected, setSelected] = useState<Workspace | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
+  const [chatPreviews, setChatPreviews] = useState<Record<string, ChatDetail>>({});
+  const [activeView, setActiveView] = useState<"chats" | "explore">("chats");
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
   const [activeChat, setActiveChat] = useState<string>("");
   const [chatDetail, setChatDetail] = useState<ChatDetail | null>(null);
   const [chatTitle, setChatTitle] = useState("");
@@ -67,6 +71,7 @@ function WorkspaceApp() {
     ]);
     setWorkspaces(items);
     setHealth(status);
+    setSelected(current => current ?? items[0] ?? null);
     setError("");
   }
 
@@ -81,10 +86,13 @@ function WorkspaceApp() {
     setTasks(taskItems);
     const chatItems = await api<Chat[]>(`/api/v1/workspaces/${workspace.id}/chats`);
     setChats(chatItems);
-    if (activeChat && !chatItems.some(chat => chat.id === activeChat)) {
-      setActiveChat("");
-      setChatDetail(null);
-    }
+    const previewEntries = await Promise.all(chatItems.map(async chat => {
+      try { return [chat.id, await api<ChatDetail>(`/api/v1/workspaces/${workspace.id}/chats/${chat.id}`)] as const; }
+      catch { return null; }
+    }));
+    setChatPreviews(Object.fromEntries(previewEntries.filter((entry): entry is readonly [string, ChatDetail] => entry !== null)));
+    setActiveChat(current => current && chatItems.some(chat => chat.id === current) ? current : chatItems[0]?.id ?? "");
+    if (activeChat && !chatItems.some(chat => chat.id === activeChat)) setChatDetail(null);
     setAssignee(current => agentItems.some(agent => agent.id === current) ? current : agentItems[0]?.id ?? "");
     setHandoverAgentId(current => agentItems.some(agent => agent.id === current) ? current : agentItems[0]?.id ?? "");
   }
@@ -133,9 +141,11 @@ function WorkspaceApp() {
     setBusy(true);
     try {
       await api(`/api/v1/workspaces/${selected.id}/chats/${activeChat}/archive`, { method: "PATCH" });
-      setActiveChat("");
+      const remaining = await api<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`);
+      setChats(remaining);
       setChatDetail(null);
-      setChats(await api<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`));
+      setActiveChat(remaining[0]?.id ?? "");
+      setMobileConversationOpen(false);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not archive chat."); }
     finally { setBusy(false); }
   }
@@ -443,22 +453,25 @@ function WorkspaceApp() {
 
   return (
     <main className="shell">
-      <aside className="rail">
-        <div className="brand-mark">A</div>
-        <span className="rail-label">WORKSPACES</span>
-        <div className="rail-dot active" aria-label="Workspace area" />
-        <div className="rail-bottom">0.1</div>
+      <aside className="rail profile-sidebar">
+        <div className="profile-identity">
+          <div className="profile-avatar">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0, 1).toUpperCase()}</div>
+          <div className="profile-identity-copy"><strong>{user.displayName || user.email || "Axon user"}</strong><small>{selected?.name ?? "Personal workspace"}</small></div>
+          <span className="profile-presence" title="Signed in" />
+        </div>
+        <div className="profile-section"><span className="profile-section-label">WORKSPACE OVERVIEW</span><div className="profile-stat-grid">
+          <div><strong>{agents.length}</strong><small>Agents</small></div><div><strong>{chats.length}</strong><small>Chats</small></div>
+          <div><strong>{tasks.filter(task => task.status === "in_progress").length}</strong><small>Running</small></div><div><strong>{tasks.filter(task => task.status === "completed").length}</strong><small>Completed</small></div>
+          <div><strong>{tasks.filter(task => task.status === "offered" || task.status === "acknowledged").length}</strong><small>Queued</small></div><div><strong>{artifacts.length}</strong><small>Artifacts</small></div>
+        </div></div>
+        <div className="profile-section"><span className="profile-section-label">MEMORY & CONTEXT</span><div className="profile-metric"><span>Approved memory entries</span><strong>{Object.values(chatPreviews).reduce((total, detail) => total + detail.memory.filter(entry => entry.status === "approved").length, 0)}</strong></div><div className="profile-metric"><span>Conversations indexed</span><strong>{Object.keys(chatPreviews).length}</strong></div></div>
+        <div className="profile-section profile-activity"><span className="profile-section-label">RECENT WORK</span>{tasks.slice().sort((a,b)=>b.updated_at.localeCompare(a.updated_at)).slice(0,4).map(task => <div className="profile-activity-row" key={task.id}><span className={`activity-dot activity-${task.status}`} /><div><strong>{task.title}</strong><small>{task.status.replaceAll("_"," ")} · {new Date(task.updated_at).toLocaleDateString()}</small></div></div>)}{tasks.length === 0 && <p className="profile-empty">Task activity will appear here as work is assigned.</p>}</div>
+        <div className="profile-bottom"><span>AXON WORKSPACE</span><small>Private · Firebase authenticated</small></div>
       </aside>
       <section className="content">
         <header className="topbar">
-          <div>
-            <p className="eyebrow">THE AGENT COLLABORATION LAYER</p>
-            <h1>Work, connected.</h1>
-          </div>
-          <div className="status">
-            <span className={health?.status === "ok" ? "pulse online" : "pulse"} />
-            {health?.status === "ok" ? "API connected" : "API unavailable"}
-          </div>
+          <div className="topbar-brand"><span className="brand-mark">A</span><div><p className="eyebrow">AXON WORKSPACE</p><h1>{selected?.name ?? "Your workspace"}</h1></div></div>
+          <div className="topbar-actions"><div className="status"><span className={health?.status === "ok" ? "pulse online" : "pulse"} />{health?.status === "ok" ? "Connected" : "API unavailable"}</div><button type="button" className="topbar-action" onClick={() => setActiveView(activeView === "explore" ? "chats" : "explore")}>{activeView === "explore" ? "Chats" : "Explore"}</button><button type="button" className="topbar-profile" onClick={() => setProfileOpen(true)} aria-label="Open profile">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</button></div>
         </header>
 
         {!selected ? (
@@ -515,7 +528,7 @@ function WorkspaceApp() {
               <h2>{selected.name}</h2>
               <p>Register agents, capture their work, and create explicit handoffs.</p>
             </div>
-            <section className="panel chat-panel">
+            {activeView === "chats" ? <section className="panel chat-panel">
               <div className="panel-heading"><div><span className="kicker">04 · PROJECT CONVERSATIONS</span><h3>Chats & memory</h3></div><span className="count">{chats.length} CHATS</span></div>
               <div className="chat-layout">
                 <aside className="chat-sidebar">
@@ -525,16 +538,15 @@ function WorkspaceApp() {
                     <button disabled={!chatTitle.trim() || busy}>Create chat</button>
                   </form>
                   <div className="chat-list">
-                    {chats.map(chat => <button type="button" className={activeChat === chat.id ? "chat-list-item active" : "chat-list-item"} key={chat.id} onClick={() => setActiveChat(chat.id)}>
-                      <span className="chat-list-copy"><strong>{chat.title}</strong><small>{chat.archived ? "Archived conversation" : "Project conversation"}</small></span>
-                      <span className="chat-list-meta"><small>{new Date(chat.updated_at).toLocaleDateString()}</small><span>{activeChat === chat.id ? "OPEN" : "↗"}</span></span>
-                    </button>)}
+                    {chats.map(chat => { const preview = chatPreviews[chat.id]; const lastMessage = preview?.messages[preview.messages.length - 1]; return <button type="button" className={activeChat === chat.id ? "chat-list-item active" : "chat-list-item"} key={chat.id} onClick={() => { setActiveChat(chat.id); setMobileConversationOpen(true); }}>
+                      <span className="chat-card-avatar">{(lastMessage?.answered_by || chat.title || "A").slice(0,1).toUpperCase()}</span><span className="chat-card-content"><span className="chat-card-heading"><strong>{chat.title}</strong><small>{new Date(chat.updated_at).toLocaleString()}</small></span><small className="chat-card-agent">{lastMessage?.answered_by || "Workspace conversation"}</small><span className="chat-card-preview">{lastMessage?.content || "No messages yet. Open this conversation to begin."}</span><span className="chat-card-footer"><small>{preview ? `${preview.messages.length} messages` : "Loading conversation"} · {lastMessage?.role === "assistant" ? "Agent replied" : lastMessage?.role === "user" ? "Your message" : "New conversation"}</small><span className="chat-card-open">{activeChat === chat.id ? "OPEN" : "VIEW"}</span></span></span>
+                    </button>; })}
                     {chats.length === 0 && <div className="chat-list-empty"><span className="chat-empty-mark">＋</span><strong>No conversations yet</strong><p>Create a titled conversation to start capturing project discussions and decisions.</p></div>}
                   </div>
                 </aside>
                 <div className="chat-main">
                   {!chatDetail ? <div className="chat-welcome"><span className="chat-welcome-mark">✳</span><span className="kicker">WORKSPACE MESSAGING</span><h3>Give this workspace a voice.</h3><p>Choose a conversation or create one to exchange updates, record decisions and build shared context for your agents.</p><div className="chat-welcome-note"><strong>{selected.name}</strong><span>Shared project workspace</span></div></div> : <>
-                    <div className="chat-conversation-heading"><div><span className="kicker">CONVERSATION · {selected.name}</span><h3>{chatDetail.chat.title}</h3><p>{chatDetail.messages.length} {chatDetail.messages.length === 1 ? "message" : "messages"} · Updated {new Date(chatDetail.chat.updated_at).toLocaleString()}</p></div><span className="chat-live-mark">●</span></div>
+                    <div className="chat-mobile-back"><button type="button" onClick={() => setMobileConversationOpen(false)}>← Chats</button></div><div className="chat-conversation-heading"><div><span className="kicker">CONVERSATION · {selected.name}</span><h3>{chatDetail.chat.title}</h3><p>{chatDetail.messages.length} {chatDetail.messages.length === 1 ? "message" : "messages"} · Updated {new Date(chatDetail.chat.updated_at).toLocaleString()}</p></div><span className="chat-live-mark">●</span></div>
                     <div className="resume-brief"><div className="panel-heading"><span className="kicker">RESUME BRIEF · APPROVED MEMORY ONLY</span><button type="button" className="secondary" disabled={busy} onClick={() => void archiveChat()}>Archive chat</button></div><p>{chatDetail.resume_brief || "No context yet. Add messages and approve useful memory to build a concise handoff."}</p></div>
                     <div className="chat-messages">{chatDetail.messages.map(message => <article className={`chat-message message-${message.role}`} key={message.id}><div className="chat-message-heading"><strong>{message.role === "user" ? "You" : message.role === "assistant" ? "Axon assistant" : "System"}</strong><small>{message.answered_by ? ` · ${message.answered_by} · ` : " · "}{new Date(message.created_at).toLocaleString()}</small></div><p>{message.content}</p><button type="button" className="secondary qoin-message-index" disabled={busy} onClick={() => void indexChatMessageWithQoin(message)}>Index with Qoin</button></article>)}{chatDetail.messages.length === 0 && <div className="chat-first-message"><span>✳</span><h4>{chatDetail.chat.title}</h4><p>This conversation is ready. Send the first message to give your agents a shared starting point.</p></div>}</div>
                     <form className="chat-compose" onSubmit={sendChatMessage}><textarea value={messageDraft} onChange={event => setMessageDraft(event.target.value)} rows={3} maxLength={256000} placeholder="Write a message to this project chat…" required /><button disabled={!messageDraft.trim() || busy}>Send message</button></form>
@@ -547,7 +559,7 @@ function WorkspaceApp() {
                   </>}
                 </div>
               </div>
-            </section>
+            </section> : <section className="panel explore-panel"><div className="panel-heading"><div><span className="kicker">AGENT DISCOVERY</span><h3>Explore agents</h3></div><span className="count">{agents.length} WORKSPACE AGENTS</span></div><p className="muted">Explore currently shows agents registered in this private workspace. Public listings and community discussions will be backed by a separate opt-in publishing API; private agents and conversations are never exposed automatically.</p><div className="explore-card-list">{agents.map(agent => <article className="explore-agent-card" key={agent.id}><div className="explore-agent-top"><span className="chat-card-avatar">{agent.display_name.slice(0,1).toUpperCase()}</span><div><strong>{agent.display_name}</strong><small>{agent.provider} · Manually registered</small></div><span className="agent-availability">Registered</span></div><p>Agent registered in {selected?.name}. Provider connection and autonomous execution are not implied by registration.</p><div className="explore-agent-meta"><span>Workspace-private</span><span>Created {new Date(agent.created_at).toLocaleDateString()}</span></div></article>)}{agents.length === 0 && <div className="chat-list-empty"><strong>No agents registered yet</strong><p>Register an agent in the workspace to make it available to your team.</p></div>}</div></section>}
 
             <section className="panel qoin-memory-panel">
               <div className="panel-heading">
@@ -644,6 +656,8 @@ function WorkspaceApp() {
         )}
 
         {error && <div className="error" role="alert">{error} <button className="retry" onClick={() => selected ? void refreshWorkspace(selected) : void refreshWorkspaces()}>Retry</button></div>}
+        <nav className="mobile-bottom-nav" aria-label="Primary navigation"><button type="button" className={activeView === "chats" ? "active" : ""} onClick={() => { setActiveView("chats"); setMobileConversationOpen(false); }}><span>◌</span>Chats</button><button type="button" className={activeView === "explore" ? "active" : ""} onClick={() => { setActiveView("explore"); setMobileConversationOpen(false); }}><span>⌕</span>Explore</button></nav>
+        {profileOpen && <div className="profile-overlay" role="dialog" aria-modal="true" aria-label="Profile and workspace overview"><div className="profile-overlay-header"><strong>Profile & workspace</strong><button type="button" onClick={() => setProfileOpen(false)}>Close</button></div><div className="profile-overlay-body"><div className="profile-identity"><div className="profile-avatar">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</div><div className="profile-identity-copy"><strong>{user.displayName || user.email || "Axon user"}</strong><small>{selected?.name ?? "Personal workspace"}</small></div></div><div className="profile-stat-grid"><div><strong>{agents.length}</strong><small>Agents</small></div><div><strong>{chats.length}</strong><small>Chats</small></div><div><strong>{tasks.filter(task => task.status === "in_progress").length}</strong><small>Running</small></div><div><strong>{tasks.filter(task => task.status === "completed").length}</strong><small>Completed</small></div><div><strong>{tasks.filter(task => task.status === "offered" || task.status === "acknowledged").length}</strong><small>Queued</small></div><div><strong>{artifacts.length}</strong><small>Artifacts</small></div></div><p className="profile-overlay-email">{user.email}</p><button type="button" className="signout-button" onClick={() => { if (auth) void signOut(auth); }}>Sign out</button></div></div>}
         <footer><span>AXON</span><span>Context should travel with the work.</span><span>FOUNDATION BUILD · 0.1</span></footer>
         {health && health.storage !== "persistent" && (
           <p className="dev-warning">Development mode: data is temporary and this API has no authentication. Do not use sensitive or production data.</p>
@@ -683,7 +697,7 @@ function AuthGate() {
 
   if (!ready) return <main className="shell"><section className="content"><p>Restoring your secure session…</p></section></main>;
   if (!auth) return <main className="shell"><section className="content"><h1>Firebase configuration required</h1><p>Set the VITE_FIREBASE_* environment variables for this web app, then restart it.</p></section></main>;
-  if (user) return <><div style={{position:"fixed",right:24,top:18,zIndex:10,display:"flex",gap:12,alignItems:"center",fontSize:12}}><span>{user.email}</span><button onClick={() => { if (auth) void signOut(auth); }}>Sign out</button></div><WorkspaceApp /></>;
+  if (user) return <WorkspaceApp user={user} />;
   return <main className="shell"><section className="content" style={{maxWidth:520,margin:"12vh auto"}}><p className="eyebrow">AXON · SECURE ACCESS</p><h1>{mode === "create" ? "Create your account" : "Welcome back"}</h1><p>Sign in to access your personal workspace and its data.</p><form className="stack-form" onSubmit={submit}><label htmlFor="auth-email">Email</label><input id="auth-email" type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)}/><label htmlFor="auth-password">Password</label><input id="auth-password" type="password" minLength={6} autoComplete={mode === "create" ? "new-password" : "current-password"} required value={password} onChange={e=>setPassword(e.target.value)}/><button disabled={working}>{working ? "Please wait…" : mode === "create" ? "Create account" : "Sign in"}</button></form>{authError && <p role="alert">{authError}</p>}<button className="back-link" onClick={()=>setMode(mode === "create" ? "sign_in" : "create")}>{mode === "create" ? "Already registered? Sign in" : "New to Axon? Create an account"}</button></section></main>;
 }
 
