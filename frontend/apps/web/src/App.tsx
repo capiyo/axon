@@ -95,6 +95,10 @@ function WorkspaceApp() {
 
   useEffect(() => {
     if (selected) {
+      setQoinVector(null);
+      setHandover(null);
+      setProgressiveContext(null);
+      setQoinNotice("");
       setSelectedArtifactIds([]);
       setResponseDrafts({});
       void refreshWorkspace(selected).catch(cause => setError(cause instanceof Error ? cause.message : "Could not load workspace."));
@@ -194,6 +198,7 @@ function WorkspaceApp() {
     if (!selected || !qoinSymbol.trim()) return;
     setBusy(true);
     setError("");
+    setQoinNotice("");
     try {
       const snapshot = await api<QoinVectorSnapshot>(
         `/api/v1/workspaces/${selected.id}/memory/qoin-vector?symbol=${encodeURIComponent(qoinSymbol.trim())}`
@@ -523,7 +528,7 @@ function WorkspaceApp() {
               </div>
               <p className="muted">Qoin supplies its six-dimensional attended market-state vector. Axon uses it as the query/key context for historical decisions; it is a market-state vector, not a text embedding.</p>
               <div className="qoin-bridge-controls">
-                <label>Market symbol<input value={qoinSymbol} onChange={event => setQoinSymbol(event.target.value.toUpperCase())} maxLength={32} placeholder="BTCUSDT" /></label>
+                <label>Market symbol<input value={qoinSymbol} onChange={event => { setQoinSymbol(event.target.value.toUpperCase()); setQoinVector(null); setHandover(null); setProgressiveContext(null); }} maxLength={32} placeholder="BTCUSDT" /></label>
                 <button type="button" disabled={busy || !qoinSymbol.trim()} onClick={() => void loadQoinVector()}>{busy ? "Loading…" : "Load latest Qoin vector"}</button>
               </div>
               {qoinNotice && <p className="qoin-notice" role="status">{qoinNotice}</p>}
@@ -533,7 +538,7 @@ function WorkspaceApp() {
                 <p>{qoinVector.reason}</p>
               </div>}
               <div className="handover-controls">
-                <label>Receiving agent<select value={handoverAgentId} onChange={event => setHandoverAgentId(event.target.value)}><option value="">Choose an agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.display_name} · {agent.provider}</option>)}</select></label>
+                <label>Receiving agent<select value={handoverAgentId} onChange={event => { setHandoverAgentId(event.target.value); setHandover(null); setProgressiveContext(null); }}><option value="">Choose an agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.display_name} · {agent.provider}</option>)}</select></label>
                 <label>Optional task scope<select value={handoverTaskId} onChange={event => setHandoverTaskId(event.target.value)}><option value="">Workspace-wide context</option>{tasks.filter(task => task.assignee_agent_id === handoverAgentId).map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label>
                 <button type="button" disabled={busy || !qoinVector || !handoverAgentId} onClick={() => void prepareAgentHandover()}>Prepare agent's first 20% context</button>
               </div>
