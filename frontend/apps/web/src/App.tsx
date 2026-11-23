@@ -9,7 +9,7 @@ import type {
 } from "../../../packages/contracts/src";
 
 
-const API_BASE_URL = (import.meta.env.VITE_AXON_API_URL ?? "").replace(/\\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_AXON_API_URL ?? "").replace(/\/$/, "");
 
 const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
   const token = await auth?.currentUser?.getIdToken();
