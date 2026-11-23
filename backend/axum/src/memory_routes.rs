@@ -147,15 +147,9 @@ pub async fn index_memory_with_qoin(
     Json(input): Json<IndexQoinMemoryRequest>,
 ) -> ApiResult<Json<QoinMemoryIndexReceipt>> {
     require_member(&state, user.user_id, workspace_id).await?;
-    if ![
-        "agent_private",
-        "task_shared",
-        "workspace_shared",
-    ]
-    .contains(&input.visibility.as_str())
+    if !["agent_private", "task_shared", "workspace_shared"].contains(&input.visibility.as_str())
         || (input.visibility == "agent_private" && input.owner_agent_id.is_none())
         || (input.visibility == "task_shared" && input.task_id.is_none())
-
     {
         return Err(error(
             StatusCode::BAD_REQUEST,
