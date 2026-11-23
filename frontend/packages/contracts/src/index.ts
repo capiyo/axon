@@ -269,7 +269,7 @@ export type QoinMemoryIndexReceipt = {
   memory_id: string;
   symbol: string;
   model_version: string;
-  memory_created_at_ms: number;
+  memory_context_timestamp_ms: number;
   qoin_event_ts_ms: number;
   indexed: boolean;
 };
