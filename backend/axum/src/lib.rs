@@ -67,6 +67,22 @@ pub fn app(state: AppState) -> Router {
             post(chat_memory_routes::mutate_memory_entry),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/memory",
+            post(memory_routes::propose),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memory/allocate",
+            post(memory_routes::allocate),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memory/:memory_id/share",
+            post(memory_routes::share),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memory/:memory_id/share/:agent_id",
+            axum::routing::delete(memory_routes::revoke),
+        )
+        .route(
             "/api/v1/admin/providers",
             get(model_registry_routes::list_providers).post(model_registry_routes::create_provider),
         )
