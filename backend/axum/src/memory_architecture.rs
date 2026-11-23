@@ -28,6 +28,7 @@ impl QoinVector {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttentionMemory {
     pub memory_id: Uuid,
+    pub source_kind: String,
     pub key: QoinVector,
     /// The value is a pointer/payload reference, never a lossy replacement for
     /// the immutable event record.
@@ -194,7 +195,7 @@ mod tests {
     use super::*;
     fn q(values: Vec<f32>) -> QoinVector { QoinVector { values, model_version: "qoin-test-v1".into() } }
     fn memory(id: Uuid, values: Vec<f32>, outcome: f32) -> AttentionMemory {
-        AttentionMemory { memory_id: id, key: q(values), value: format!("memory:{id}"),
+        AttentionMemory { memory_id: id, source_kind: "memory_entry".into(), key: q(values), value: format!("memory:{id}"),
             outcome_score: outcome, evidence_score: 0.9, source_event_sequence: 1,
             tags: BTreeSet::new(), dependency_ids: BTreeSet::new() }
     }
@@ -289,7 +290,7 @@ impl MemoryEpochCoordinator {
             .execute(&mut *tx).await?;
         sqlx::query(
             "INSERT INTO memory_epoch_items (epoch_id, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, source_kind) SELECT ?, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, source_kind FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved'"
-        ).bind(id.to_string()).bind(workspace_id).bind(max_sequence)
+        ).bind(id.to_string()).bind(workspace_id)
             .execute(&mut *tx).await?;
         tx.commit().await?;
         Ok(true)
@@ -433,6 +434,7 @@ impl MemoryEpochCoordinator {
         for row in rows {
             let id_text: String = row.try_get("memory_id")?;
             let id = Uuid::parse_str(&id_text).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let source_kind: String = row.try_get("source_kind")?;
             let vector_json: String = row.try_get("qoin_vector_json")?;
             let vector: QoinVector = serde_json::from_str(&vector_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
             if vector.model_version != request.query.model_version {
@@ -448,7 +450,7 @@ impl MemoryEpochCoordinator {
             let evidence: f32 = row.try_get("evidence_score")?;
             let sequence: i64 = row.try_get("source_event_sequence")?;
             payloads.insert(id, (value, sequence));
-            memories.push(AttentionMemory { memory_id: id, key: vector, value: id.to_string(),
+            memories.push(AttentionMemory { memory_id: id, source_kind, key: vector, value: id.to_string(),
                 outcome_score: outcome, evidence_score: evidence, source_event_sequence: sequence,
                 tags, dependency_ids: dependencies });
         }
@@ -466,7 +468,7 @@ impl MemoryEpochCoordinator {
             .bind(Utc::now().to_rfc3339()).bind(request.project_id.map(|v| v.to_string())).execute(&self.pool).await?;
         let initial = selection.initial.iter().filter_map(|score| {
             payloads.get(&score.memory_id).map(|(payload, sequence)| HandoverMemory {
-                memory_id: score.memory_id, source_kind: memories.iter().find(|memory| memory.memory_id == score.memory_id).map(|memory| memory.value_kind.clone()).unwrap_or_else(|| "memory_entry".into()), source_event_sequence: *sequence,
+                memory_id: score.memory_id, source_kind: memories.iter().find(|memory| memory.memory_id == score.memory_id).map(|memory| memory.source_kind.clone()).unwrap_or_else(|| "memory_entry".into()), source_event_sequence: *sequence,
                 payload_json: payload.clone(), attention_score: score.total
             })
         }).collect();
@@ -531,7 +533,7 @@ impl MemoryEpochCoordinator {
             let evidence: f32 = row.try_get("evidence_score")?;
             let sequence: i64 = row.try_get("source_event_sequence")?;
             payloads.insert(id, (payload, sequence));
-            candidates.push(AttentionMemory { memory_id: id, key: vector, value: id.to_string(),
+            candidates.push(AttentionMemory { memory_id: id, source_kind, key: vector, value: id.to_string(),
                 outcome_score: outcome, evidence_score: evidence, source_event_sequence: sequence,
                 tags, dependency_ids: dependencies.into_iter().collect() });
         }
@@ -546,7 +548,7 @@ impl MemoryEpochCoordinator {
                 sqlx::query("INSERT OR IGNORE INTO agent_memory_session_retrievals (session_id, memory_id, retrieved_at) VALUES (?, ?, ?)")
                     .bind(session_id.to_string()).bind(score.memory_id.to_string())
                     .bind(Utc::now().to_rfc3339()).execute(&self.pool).await?;
-                memories.push(HandoverMemory { memory_id: score.memory_id, source_kind: candidates.iter().find(|memory| memory.memory_id == score.memory_id).map(|memory| memory.value_kind.clone()).unwrap_or_else(|| "memory_entry".into()),
+                memories.push(HandoverMemory { memory_id: score.memory_id, source_kind: candidates.iter().find(|memory| memory.memory_id == score.memory_id).map(|memory| memory.source_kind.clone()).unwrap_or_else(|| "memory_entry".into()),
                     source_event_sequence: *sequence, payload_json: payload.clone(), attention_score: score.total });
             }
         }
