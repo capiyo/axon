@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -81,6 +81,11 @@ function WorkspaceApp() {
   const [qoinNotice, setQoinNotice] = useState("");
   const [activeTab, setActiveTab] = useState<"chats" | "explore">("chats");
   const [menuOpen, setMenuOpen] = useState(false);
+  const chatScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    chatScrollRef.current?.scrollToEnd({ animated: true });
+  }, [chatDetail?.messages.length, activeChat]);
 
   async function refreshHome() {
     const [status, items] = await Promise.all([
@@ -102,8 +107,9 @@ function WorkspaceApp() {
     setArtifacts(artifactItems);
     setTasks(taskItems);
     const chatItems = await request<Chat[]>(`/api/v1/workspaces/${workspace.id}/chats`);
-    setChats(chatItems);
-    setActiveChat(current => current && chatItems.some(chat => chat.id === current) ? current : chatItems[0]?.id ?? "");
+    const recentChats = [...chatItems].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+    setChats(recentChats);
+    setActiveChat(current => current && recentChats.some(chat => chat.id === current) ? current : recentChats[0]?.id ?? "");
     if (!agentItems.some(agent => agent.id === assignee)) setAssignee(agentItems[0]?.id ?? "");
     if (!agentItems.some(agent => agent.id === handoverAgentId)) setHandoverAgentId(agentItems[0]?.id ?? "");
   }
@@ -449,7 +455,7 @@ function WorkspaceApp() {
       </View> : null}
 
       <View style={{flex:1,backgroundColor:"#0e1612"}}>
-        {activeTab === "chats" ? <ScrollView contentContainerStyle={{padding:15,paddingBottom:112}} keyboardShouldPersistTaps="handled">
+        {activeTab === "chats" ? <ScrollView ref={chatScrollRef} contentContainerStyle={{padding:15,paddingBottom:112}} keyboardShouldPersistTaps="handled">
           <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
             <View><Text style={{color:"#849087",fontSize:9,letterSpacing:1.2,fontWeight:"700"}}>WORKSPACE</Text><Text style={{color:"#e8eee9",fontSize:12,fontWeight:"700",marginTop:4}}>{selected?.name ?? "Select a workspace"}</Text></View>
             <View style={{width:7,height:7,borderRadius:4,backgroundColor:health?.status==="ok"?"#bfff4b":"#8a6c46"}}/>

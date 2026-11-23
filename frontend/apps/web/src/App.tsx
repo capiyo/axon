@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { auth } from "./firebase";
 
@@ -61,6 +61,11 @@ function WorkspaceApp() {
   const [qoinNotice, setQoinNotice] = useState("");
   const [activeTab, setActiveTab] = useState<"chats" | "explore">("chats");
   const [menuOpen, setMenuOpen] = useState(false);
+  const messageEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [chatDetail?.messages.length, activeChat]);
 
   async function refreshWorkspaces() {
     const [items, status] = await Promise.all([
@@ -83,8 +88,9 @@ function WorkspaceApp() {
     setArtifacts(artifactItems);
     setTasks(taskItems);
     const chatItems = await api<Chat[]>(`/api/v1/workspaces/${workspace.id}/chats`);
-    setChats(chatItems);
-    setActiveChat(current => current && chatItems.some(chat => chat.id === current) ? current : chatItems[0]?.id ?? "");
+    const recentChats = [...chatItems].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+    setChats(recentChats);
+    setActiveChat(current => current && recentChats.some(chat => chat.id === current) ? current : recentChats[0]?.id ?? "");
     setAssignee(current => agentItems.some(agent => agent.id === current) ? current : agentItems[0]?.id ?? "");
     setHandoverAgentId(current => agentItems.some(agent => agent.id === current) ? current : agentItems[0]?.id ?? "");
   }
@@ -498,8 +504,9 @@ function WorkspaceApp() {
             <div className="axon-message-stream">
               {chatDetail.messages.map(message => <article key={message.id} className={"axon-message-row " + (message.role === "user" ? "mine" : "theirs")}>
                 <div className="axon-message-avatar">{message.role === "user" ? avatarLetter : (message.answered_by || message.role).slice(0,1).toUpperCase()}</div>
-                <div className="axon-message-content"><div className="axon-message-meta"><strong>{message.role === "user" ? "You" : message.answered_by || message.role}</strong>{message.answered_by && message.role !== "user" ? <span>Agent response</span> : null}</div><div className="axon-message-bubble"><p>{message.content}</p></div><button type="button" className="axon-message-action" disabled={busy} onClick={() => void indexChatMessageWithQoin(message)}>Index with Qoin</button></div>
+                <div className="axon-message-content"><div className="axon-message-meta"><strong>{message.role === "user" ? "You" : message.answered_by || message.role}</strong><span>{new Date(message.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span></div><div className="axon-message-bubble"><p>{message.content}</p></div><button type="button" className="axon-message-action" disabled={busy} onClick={() => void indexChatMessageWithQoin(message)}>Index with Qoin</button></div>
               </article>)}
+              <div ref={messageEndRef} />
               {chatDetail.messages.length === 0 && <div className="axon-empty-stream"><span>✧</span><strong>This conversation is new</strong><p>Send a message to start the working history.</p></div>}
             </div>
             <form className="axon-composer" onSubmit={sendChatMessage}><textarea value={messageDraft} onChange={event => setMessageDraft(event.target.value)} rows={2} maxLength={256000} placeholder="Message your workspace…" required /><div className="axon-composer-footer"><span>Messages become part of this workspace's history.</span><button disabled={!messageDraft.trim() || busy}>{busy ? "Sending…" : "Send"} <span>↗</span></button></div></form>
