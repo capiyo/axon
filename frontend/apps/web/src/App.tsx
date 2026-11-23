@@ -5,7 +5,7 @@ import { auth } from "./firebase";
 import type {
   Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage,
   ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext,
-  QoinMemoryIndexReceipt
+  QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt
 } from "../../../packages/contracts/src";
 
 
@@ -210,6 +210,30 @@ function WorkspaceApp() {
     } catch (cause) {
       setQoinVector(null);
       setError(cause instanceof Error ? cause.message : "Could not load the Qoin market vector.");
+    } finally { setBusy(false); }
+  }
+
+  async function indexChatMessageWithQoin(message: ChatMessage) {
+    if (!selected || !activeChat || !qoinSymbol.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      const receipt = await api<QoinChatMessageIndexReceipt>(
+        `/api/v1/workspaces/${selected.id}/chats/${activeChat}/messages/${message.id}/qoin-index`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            symbol: qoinSymbol.trim(),
+            tags: [message.role, "source:chat_message", `symbol:${qoinSymbol.trim().toUpperCase()}`],
+            dependency_ids: [],
+            evidence_score: 0.5
+          })
+        }
+      );
+      setQoinNotice(`Indexed chat message ${receipt.message_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()} · available after the next hourly epoch.`);
+      setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not index this chat message with Qoin.");
     } finally { setBusy(false); }
   }
 
@@ -508,7 +532,7 @@ function WorkspaceApp() {
                 <div className="chat-main">
                   {!chatDetail ? <div className="empty-state compact"><h3>Select a chat or create one.</h3><p>Each conversation keeps its own messages, approved memory and resume brief.</p></div> : <>
                     <div className="resume-brief"><div className="panel-heading"><span className="kicker">RESUME BRIEF · APPROVED MEMORY ONLY</span><button type="button" className="secondary" disabled={busy} onClick={() => void archiveChat()}>Archive chat</button></div><p>{chatDetail.resume_brief || "No context yet. Add messages and approve useful memory to build a concise handoff."}</p></div>
-                    <div className="chat-messages">{chatDetail.messages.map(message => <article className={`chat-message message-${message.role}`} key={message.id}><div><strong>{message.role}</strong>{message.answered_by && <small> · {message.answered_by}</small>}</div><p>{message.content}</p></article>)}{chatDetail.messages.length === 0 && <p className="muted">No messages yet.</p>}</div>
+                    <div className="chat-messages">{chatDetail.messages.map(message => <article className={`chat-message message-${message.role}`} key={message.id}><div><strong>{message.role}</strong>{message.answered_by && <small> · {message.answered_by}</small>}</div><p>{message.content}</p><button type="button" className="secondary qoin-message-index" disabled={busy} onClick={() => void indexChatMessageWithQoin(message)}>Index with Qoin</button></article>)}{chatDetail.messages.length === 0 && <p className="muted">No messages yet.</p>}</div>
                     <form className="chat-compose" onSubmit={sendChatMessage}><textarea value={messageDraft} onChange={event => setMessageDraft(event.target.value)} rows={3} maxLength={256000} placeholder="Write a message to this project chat…" required /><button disabled={!messageDraft.trim() || busy}>Send message</button></form>
                     <div className="memory-section">
                       <div className="panel-heading"><div><span className="kicker">PROJECT MEMORY</span><h3>Review proposed knowledge</h3></div></div>
