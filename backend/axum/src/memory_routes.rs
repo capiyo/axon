@@ -188,7 +188,7 @@ pub async fn index_memory_with_qoin(
             "Qoin integration is not configured. Set QOIN_API_URL on the Axon backend.",
         )
     })?;
-    let memory_created_at_ms = coordinator(&state)?
+    let memory_context_timestamp_ms = coordinator(&state)?
         .approved_memory_context_timestamp_ms(workspace_id, chat_id, memory_id)
         .await
         .map_err(|_| {
@@ -198,7 +198,7 @@ pub async fn index_memory_with_qoin(
             )
         })?;
     let snapshot = client
-        .at(&input.symbol, memory_created_at_ms)
+        .at(&input.symbol, memory_context_timestamp_ms)
         .await
         .map_err(qoin_error)?;
     let model_version = snapshot.vector.model_version.clone();
@@ -234,7 +234,7 @@ pub async fn index_memory_with_qoin(
         memory_id,
         symbol: snapshot.symbol,
         model_version,
-        memory_created_at_ms,
+        memory_context_timestamp_ms,
         qoin_event_ts_ms,
         indexed: true,
     }))
