@@ -1126,3 +1126,38 @@ mod tests {
             .is_empty());
     }
 }
+
+pub async fn list_notifications(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Query(query): Query<ExploreQuery>,
+) -> ApiResult<Json<NotificationPage>> {
+    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Notification storage is unavailable."))?;
+    let page = store.list_notifications(user.user_id, query.limit.unwrap_or(30), query.offset.unwrap_or(0))
+        .await.map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load notifications."))?;
+    Ok(Json(page))
+}
+
+pub async fn mark_notification_read(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path(notification_id): Path<Uuid>,
+) -> ApiResult<StatusCode> {
+    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Notification storage is unavailable."))?;
+    if store.mark_notification_read(notification_id, user.user_id).await
+        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not mark notification as read."))? {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(error(StatusCode::NOT_FOUND, "Notification not found or already read."))
+    }
+}
+
+pub async fn mark_all_notifications_read(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let store = state.explore.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Notification storage is unavailable."))?;
+    let updated = store.mark_all_notifications_read(user.user_id).await
+        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not mark notifications as read."))?;
+    Ok(Json(serde_json::json!({ "updated": updated })))
+}
