@@ -518,7 +518,7 @@ impl MemoryEpochCoordinator {
     /// Read the original creation time from the immutable approved-memory event.
     /// Qoin history lookup uses this timestamp so old memories are never mapped
     /// to the market state that happens to be current when someone indexes them.
-    pub async fn approved_memory_created_at_ms(
+    pub async fn approved_memory_context_timestamp_ms(
         &self,
         workspace_id: Uuid,
         chat_id: Uuid,
@@ -540,11 +540,28 @@ impl MemoryEpochCoordinator {
                 "only approved memories can be mapped to historical Qoin vectors".into(),
             ));
         }
-        let created_at = value
-            .get("created_at")
+        let context_timestamp = if let Some(source_message_id) = value
+            .get("source_message_id")
             .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| sqlx::Error::Protocol("memory creation timestamp is missing".into()))?;
-        let timestamp = DateTime::parse_from_rfc3339(created_at)
+        {
+            sqlx::query_scalar::<_, String>(
+                "SELECT created_at FROM chat_messages WHERE id = ? AND chat_id = ?",
+            )
+            .bind(source_message_id)
+            .bind(chat_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(sqlx::Error::RowNotFound)?
+        } else {
+            value
+                .get("created_at")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| {
+                    sqlx::Error::Protocol("memory creation timestamp is missing".into())
+                })?
+                .to_owned()
+        };
+        let timestamp = DateTime::parse_from_rfc3339(&context_timestamp)
             .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
         Ok(timestamp.timestamp_millis())
     }
