@@ -112,9 +112,15 @@ impl QoinVectorClient {
         }
         let mut endpoint = self.endpoint.clone();
         if at_ms.is_some() {
-            endpoint.set_path(&format!("{}/history", endpoint.path().trim_end_matches('/')));
+            endpoint.set_path(&format!(
+                "{}/history",
+                endpoint.path().trim_end_matches('/')
+            ));
         }
-        let mut request = self.http.get(endpoint).query(&[("symbol", symbol.as_str())]);
+        let mut request = self
+            .http
+            .get(endpoint)
+            .query(&[("symbol", symbol.as_str())]);
         if let Some(timestamp) = at_ms {
             request = request.query(&[("at_ms", timestamp)]);
         }
