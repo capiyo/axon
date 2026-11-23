@@ -166,7 +166,7 @@ impl MemoryStore {
         let now = Utc::now().to_rfc3339();
         let mut tx = self.pool.begin().await?;
         let exists: Option<i64> = sqlx::query_scalar(
-            "SELECT 1 FROM agent_memories WHERE id = ? AND workspace_id = ?",
+            "SELECT 1 FROM agent_memories WHERE id = ? AND workspace_id = ? AND verification = 'verified'",
         )
         .bind(memory_id.to_string())
         .bind(workspace_id.to_string())
