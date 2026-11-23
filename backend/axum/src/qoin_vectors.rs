@@ -95,10 +95,17 @@ impl QoinVectorClient {
             return Err(QoinVectorError::HttpStatus(response.status()));
         }
         let decision: QoinDecision = response.json().await?;
+        if decision.symbol.trim().to_ascii_uppercase() != symbol {
+            return Err(QoinVectorError::InvalidVector);
+        }
         let values = decision
             .attended_features
             .ok_or(QoinVectorError::MissingVector)?;
         if values.len() != QOIN_VECTOR_DIMENSION || values.iter().any(|value| !value.is_finite()) {
+            return Err(QoinVectorError::InvalidVector);
+        }
+        let values = values.into_iter().map(|value| value as f32).collect::<Vec<_>>();
+        if values.iter().any(|value| !value.is_finite()) {
             return Err(QoinVectorError::InvalidVector);
         }
         let model_version = decision
@@ -106,12 +113,16 @@ impl QoinVectorClient {
             .or(decision.model_version)
             .filter(|version| !version.trim().is_empty())
             .ok_or(QoinVectorError::MissingModelVersion)?;
+        let vector = QoinVector {
+            values,
+            model_version,
+        };
+        vector
+            .validate()
+            .map_err(|_| QoinVectorError::InvalidVector)?;
         Ok(QoinVectorSnapshot {
             symbol: decision.symbol,
-            vector: QoinVector {
-                values: values.into_iter().map(|value| value as f32).collect(),
-                model_version,
-            },
+            vector,
             features: decision.features,
             action: decision.action.unwrap_or_else(|| "wait".into()),
             reason: decision.reason.unwrap_or_default(),
