@@ -196,7 +196,15 @@ pub async fn share(
         ));
     }
     drop(agents);
-    let store = state.memory_store.as_ref().ok_or_else(|| error(StatusCode::SERVICE_UNAVAILABLE, "Persistent memory is unavailable."))?;
+    let store = state
+        .memory_store
+        .as_ref()
+        .ok_or_else(|| {
+            error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Persistent memory is unavailable.",
+            )
+        })?;
     store
         .grant(
             workspace_id,
