@@ -93,6 +93,10 @@ pub fn app(state: AppState) -> Router {
             post(memory_routes::index_memory_with_qoin),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/chats/:chat_id/messages/:message_id/qoin-index",
+            post(memory_routes::index_chat_message_with_qoin),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-context",
             post(memory_routes::prepare_handover),
         )
