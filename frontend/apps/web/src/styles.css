@@ -494,3 +494,6 @@ body {
 .notification-item strong { color: var(--axon-color-text); font-size: 10px; }
 .notification-item span { color: var(--axon-color-text-muted); font-size: 10px; line-height: 1.5; }
 .notification-item small, .notification-empty { color: var(--axon-color-text-subtle); font-size: 9px; }
+
+.chat-card-progress { display: block; width: 100%; height: 4px; overflow: hidden; border-radius: 999px; background: #294A35; }
+.chat-card-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--axon-color-accent); transition: width .2s ease; }
