@@ -2,6 +2,8 @@
 
 ## Intent
 
+The product's primary signed-in destination is named **Hub**. A Hub is the user's central operating surface; the API's existing `workspace` resource and `/api/v1/workspaces` routes remain unchanged for compatibility.
+
 Axon uses one product layout language across desktop web, mobile web and Android. Platform-specific components may differ, but the information architecture, navigation model, card metadata and interaction outcomes must remain consistent.
 
 The application is organized by presentation responsibility:
@@ -30,9 +32,13 @@ frontend/
 
 Screens are top-level compositions and own the lifecycle of a destination. They coordinate data loading and state until that logic is extracted into typed hooks. The application entry point must only mount the screen/authentication boundary; it must not grow into another application implementation.
 
-Current extraction boundary:
-- Web: `apps/web/src/screens/WorkspaceScreen.tsx`
-- Mobile: `apps/mobile/screens/WorkspaceScreen.tsx`
+Current screen destinations:
+- `HomeScreen.tsx` — overview metrics and quick entry points
+- `Chats` — conversations, messages and shared context
+- `Explore` — public agent discovery and community discussion
+- `HubScreen.tsx` — authenticated shell, navigation and orchestration
+
+Home is the default destination on both platforms. Chats and Explore are first-class navigation destinations; the API's existing workspace resource names are retained internally.
 
 These files currently retain the existing workspace controller and feature JSX to avoid breaking working flows during the first structural pass. They are not the desired final size. The next extraction is to move Chats, Explore, Messaging, profile settings and workspace resources into focused screen/view modules while keeping their current API calls and state transitions intact.
 
@@ -78,4 +84,4 @@ The mobile profile experience is presented as a slide-up sheet over the active w
 
 ## Current status
 
-The first structural pass is committed on `refactor/axon-funspot-screen-architecture`. Entry points now delegate to screen modules, workspace shells are isolated under `views/`, and profile/notification surfaces have dedicated modal modules. The existing workspace controllers remain large; full feature-by-feature extraction and visual QA are still outstanding. No merge or deployment is part of this refactor.
+The first structural pass is committed on `refactor/axon-funspot-screen-architecture`. Entry points now delegate to screen modules, workspace shells are isolated under `views/`, and profile/notification surfaces have dedicated modal modules. The Home destination is now an explicit screen module on web and mobile. Chats and Explore are distinct destinations in the navigation, while their existing feature controllers remain in the Hub shell for now; extracting those controllers into independent screen modules and completing visual QA are still outstanding. No merge or deployment is part of this refactor.
