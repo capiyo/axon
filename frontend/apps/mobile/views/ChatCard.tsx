@@ -42,7 +42,7 @@ export default function ChatCard({ chat, linkedTaskCount, progress, styles, onOp
           <View style={{ flex: 1 }}><Text style={styles.chatCardMobileTitle}>{chat.title}</Text><Text style={styles.chatCardMobileAgent}>{last?.answered_by || "Session"}</Text></View>
           <Text style={styles.chatCardMobileTime}>{new Date(chat.updated_at).toLocaleString()}</Text>
         </View>
-        <Text style={styles.chatCardMobilePreview}>{last?.content || "No messages yet. Open this chat to begin."}</Text>
+        <Text style={styles.chatCardMobilePreview}>{last?.content || "No messages yet. Open this session to begin."}</Text>
         {progress !== null ? <View style={styles.chatCardMobileProgress}><View style={[styles.chatCardMobileProgressFill, { width: `${progress}%` }]} /></View> : null}
         <Text style={styles.chatCardMobileOpen}>OPEN SESSION →</Text>
       </Pressable>
