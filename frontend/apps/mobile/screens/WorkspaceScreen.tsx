@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import WorkspaceView from "../views/WorkspaceView";
 import NotificationsModal from "../modals/NotificationsModal";
+import ProfileModal from "../modals/ProfileModal";
 import {
   ActivityIndicator,
   Image,
@@ -55,6 +56,67 @@ function ActionButton({ label, onPress, disabled = false, secondary = false }: {
   disabled?: boolean;
   secondary?: boolean;
 }) {
+  const profileContent = (
+<>
+              <View style={styles.screenHeading}><Pressable onPress={() => setProfileOpen(false)}><Text style={styles.back}>← Back</Text></Pressable><Text style={styles.screenTitle}>Profile & workspace</Text><Text style={styles.description}>{user.email}</Text></View>
+              <View style={styles.panel}>
+                <View style={styles.profileIdentityMobile}>
+                  {user.photoURL ? <Image source={{uri:user.photoURL}} style={styles.profileAvatarMobile}/> : <View style={styles.profileAvatarFallback}><Text style={styles.profileAvatarFallbackText}>{(user.displayName || user.email || "A").slice(0,1).toUpperCase()}</Text></View>}
+                  <View style={{flex:1}}><Text style={styles.rowTitle}>{user.displayName || user.email || "Axon user"}</Text><Text style={styles.rowMeta}>{selected.name}</Text></View>
+                </View>
+                <View style={styles.mobileStatsGrid}>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{agents.length}</Text><Text style={styles.mobileStatLabel}>Agents</Text></View>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{chats.length}</Text><Text style={styles.mobileStatLabel}>Chats</Text></View>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "in_progress").length}</Text><Text style={styles.mobileStatLabel}>Running</Text></View>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "completed").length}</Text><Text style={styles.mobileStatLabel}>Completed</Text></View>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "offered" || task.status === "acknowledged").length}</Text><Text style={styles.mobileStatLabel}>Queued</Text></View>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{artifacts.length}</Text><Text style={styles.mobileStatLabel}>Artifacts</Text></View>
+                </View>
+                <View style={styles.profileMetricsMobile}>
+                  <Text style={styles.fieldLabel}>MEMORY & CONTEXT</Text>
+                  <Text style={styles.rowMeta}>Selected chat approved memory entries · {(chatDetail?.memory.filter(entry=>entry.status==="approved").length ?? 0)}</Text>
+                  <Text style={styles.rowMeta}>Messages across active chats · {chats.reduce((total,chat)=>total+chat.message_count,0)}</Text>
+                  <Text style={styles.rowMeta}>Captured artifacts · {artifacts.length}</Text>
+                  <Text style={styles.fieldLabel}>EXECUTION & HEALTH</Text>
+                  <Text style={styles.rowMeta}>Awaiting review · {tasks.filter(task=>task.status==="review_required" || task.status==="submitted").length}</Text>
+                  <Text style={styles.rowMeta}>Rejected / cancelled · {tasks.filter(task=>task.status==="rejected" || task.status==="cancelled").length}</Text>
+                  <Text style={styles.rowMeta}>API · {health?.status === "ok" ? "Connected" : "Unavailable"}</Text>
+                  <Text style={styles.rowMeta}>Storage · {health?.storage === "persistent" ? "Persistent" : health?.storage ?? "Unknown"}</Text>
+                </View>
+                <Text style={styles.fieldLabel}>AGENT REGISTRY</Text>
+                <TextInput value={agentName} onChangeText={setAgentName} placeholder="Agent name" style={styles.input}/>
+                <TextInput value={provider} onChangeText={setProvider} placeholder="Provider" style={styles.input}/>
+                <ActionButton label="Register agent" onPress={registerAgent} disabled={!agentName.trim() || busy}/>
+                {agents.map(agent => <View key={agent.id} style={styles.listRow}><Text style={styles.rowTitle}>{agent.display_name}</Text><Text style={styles.rowMeta}>{agent.provider} · manually registered</Text></View>)}
+                <Text style={styles.fieldLabel}>PUBLISH TO EXPLORE</Text>
+                {agents.map(agent => <Pressable key={agent.id} onPress={() => setPublishAgentId(agent.id)} style={[styles.agentChoice,publishAgentId===agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text><Text style={styles.rowMeta}>{publishAgentId===agent.id ? "Selected for publishing" : "Select to publish"}</Text></Pressable>)}
+                <TextInput value={publishCategory} onChangeText={setPublishCategory} placeholder="Category" style={styles.input} maxLength={80}/>
+                <TextInput value={publishDescription} onChangeText={setPublishDescription} placeholder="Public agent description…" style={[styles.input,styles.multiline]} multiline maxLength={4000}/>
+                <ActionButton label="Publish selected agent" onPress={publishExploreAgent} disabled={!publishAgentId || !publishDescription.trim() || !publishCategory.trim() || busy} secondary/>
+                <Text style={styles.fieldLabel}>CAPTURED CONTEXT</Text>
+                <TextInput value={artifactTitle} onChangeText={setArtifactTitle} placeholder="Artifact title" style={styles.input}/>
+                <TextInput value={artifactContent} onChangeText={setArtifactContent} placeholder="Capture findings and evidence…" style={[styles.input,styles.multiline]} multiline/>
+                <ActionButton label="Capture artifact" onPress={captureArtifact} disabled={!artifactTitle.trim() || !artifactContent.trim() || busy}/>
+                {artifacts.map(artifact => <View key={artifact.id} style={styles.listRow}><Text style={styles.rowTitle}>{artifact.title}</Text><Text style={styles.rowMeta}>{artifact.content}</Text></View>)}
+                <Text style={styles.fieldLabel}>QOIN × AXON MEMORY CONTEXT</Text>
+                <TextInput value={qoinSymbol} onChangeText={value => {setQoinSymbol(value.toUpperCase());setQoinVector(null);setHandover(null);setProgressiveContext(null);}} placeholder="Market symbol (BTCUSDT)" autoCapitalize="characters" style={styles.input}/>
+                <ActionButton label="Load latest Qoin vector" onPress={loadQoinVector} disabled={busy || !qoinSymbol.trim()} secondary/>
+                {qoinVector ? <View style={styles.listRow}><Text style={styles.rowTitle}>{qoinVector.symbol} · {qoinVector.vector.model_version} · {qoinVector.action.toUpperCase()}</Text><Text style={styles.rowMeta}>{qoinVector.reason}</Text>{Object.entries(qoinVector.features).map(([key,value]) => <Text key={key} style={styles.rowMeta}>{key.replaceAll("_"," ")}: {value.toFixed(3)}</Text>)}</View> : <Text style={styles.muted}>Load a current market-state vector to prepare bounded historical context for an agent.</Text>}
+                <Text style={styles.fieldLabel}>RECEIVING AGENT</Text>
+                {agents.map(agent => <Pressable key={agent.id} onPress={() => {setHandoverAgentId(agent.id);setHandover(null);setProgressiveContext(null);}} style={[styles.agentChoice,handoverAgentId===agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text></Pressable>)}
+                <ActionButton label="Prepare first 20% context" onPress={prepareAgentHandover} disabled={busy || !qoinVector || !handoverAgentId || agents.length===0} secondary/>
+                {handover ? <View style={styles.listRow}><Text style={styles.rowTitle}>Epoch {handover.epoch.epoch_number} · {handover.initial.length} initial memories</Text><Text style={styles.rowMeta}>{(handover.achieved_coverage*100).toFixed(1)}% contribution coverage · {handover.deferred_count} deferred</Text>{handover.initial.map(item => <View key={item.memory_id} style={styles.contextChoice}><Text style={styles.rowTitle}>{item.source_kind} · {(item.attention_score*100).toFixed(1)}%</Text><Text style={styles.rowMeta}>{item.payload_json}</Text></View>)}<ActionButton label="Retrieve next 10 historical memories" onPress={retrieveMoreContext} disabled={busy || handover.deferred_count===0} secondary/>{progressiveContext ? progressiveContext.memories.map(item => <View key={item.memory_id} style={styles.contextChoice}><Text style={styles.rowTitle}>{item.source_kind} · {(item.attention_score*100).toFixed(1)}%</Text><Text style={styles.rowMeta}>{item.payload_json}</Text></View>) : null}</View> : null}
+                <Text style={styles.fieldLabel}>TASK HANDOFFS</Text>
+                <TextInput value={taskTitle} onChangeText={setTaskTitle} placeholder="Task title" style={styles.input}/>
+                <TextInput value={taskObjective} onChangeText={setTaskObjective} placeholder="Expected outcome and instructions…" style={[styles.input,styles.multiline]} multiline/>
+                {agents.map(agent => <Pressable key={agent.id} onPress={() => setAssignee(agent.id)} style={[styles.agentChoice,assignee===agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text></Pressable>)}
+                <ActionButton label="Create handoff" onPress={createTask} disabled={!taskTitle.trim() || !taskObjective.trim() || !assignee || busy}/>
+                {tasks.map(task => <View key={task.id} style={styles.listRow}><Text style={styles.rowTitle}>{task.title}</Text><Text style={styles.rowMeta}>{task.status.replaceAll("_"," ")} · {task.transitions.length} events</Text>{["offered","acknowledged","in_progress","changes_requested"].includes(task.status) ? <ActionButton label="Run assigned agent" onPress={() => void executeTask(task)} disabled={busy}/> : null}{nextTaskStatus[task.status] ? <ActionButton label={`Advance to ${nextTaskStatus[task.status].replaceAll("_"," ")}`} onPress={() => advanceTask(task,nextTaskStatus[task.status])} disabled={busy} secondary/> : null}{task.status === "in_progress" ? <><TextInput value={responseDrafts[task.id] ?? ""} onChangeText={value => setResponseDrafts(current => ({...current,[task.id]:value}))} placeholder="Capture agent response…" style={[styles.input,styles.multiline]} multiline/><ActionButton label="Submit response" onPress={() => submitTaskResponse(task)} disabled={busy || !(responseDrafts[task.id] ?? "").trim()} secondary/></> : null}</View>)}
+                <ActionButton label="Sign out" onPress={() => { if (auth) void signOut(auth); }} secondary/>
+              </View>
+            </>
+  );
+
   return (
     <Pressable onPress={onPress} disabled={disabled} style={[styles.button, secondary && styles.secondaryButton, disabled && styles.disabled]}>
       <Text style={[styles.buttonText, secondary && styles.secondaryButtonText]}>{label}</Text>
@@ -688,65 +750,6 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               <ActionButton label="Create workspace" onPress={createWorkspace} disabled={!workspaceName.trim() || busy}/>
               {workspaces.map(workspace => <Pressable key={workspace.id} onPress={() => setSelected(workspace)} style={styles.workspaceRow}><Text style={styles.rowTitle}>{workspace.name}</Text></Pressable>)}
             </View>
-          ) : profileOpen ? (
-            <>
-              <View style={styles.screenHeading}><Pressable onPress={() => setProfileOpen(false)}><Text style={styles.back}>← Back</Text></Pressable><Text style={styles.screenTitle}>Profile & workspace</Text><Text style={styles.description}>{user.email}</Text></View>
-              <View style={styles.panel}>
-                <View style={styles.profileIdentityMobile}>
-                  {user.photoURL ? <Image source={{uri:user.photoURL}} style={styles.profileAvatarMobile}/> : <View style={styles.profileAvatarFallback}><Text style={styles.profileAvatarFallbackText}>{(user.displayName || user.email || "A").slice(0,1).toUpperCase()}</Text></View>}
-                  <View style={{flex:1}}><Text style={styles.rowTitle}>{user.displayName || user.email || "Axon user"}</Text><Text style={styles.rowMeta}>{selected.name}</Text></View>
-                </View>
-                <View style={styles.mobileStatsGrid}>
-                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{agents.length}</Text><Text style={styles.mobileStatLabel}>Agents</Text></View>
-                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{chats.length}</Text><Text style={styles.mobileStatLabel}>Chats</Text></View>
-                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "in_progress").length}</Text><Text style={styles.mobileStatLabel}>Running</Text></View>
-                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "completed").length}</Text><Text style={styles.mobileStatLabel}>Completed</Text></View>
-                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "offered" || task.status === "acknowledged").length}</Text><Text style={styles.mobileStatLabel}>Queued</Text></View>
-                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{artifacts.length}</Text><Text style={styles.mobileStatLabel}>Artifacts</Text></View>
-                </View>
-                <View style={styles.profileMetricsMobile}>
-                  <Text style={styles.fieldLabel}>MEMORY & CONTEXT</Text>
-                  <Text style={styles.rowMeta}>Selected chat approved memory entries · {(chatDetail?.memory.filter(entry=>entry.status==="approved").length ?? 0)}</Text>
-                  <Text style={styles.rowMeta}>Messages across active chats · {chats.reduce((total,chat)=>total+chat.message_count,0)}</Text>
-                  <Text style={styles.rowMeta}>Captured artifacts · {artifacts.length}</Text>
-                  <Text style={styles.fieldLabel}>EXECUTION & HEALTH</Text>
-                  <Text style={styles.rowMeta}>Awaiting review · {tasks.filter(task=>task.status==="review_required" || task.status==="submitted").length}</Text>
-                  <Text style={styles.rowMeta}>Rejected / cancelled · {tasks.filter(task=>task.status==="rejected" || task.status==="cancelled").length}</Text>
-                  <Text style={styles.rowMeta}>API · {health?.status === "ok" ? "Connected" : "Unavailable"}</Text>
-                  <Text style={styles.rowMeta}>Storage · {health?.storage === "persistent" ? "Persistent" : health?.storage ?? "Unknown"}</Text>
-                </View>
-                <Text style={styles.fieldLabel}>AGENT REGISTRY</Text>
-                <TextInput value={agentName} onChangeText={setAgentName} placeholder="Agent name" style={styles.input}/>
-                <TextInput value={provider} onChangeText={setProvider} placeholder="Provider" style={styles.input}/>
-                <ActionButton label="Register agent" onPress={registerAgent} disabled={!agentName.trim() || busy}/>
-                {agents.map(agent => <View key={agent.id} style={styles.listRow}><Text style={styles.rowTitle}>{agent.display_name}</Text><Text style={styles.rowMeta}>{agent.provider} · manually registered</Text></View>)}
-                <Text style={styles.fieldLabel}>PUBLISH TO EXPLORE</Text>
-                {agents.map(agent => <Pressable key={agent.id} onPress={() => setPublishAgentId(agent.id)} style={[styles.agentChoice,publishAgentId===agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text><Text style={styles.rowMeta}>{publishAgentId===agent.id ? "Selected for publishing" : "Select to publish"}</Text></Pressable>)}
-                <TextInput value={publishCategory} onChangeText={setPublishCategory} placeholder="Category" style={styles.input} maxLength={80}/>
-                <TextInput value={publishDescription} onChangeText={setPublishDescription} placeholder="Public agent description…" style={[styles.input,styles.multiline]} multiline maxLength={4000}/>
-                <ActionButton label="Publish selected agent" onPress={publishExploreAgent} disabled={!publishAgentId || !publishDescription.trim() || !publishCategory.trim() || busy} secondary/>
-                <Text style={styles.fieldLabel}>CAPTURED CONTEXT</Text>
-                <TextInput value={artifactTitle} onChangeText={setArtifactTitle} placeholder="Artifact title" style={styles.input}/>
-                <TextInput value={artifactContent} onChangeText={setArtifactContent} placeholder="Capture findings and evidence…" style={[styles.input,styles.multiline]} multiline/>
-                <ActionButton label="Capture artifact" onPress={captureArtifact} disabled={!artifactTitle.trim() || !artifactContent.trim() || busy}/>
-                {artifacts.map(artifact => <View key={artifact.id} style={styles.listRow}><Text style={styles.rowTitle}>{artifact.title}</Text><Text style={styles.rowMeta}>{artifact.content}</Text></View>)}
-                <Text style={styles.fieldLabel}>QOIN × AXON MEMORY CONTEXT</Text>
-                <TextInput value={qoinSymbol} onChangeText={value => {setQoinSymbol(value.toUpperCase());setQoinVector(null);setHandover(null);setProgressiveContext(null);}} placeholder="Market symbol (BTCUSDT)" autoCapitalize="characters" style={styles.input}/>
-                <ActionButton label="Load latest Qoin vector" onPress={loadQoinVector} disabled={busy || !qoinSymbol.trim()} secondary/>
-                {qoinVector ? <View style={styles.listRow}><Text style={styles.rowTitle}>{qoinVector.symbol} · {qoinVector.vector.model_version} · {qoinVector.action.toUpperCase()}</Text><Text style={styles.rowMeta}>{qoinVector.reason}</Text>{Object.entries(qoinVector.features).map(([key,value]) => <Text key={key} style={styles.rowMeta}>{key.replaceAll("_"," ")}: {value.toFixed(3)}</Text>)}</View> : <Text style={styles.muted}>Load a current market-state vector to prepare bounded historical context for an agent.</Text>}
-                <Text style={styles.fieldLabel}>RECEIVING AGENT</Text>
-                {agents.map(agent => <Pressable key={agent.id} onPress={() => {setHandoverAgentId(agent.id);setHandover(null);setProgressiveContext(null);}} style={[styles.agentChoice,handoverAgentId===agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text></Pressable>)}
-                <ActionButton label="Prepare first 20% context" onPress={prepareAgentHandover} disabled={busy || !qoinVector || !handoverAgentId || agents.length===0} secondary/>
-                {handover ? <View style={styles.listRow}><Text style={styles.rowTitle}>Epoch {handover.epoch.epoch_number} · {handover.initial.length} initial memories</Text><Text style={styles.rowMeta}>{(handover.achieved_coverage*100).toFixed(1)}% contribution coverage · {handover.deferred_count} deferred</Text>{handover.initial.map(item => <View key={item.memory_id} style={styles.contextChoice}><Text style={styles.rowTitle}>{item.source_kind} · {(item.attention_score*100).toFixed(1)}%</Text><Text style={styles.rowMeta}>{item.payload_json}</Text></View>)}<ActionButton label="Retrieve next 10 historical memories" onPress={retrieveMoreContext} disabled={busy || handover.deferred_count===0} secondary/>{progressiveContext ? progressiveContext.memories.map(item => <View key={item.memory_id} style={styles.contextChoice}><Text style={styles.rowTitle}>{item.source_kind} · {(item.attention_score*100).toFixed(1)}%</Text><Text style={styles.rowMeta}>{item.payload_json}</Text></View>) : null}</View> : null}
-                <Text style={styles.fieldLabel}>TASK HANDOFFS</Text>
-                <TextInput value={taskTitle} onChangeText={setTaskTitle} placeholder="Task title" style={styles.input}/>
-                <TextInput value={taskObjective} onChangeText={setTaskObjective} placeholder="Expected outcome and instructions…" style={[styles.input,styles.multiline]} multiline/>
-                {agents.map(agent => <Pressable key={agent.id} onPress={() => setAssignee(agent.id)} style={[styles.agentChoice,assignee===agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text></Pressable>)}
-                <ActionButton label="Create handoff" onPress={createTask} disabled={!taskTitle.trim() || !taskObjective.trim() || !assignee || busy}/>
-                {tasks.map(task => <View key={task.id} style={styles.listRow}><Text style={styles.rowTitle}>{task.title}</Text><Text style={styles.rowMeta}>{task.status.replaceAll("_"," ")} · {task.transitions.length} events</Text>{["offered","acknowledged","in_progress","changes_requested"].includes(task.status) ? <ActionButton label="Run assigned agent" onPress={() => void executeTask(task)} disabled={busy}/> : null}{nextTaskStatus[task.status] ? <ActionButton label={`Advance to ${nextTaskStatus[task.status].replaceAll("_"," ")}`} onPress={() => advanceTask(task,nextTaskStatus[task.status])} disabled={busy} secondary/> : null}{task.status === "in_progress" ? <><TextInput value={responseDrafts[task.id] ?? ""} onChangeText={value => setResponseDrafts(current => ({...current,[task.id]:value}))} placeholder="Capture agent response…" style={[styles.input,styles.multiline]} multiline/><ActionButton label="Submit response" onPress={() => submitTaskResponse(task)} disabled={busy || !(responseDrafts[task.id] ?? "").trim()} secondary/></> : null}</View>)}
-                <ActionButton label="Sign out" onPress={() => { if (auth) void signOut(auth); }} secondary/>
-              </View>
-            </>
           ) : activeTab === "explore" ? (
             <>
               <View style={styles.screenHeading}><Text style={styles.eyebrow}>PUBLIC DISCOVERY</Text><Text style={styles.screenTitle}>Explore agents</Text><Text style={styles.description}>Discover agents that their owners have deliberately published, and read the community discussion.</Text></View>
@@ -804,6 +807,10 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
             </>
           )}
         </ScrollView>
+
+        <ProfileModal visible={profileOpen} onClose={() => setProfileOpen(false)}>
+          {profileContent}
+        </ProfileModal>
 
         {!profileOpen && <View style={styles.mobileBottomNav}><Pressable onPress={() => {setActiveTab("chats");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="chats" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>◌</Text><Text style={styles.mobileNavText}>Chats</Text>{chats.reduce((total,chat)=>total+chat.unread_count,0)>0 ? <Text style={styles.mobileNavBadge}>{chats.reduce((total,chat)=>total+chat.unread_count,0)}</Text> : null}</Pressable><Pressable onPress={() => {setActiveTab("explore");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="explore" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>⌕</Text><Text style={styles.mobileNavText}>Explore</Text></Pressable></View>}
         {notificationsOpen && <NotificationsModal notifications={notifications} style={styles.notificationsOverlay} onMarkAllRead={markAllNotificationsRead} onClose={() => setNotificationsOpen(false)} onOpenNotification={openNotification} styles={styles} /> }
