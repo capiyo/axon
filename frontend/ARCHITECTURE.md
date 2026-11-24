@@ -33,12 +33,12 @@ frontend/
 Screens are top-level compositions and own the lifecycle of a destination. They coordinate data loading and state until that logic is extracted into typed hooks. The application entry point must only mount the screen/authentication boundary; it must not grow into another application implementation.
 
 Current screen destinations:
-- `HomeScreen.tsx` — overview metrics and quick entry points
-- `ChatsScreen.tsx` — dedicated Chats destination boundary
-- `ExploreScreen.tsx` — dedicated Explore destination boundary
-- `HubScreen.tsx` — authenticated shell, navigation and orchestration
+- `HubScreen.tsx` — authenticated desktop Hub and Android app shell
+- `HomeScreen.tsx` — the single content surface with Chats and Explore tabs
+- `ChatsScreen.tsx` — Chats tab content boundary
+- `ExploreScreen.tsx` — Explore tab content boundary
 
-Home is the default destination on both platforms. Chats and Explore are first-class navigation destinations; the API's existing workspace resource names are retained internally.
+Chats and Explore are tabs inside Home, not separate primary destinations. The API's existing workspace resource names are retained internally.
 
 These files currently retain the existing workspace controller and feature JSX to avoid breaking working flows during the first structural pass. They are not the desired final size. The next extraction is to move Chats, Explore, Messaging, profile settings and workspace resources into focused screen/view modules while keeping their current API calls and state transitions intact.
 
@@ -67,7 +67,7 @@ The mobile profile experience is presented as a slide-up sheet over the active H
 ## Funspot parity rules
 
 1. Desktop keeps the profile/sidebar context on the left and the active Chats/Messaging work area alongside it.
-2. Desktop exposes Home, Chats and Explore in the top navigation; mobile uses the compact app header and one floating pill navigation for the same three destinations.
+2. Desktop uses Hub as its primary shell, with Chats and Explore tabs inside Home. Android uses the compact AppHeader, the same Home tabs, and a bottom floating action button for quick chat creation.
 3. Messaging is opened from a chat card; it is not a separate primary navigation destination.
 4. Profile and notification surfaces are overlays/sheets, not replacement pages.
 5. Cards blend into the page surface, retain useful metadata and previews, and grow with their content.
@@ -84,4 +84,4 @@ The mobile profile experience is presented as a slide-up sheet over the active H
 
 ## Current status
 
-The first structural pass is committed on `refactor/axon-funspot-screen-architecture`. Entry points now delegate to screen modules, workspace shells are isolated under `views/`, and profile/notification surfaces have dedicated modal modules. Home, Chats and Explore now have explicit screen modules on both web and mobile. HubScreen owns authentication, navigation and feature orchestration; the existing chat and explore data controllers still live in that shell and are the next extraction target. Visual QA remains outstanding. No merge or deployment is part of this refactor.
+The first structural pass is committed on `refactor/axon-funspot-screen-architecture`. Entry points now delegate to screen modules, workspace shells are isolated under `views/`, and profile/notification surfaces have dedicated modal modules. Home now hosts Chats and Explore as tabs on both platforms. Desktop presents the Hub shell; Android keeps its AppHeader and uses a bottom floating action button to create a chat. The existing chat and explore data controllers still live in HubScreen and remain candidates for extraction. Visual QA remains outstanding. No merge or deployment is part of this refactor.
