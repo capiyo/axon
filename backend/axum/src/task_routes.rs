@@ -1,6 +1,7 @@
 use crate::agent_runtime::AgentRuntime;
 use crate::auth_middleware::AuthenticatedUser;
 use crate::chat_memory::CreateMessage;
+use crate::memory_architecture::{HandoverRequest, ParetoPolicy, ProgressiveRetrievalRequest, QoinVector};
 use crate::explore::NotificationInput;
 use crate::{
     audit::AuditEvent,
@@ -14,7 +15,8 @@ use axum::{
     Json,
 };
 use chrono::Utc;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -150,10 +152,23 @@ pub async fn create_task(
 /// Execute an assigned task through its configured provider and persist the
 /// response as an artifact. This endpoint is explicit: task creation never
 /// triggers billable provider calls implicitly.
+#[derive(Debug, Default, Deserialize)]
+pub struct ExecuteTaskRequest {
+    #[serde(default)]
+    pub memory_query: Option<QoinVector>,
+    #[serde(default)]
+    pub heads: usize,
+    #[serde(default)]
+    pub tags: BTreeSet<String>,
+    #[serde(default)]
+    pub progressive_limit: usize,
+}
+
 pub async fn execute_task(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path(task_id): Path<Uuid>,
+    request: Option<Json<ExecuteTaskRequest>>,
 ) -> TaskResult<Json<TaskSubmission>> {
     if !state.claim_task_execution(task_id) {
         return Err(error(
@@ -161,7 +176,8 @@ pub async fn execute_task(
             "This task is already being executed.",
         ));
     }
-    let result = execute_task_claimed(state.clone(), user, task_id).await;
+    let request = request.map(|Json(value)| value).unwrap_or_default();
+    let result = execute_task_claimed(state.clone(), user, task_id, request).await;
     state.release_task_execution(task_id);
     result
 }
@@ -170,6 +186,7 @@ async fn execute_task_claimed(
     state: AppState,
     user: Arc<AuthenticatedUser>,
     task_id: Uuid,
+    request: ExecuteTaskRequest,
 ) -> TaskResult<Json<TaskSubmission>> {
     let mut task = state
         .tasks
@@ -237,6 +254,62 @@ async fn execute_task_claimed(
         }
     }
     drop(artifacts);
+
+    // When the client has a Qoin vector snapshot, retrieve approved
+    // historical memories from the pinned hourly epoch using Axon's QKV and
+    // Pareto selector. No synthetic embedding or current-market fallback is used.
+    if let Some(query) = request.memory_query.clone() {
+        let coordinator = state.memory_epochs.as_ref().ok_or_else(storage_failure)?;
+        let handover = coordinator
+            .prepare_handover(HandoverRequest {
+                workspace_id: task.workspace_id,
+                agent_id: agent.id,
+                task_id: Some(task.id),
+                project_id: None,
+                query: query.clone(),
+                heads: if request.heads == 0 { 2 } else { request.heads.min(8) },
+                tags: request.tags.clone(),
+                dependency_ids: BTreeSet::new(),
+                pareto: ParetoPolicy::default(),
+            })
+            .await
+            .map_err(|_| error(
+                StatusCode::CONFLICT,
+                "No compatible published memory epoch is available for this agent and Qoin vector.",
+            ))?;
+        if !handover.initial.is_empty() {
+            context_sections.push(format!(
+                "QKV/QOIN INITIAL MEMORY (epoch {}, coverage {:.3}):\\n{}",
+                handover.epoch.epoch_number,
+                handover.achieved_coverage,
+                handover.initial.iter().map(|memory| memory.payload_json.as_str()).collect::<Vec<_>>().join("\\n")
+            ));
+        }
+        let progressive_limit = request.progressive_limit.min(20);
+        if progressive_limit > 0 && handover.deferred_count > 0 {
+            let additional = coordinator
+                .retrieve_progressive(
+                    task.workspace_id,
+                    agent.id,
+                    handover.session_id,
+                    ProgressiveRetrievalRequest {
+                        query,
+                        heads: if request.heads == 0 { 2 } else { request.heads.min(8) },
+                        tags: request.tags,
+                        dependency_ids: BTreeSet::new(),
+                        limit: progressive_limit,
+                    },
+                )
+                .await
+                .map_err(|_| storage_failure())?;
+            if !additional.memories.is_empty() {
+                context_sections.push(format!(
+                    "QKV/QOIN PROGRESSIVE MEMORY:\\n{}",
+                    additional.memories.iter().map(|memory| memory.payload_json.as_str()).collect::<Vec<_>>().join("\\n")
+                ));
+            }
+        }
+    }
 
     let mut source_chat_title = None;
     if let Some(chat_id) = task.source_chat_id {
