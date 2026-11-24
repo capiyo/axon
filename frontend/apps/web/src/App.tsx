@@ -674,6 +674,35 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     }
   }
 
+  async function executeTask(task: Task) {
+    if (!selected || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const memoryRequest = qoinVector
+        ? {
+            memory_query: qoinVector.vector,
+            heads: 2,
+            tags: [`symbol:${qoinVector.symbol}`],
+            progressive_limit: 10
+          }
+        : {};
+      await api<{ task: Task; artifact: Artifact }>(`/api/v1/tasks/${task.id}/execute`, {
+        method: "POST",
+        body: JSON.stringify(memoryRequest)
+      });
+      await refreshWorkspace(selected);
+      if (task.source_chat_id && activeChat === task.source_chat_id) {
+        setChatDetail(await api<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`));
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Agent execution failed.");
+      await refreshWorkspace(selected);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const nextStatus: Record<string, string> = {
     offered: "acknowledged",
     acknowledged: "in_progress",
@@ -908,6 +937,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                     <div className="task-card-head"><div><span className="kicker">TASK · V{task.version}</span><h4>{task.title}</h4></div><span className={`task-status status-${task.status}`}>{task.status.replaceAll("_", " ")}</span></div>
                     <p>{task.objective}</p>
                     <div className="task-meta"><span>Assigned to <strong>{assigneeAgent?.display_name ?? "Unknown agent"}</strong></span><span>{task.transitions.length} events</span></div>
+                    {["offered", "acknowledged", "in_progress", "changes_requested"].includes(task.status) && <button className="advance-button" disabled={busy} onClick={() => void executeTask(task)}>Run assigned agent →</button>}
                     {task.status === "in_progress" && <div className="response-capture"><label htmlFor={`response-${task.id}`}>Capture the agent's response</label><textarea id={`response-${task.id}`} rows={4} value={responseDrafts[task.id] ?? ""} onChange={event => setResponseDrafts(current => ({ ...current, [task.id]: event.target.value }))} placeholder="Paste the response returned by the assigned assistant…" /><button className="advance-button" disabled={busy || !(responseDrafts[task.id] ?? "").trim()} onClick={() => void submitTaskResponse(task)}>Submit response as artifact →</button></div>}
                     {next && task.status !== "in_progress" && <button className="advance-button" disabled={busy} onClick={() => void advanceTask(task, next)}>Advance to {next.replaceAll("_", " ")} →</button>}
                     {task.status === "review_required" && <button className="request-changes-button" disabled={busy} onClick={() => void advanceTask(task, "changes_requested")}>Request changes</button>}
