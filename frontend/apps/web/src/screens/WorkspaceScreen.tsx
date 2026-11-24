@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import WorkspaceView from "../views/WorkspaceView";
 import ProfileModal from "../modals/ProfileModal";
+import ChatCard from "../views/ChatCard";
 import type { FormEvent } from "react";
 import { auth } from "../firebase";
 
@@ -804,9 +805,11 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                     <button disabled={!chatTitle.trim() || busy}>Create chat</button>
                   </form>
                   <div className="chat-list">
-                    {chats.map(chat => { const lastMessage = chat.last_message; const linkedTasks = tasks.filter(task => task.source_chat_id === chat.id); const progress = linkedTasks.length ? Math.round(linkedTasks.reduce((sum,task)=>sum+taskProgress(task.status),0)/linkedTasks.length) : null; return <button type="button" className={activeChat === chat.id ? "chat-list-item active" : "chat-list-item"} key={chat.id} onClick={() => { setActiveChat(chat.id); setMobileConversationOpen(true); }}>
-                      <span className="chat-card-avatar">{(lastMessage?.answered_by || chat.title || "A").slice(0,1).toUpperCase()}</span><span className="chat-card-content"><span className="chat-card-heading"><strong>{chat.title}</strong><small>{new Date(chat.updated_at).toLocaleString()}</small></span><small className="chat-card-agent">{lastMessage?.answered_by || "Workspace conversation"}</small><span className="chat-card-preview">{lastMessage?.content || "No messages yet. Open this conversation to begin."}</span>{progress !== null && <span className="chat-card-progress"><span style={{width: `${progress}%`}} /></span>}<span className="chat-card-footer"><small>{`${chat.message_count} messages`} · {linkedTasks.length} tasks · {lastMessage?.role === "assistant" ? "Agent replied" : lastMessage?.role === "user" ? "Your message" : "New conversation"}</small><span className="chat-card-actions">{chat.unread_count > 0 && <span className="chat-unread-count">{chat.unread_count}</span>}<span role="button" tabIndex={0} className="chat-card-like" onClick={event => {event.stopPropagation();void toggleChatLike(chat.id);}} onKeyDown={event => {if(event.key==="Enter" || event.key===" "){event.preventDefault();event.stopPropagation();void toggleChatLike(chat.id);}}}>{chat.is_liked ? "♥" : "♡"}</span><span role="button" tabIndex={0} className="chat-card-archive" onClick={event => {event.stopPropagation();void archiveChatById(chat.id);}} onKeyDown={event => {if(event.key==="Enter" || event.key===" "){event.preventDefault();event.stopPropagation();void archiveChatById(chat.id);}}}>Archive</span></span></span></span>
-                    </button>; })}
+                    {chats.map(chat => {
+                      const linkedTasks = tasks.filter(task => task.source_chat_id === chat.id);
+                      const progress = linkedTasks.length ? Math.round(linkedTasks.reduce((sum, task) => sum + taskProgress(task.status), 0) / linkedTasks.length) : null;
+                      return <ChatCard key={chat.id} chat={chat} linkedTaskCount={linkedTasks.length} progress={progress} active={activeChat === chat.id} onOpen={() => { setActiveChat(chat.id); setMobileConversationOpen(true); }} onLike={() => void toggleChatLike(chat.id)} onArchive={() => void archiveChatById(chat.id)} />;
+                    })}
                     {chats.length === 0 && <div className="chat-list-empty"><span className="chat-empty-mark">＋</span><strong>No conversations yet</strong><p>Create a titled conversation to start capturing project discussions and decisions.</p></div>}
                   </div>
                 </aside>
