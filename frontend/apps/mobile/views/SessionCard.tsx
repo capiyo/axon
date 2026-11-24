@@ -16,7 +16,7 @@ interface SessionCardStyles {
   sessionCardMobileFooter: ViewStyle;
   sessionCardMobileMeta: TextStyle;
   sessionCardMobileActions: ViewStyle;
-  sessionUnreadCount: TextStyle;
+  chatUnreadCount: TextStyle;
   sessionCardMobileLike: TextStyle;
   sessionCardMobileArchive: TextStyle;
 }
@@ -33,7 +33,7 @@ interface SessionCardProps {
 
 export default function SessionCard({ session, linkedTaskCount, progress, styles, onOpen, onLike, onArchive }: SessionCardProps) {
   const last = session.last_message;
-  const replyLabel = last?.role === "assistant" ? "Agent replied" : last?.role === "user" ? "Your message" : "New session";
+  const replyLabel = last?.role === "assistant" ? "Axon responded" : last?.role === "user" ? "Your prompt" : "New session";
   return (
     <View style={styles.sessionCardMobile}>
       <Pressable onPress={onOpen}>
@@ -47,9 +47,9 @@ export default function SessionCard({ session, linkedTaskCount, progress, styles
         <Text style={styles.sessionCardMobileOpen}>OPEN SESSION →</Text>
       </Pressable>
       <View style={styles.sessionCardMobileFooter}>
-        <Text style={styles.sessionCardMobileMeta}>{session.message_count} messages · {linkedTaskCount} tasks · {replyLabel}</Text>
+        <Text style={styles.sessionCardMobileMeta}>{session.message_count} turns · {linkedTaskCount} tasks · {replyLabel}</Text>
         <View style={styles.sessionCardMobileActions}>
-          {session.unread_count > 0 ? <Text style={styles.sessionUnreadCount}>{session.unread_count}</Text> : null}
+          {session.unread_count > 0 ? <Text style={styles.chatUnreadCount}>{session.unread_count}</Text> : null}
           <Pressable onPress={onLike}><Text style={styles.sessionCardMobileLike}>{session.is_liked ? "♥" : "♡"}</Text></Pressable>
           <Pressable onPress={onArchive}><Text style={styles.sessionCardMobileArchive}>Archive</Text></Pressable>
         </View>
