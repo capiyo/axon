@@ -1,5 +1,7 @@
 name: CI
 
+# Keep refactor branches build-verified while UI architecture is extracted.
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
