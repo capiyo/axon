@@ -67,7 +67,7 @@
 
 ## Verification
 
-GitHub Actions run **#629** completed successfully:
+GitHub Actions run **#638** completed successfully:
 
 | Check | Result |
 |---|---|
@@ -137,7 +137,7 @@ The mobile header source contains Axon branding/workspace identity, notification
 | External push delivery (FCM/APNs) | No | No | No provider integration in this change | Not implemented |
 | Messaging attachments / upload composer | No attachment workflow verified in the current messaging composer | No attachment workflow verified in the current messaging composer | No attachment workflow added by this PR | Not implemented in this change |
 | Qoin memory indexing from message UI | Yes | Yes | Existing Qoin bridge | Implemented |
-| Native Android APK/device build | Not applicable | TypeScript check only was recorded | N/A | Not verified by CI run #629 |
+| Native Android APK/device build | Not applicable | TypeScript check only was recorded | N/A | Not verified by CI run #638 |
 | External agent runtime invocation from Explore | No runtime invocation | No runtime invocation | Listing start creates a workspace chat only | Not implemented |
 
 ### Remaining work / explicit boundaries
@@ -156,7 +156,7 @@ The mobile header source contains Axon branding/workspace identity, notification
 - Inspected the branch-head source files: frontend/apps/web/src/App.tsx, frontend/apps/web/src/styles.css, frontend/apps/mobile/App.tsx, and frontend/packages/theme/src/tokens.css.
 - The web floating pill is rendered by the mobile-bottom-nav navigation element and styled as fixed/centered at the bottom under the 900px breakpoint.
 - The React Native pill is rendered by mobileBottomNav and styled with absolute positioning, bottom 12, width 258 and rounded corners.
-- Existing successful CI evidence remains GitHub Actions run #629: Rust formatting, Clippy, Rust tests, web typecheck/build, mobile TypeScript check and Python connector tests passed.
+- Existing successful CI evidence remains GitHub Actions run #638: Rust formatting, Clippy, Rust tests, web typecheck/build, mobile TypeScript check and Python connector tests passed.
 - This is a source audit, not a claim that a live browser/device visual test was performed.
 
 
@@ -169,7 +169,7 @@ This section supersedes the earlier statement that all agent runtime invocation 
 - Added a server-side provider adapter supporting Anthropic Messages and OpenAI Chat Completions-compatible endpoints.
 - Provider credentials and model IDs are resolved from server environment variables using the registered agent's provider identifier. They are not stored in agent records or returned to clients.
 - Added authenticated `POST /api/v1/tasks/:task_id/execute`. Task creation remains non-billable; the user explicitly starts execution from the web or React Native task card.
-- Execution validates workspace membership, verifies that the assigned agent belongs to the task workspace, and uses a process-local concurrent execution claim.
+- Execution validates workspace membership, verifies that the assigned agent belongs to the task workspace, and uses an owner-token SQLite lease with expiry to prevent concurrent execution across API instances sharing the same database.
 - Task lifecycle is persisted as offered → acknowledged → in progress → submitted. A provider failure leaves the task in progress and retryable; a successful response is stored as an artifact and remains subject to the existing review/acceptance lifecycle.
 - When a task references a source chat, the runtime injects the approved memory entries, bounded resume brief, bounded recent transcript and attached workspace artifacts. Retrieved conversation/artifact data is explicitly marked as untrusted reference material.
 - When the client supplies a real Qoin vector snapshot, Axon runs the existing QKV/Pareto handover against the latest compatible published memory epoch and can retrieve a bounded progressive batch. No synthetic embedding is created. If no compatible epoch exists, execution continues with the authorized chat/artifact context and records a warning.
@@ -182,7 +182,7 @@ This section supersedes the earlier statement that all agent runtime invocation 
 1. Provider execution supports Anthropic Messages and OpenAI-compatible chat completions. It is not yet a general A2A protocol negotiation/runtime and does not yet expose provider tool/function calls to the connector permission system.
 2. Agent invocation is task-driven. Starting an Explore conversation still does not automatically invoke the listed agent; a task must be assigned and explicitly executed.
 3. QKV/Qoin historical retrieval is injected when the client supplies an actual Qoin vector snapshot. Without one, execution uses source-chat approved memories, the resume brief, recent chat and artifacts.
-4. The execution claim is process-local. A durable lease/idempotency record is still required before horizontally scaling the API or guaranteeing at-most-once provider billing across multiple instances.
+4. Execution uses a durable SQLite lease and sends a stable task-version idempotency key to the provider. Providers that honor idempotency can deduplicate retries; providers that ignore it may still duplicate work if the API crashes after the provider finishes but before Axon persists the response. Horizontally scaled instances must share the same durable database.
 5. Provider credentials and endpoints must be configured in the backend hosting environment. CI does not have those secrets and therefore does not prove a live paid provider request succeeded.
 6. The Python connector persists the DeepSeek response artifact; it does not yet create an Axon task automatically or upload the imported Claude conversation itself.
 7. External FCM/APNs push delivery, global-admin moderation, messaging attachments, native Android APK/device QA and full visual QA remain outstanding.
@@ -190,7 +190,7 @@ This section supersedes the earlier statement that all agent runtime invocation 
 
 ### Verification
 
-GitHub Actions run **#629** completed successfully:
+GitHub Actions run **#638** completed successfully:
 
 | Check | Result |
 |---|---|
