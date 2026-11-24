@@ -79,6 +79,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [activeTab, setActiveTab] = useState<"chats" | "explore">("chats");
   const [quickChatOpen, setQuickChatOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [exploreAgents, setExploreAgents] = useState<ExploreAgent[]>([]);
   const [exploreComments, setExploreComments] = useState<Record<string, ExploreComment[]>>({});
@@ -741,6 +742,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       <StatusBar style="light" />
       <View style={styles.mobileRoot}>
         <View style={styles.mobileHeader}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open Hub menu" accessibilityState={{ expanded: menuOpen }} onPress={() => setMenuOpen(value => !value)} style={styles.mobileMenuButton}><Text style={styles.mobileMenuIcon}>☰</Text></Pressable>
           <View style={styles.mobileBrandMark}><Text style={styles.mobileBrandMarkText}>A</Text></View>
           <View style={styles.mobileHeaderCopy}><Text style={styles.mobileBrand}>AXON</Text><Text style={styles.mobileWorkspace}>{selected?.name ?? "Your Hub"}</Text></View>
           <Pressable onPress={() => {setNotificationsOpen(true);void refreshNotifications();}} style={styles.mobileNotificationButton} accessibilityLabel="Notifications"><Text style={styles.mobileNotificationIcon}>🔔</Text>{notificationUnread > 0 ? <Text style={styles.mobileNotificationBadge}>{notificationUnread}</Text> : null}</Pressable>
@@ -818,6 +820,13 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           )}
         </ScrollView>
 
+        {menuOpen ? <View style={styles.mobileMenu} accessibilityLabel="Hub menu">
+          <Pressable style={styles.mobileMenuItem} onPress={() => { setActiveTab("chats"); setMobileChatOpen(false); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Chats</Text></Pressable>
+          <Pressable style={styles.mobileMenuItem} onPress={() => { setActiveTab("explore"); setMobileChatOpen(false); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Explore agents</Text></Pressable>
+          <Pressable style={styles.mobileMenuItem} onPress={() => { setProfileOpen(true); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Profile & Hub settings</Text></Pressable>
+          <Pressable style={styles.mobileMenuItem} onPress={() => { setSelected(null); setActiveTab("chats"); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>All Hubs</Text></Pressable>
+          <Pressable style={styles.mobileMenuItem} onPress={() => { setMenuOpen(false); if (auth) void signOut(auth); }}><Text style={[styles.mobileMenuItemText, { color: "#F0A0A0" }]}>Sign out</Text></Pressable>
+        </View> : null}
         {selected ? <HomeScreen activeTab={activeTab} unreadCount={chats.reduce((total, chat) => total + chat.unread_count, 0)} onTabChange={tab => { setActiveTab(tab); setMobileChatOpen(false); }} /> : null}
 
         {selected && !profileOpen ? (
@@ -894,6 +903,11 @@ const styles = StyleSheet.create({
 
   mobileRoot: { flex:  1, backgroundColor: "#0E1612" },
   mobileHeader: { minHeight: 64, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 11, backgroundColor: "#0E1612" },
+  mobileMenuButton: { width: 34, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: "#14231B" },
+  mobileMenuIcon: { color: "#9DE4B0", fontSize: 19, fontWeight: "700" },
+  mobileMenu: { position: "absolute", zIndex: 42, top: 60, left: 12, width: 224, padding: 7, borderRadius: 15, backgroundColor: "#17271D", elevation: 20, shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } },
+  mobileMenuItem: { minHeight: 43, justifyContent: "center", paddingHorizontal: 13, borderRadius: 10 },
+  mobileMenuItemText: { color: "#E7F6EB", fontSize: 12, fontWeight: "700" },
   mobileBrandMark: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#28583D", alignItems: "center", justifyContent: "center" },
   mobileBrandMarkText: { color: "#E7F6EB", fontSize: 18, fontWeight: "900" },
   mobileHeaderCopy: { flex: 1, gap: 2 },
