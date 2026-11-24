@@ -515,3 +515,23 @@ body {
 .terms-consent input[type="checkbox"]:checked::before { transform: scale(1); }
 .terms-consent input[type="checkbox"]:focus-visible { outline: 3px solid #8bd6a055; outline-offset: 3px; }
 .terms-consent-copy strong { color: #9bd9aa; font-weight: 700; }
+
+
+/* Axon Hub home destination */
+.axon-home-screen { display: grid; gap: 18px; margin: 28px 0 40px; }
+.axon-home-intro { max-width: 680px; }
+.axon-home-intro h2 { margin: 9px 0 7px; font: 800 30px Manrope, sans-serif; letter-spacing: -.045em; }
+.axon-home-intro p { max-width: 590px; color: #8995a0; font-size: 13px; line-height: 1.7; }
+.axon-home-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.axon-home-metrics article { min-height: 92px; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 15px; border-radius: 15px; background: #ffffff08; }
+.axon-home-metrics strong { font-size: 25px; font-weight: 800; letter-spacing: -.04em; }
+.axon-home-metrics span { color: #8995a0; font-size: 11px; }
+.axon-home-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.axon-home-actions button { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 18px; border: 0; border-radius: 15px; text-align: left; background: #ffffff08; color: inherit; cursor: pointer; }
+.axon-home-actions button strong { font-size: 14px; }
+.axon-home-actions button span { color: #8995a0; font-size: 12px; }
+@media (max-width: 900px) {
+  .axon-home-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .axon-home-actions { grid-template-columns: 1fr; }
+  .mobile-bottom-nav { width: min(340px, calc(100vw - 28px)); }
+}
