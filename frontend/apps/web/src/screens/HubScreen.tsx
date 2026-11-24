@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import WorkspaceView from "../views/WorkspaceView";
 import HomeScreen from "./HomeScreen";
+import ChatsScreen from "./ChatsScreen";
+import ExploreScreen from "./ExploreScreen";
 import ProfileModal from "../modals/ProfileModal";
 import ChatCard from "../views/ChatCard";
 import type { FormEvent } from "react";
@@ -809,7 +811,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               artifactCount={artifacts.length}
               onOpenChats={() => setActiveView("chats")}
               onOpenExplore={() => setActiveView("explore")}
-            /> : activeView === "chats" ? <section className="panel chat-panel">
+            /> : activeView === "chats" ? <ChatsScreen><section className="panel chat-panel">
               <div className="panel-heading"><div><span className="kicker">04 · PROJECT CONVERSATIONS</span><h3>Chats & memory</h3></div><span className="count">{chats.length} CHATS</span></div>
               <div className={mobileConversationOpen ? "chat-layout mobile-conversation-open" : "chat-layout"}>
                 <aside className="chat-sidebar">
@@ -842,7 +844,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                   </>}
                 </div>
               </div>
-            </section> : <section className="panel explore-panel">
+            </section></ChatsScreen> : <ExploreScreen><section className="panel explore-panel">
               <div className="panel-heading"><div><span className="kicker">PUBLIC AGENT DISCOVERY</span><h3>Explore agents</h3></div><label className="explore-sort">Sort <select value={exploreSort} onChange={event => setExploreSort(event.target.value as "recent" | "popular" | "discussed")}><option value="recent">Newest</option><option value="popular">Most liked</option><option value="discussed">Most discussed</option></select></label></div>
               <form className="explore-publish-form" onSubmit={publishExploreAgent}>
                 <strong>Publish one of your agents</strong>
@@ -873,7 +875,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 })}
                 {exploreAgents.length === 0 && <div className="chat-list-empty"><strong>No public agents yet</strong><p>Publish an agent from this workspace to make it discoverable to the Axon community.</p></div>}
               </div>
-            </section>}
+            </section></ExploreScreen>}
 
             <section className="panel qoin-memory-panel">
               <div className="panel-heading">
