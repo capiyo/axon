@@ -184,10 +184,7 @@ pub async fn execute_task(
     }
     let request = request.map(|Json(value)| value).unwrap_or_default();
     let result = execute_task_claimed(state.clone(), user, task_id, request).await;
-    if let Err(release_error) = state
-        .release_task_execution(task_id, execution_token)
-        .await
-    {
+    if let Err(release_error) = state.release_task_execution(task_id, execution_token).await {
         tracing::error!(%release_error, %task_id, "could not release task execution lease");
     }
     result
