@@ -34,6 +34,7 @@ pub struct AppState {
     /// Runtime cache backed by the append-only audit table when SQLite is configured.
     pub audit: Arc<RwLock<AuditStore>>,
     storage: Option<Arc<dyn Storage>>,
+    execution_claims: Arc<std::sync::Mutex<HashSet<Uuid>>>,
     pub chat_memory: Option<ChatMemoryStore>,
     pub explore: Option<ExploreStore>,
     pub memory_epochs: Option<MemoryEpochCoordinator>,
@@ -191,6 +192,20 @@ impl AppState {
             Some(storage) => storage.list_audit_events(workspace_id).await,
             None => Ok(self.audit.read().await.list_workspace(workspace_id)),
         }
+    }
+
+    pub fn claim_task_execution(&self, task_id: Uuid) -> bool {
+        self.execution_claims
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(task_id)
+    }
+
+    pub fn release_task_execution(&self, task_id: Uuid) {
+        self.execution_claims
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(&task_id);
     }
 
     pub fn storage_is_durable(&self) -> bool {
