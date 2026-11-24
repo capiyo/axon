@@ -67,7 +67,7 @@
 
 ## Verification
 
-GitHub Actions run **#605** completed successfully:
+GitHub Actions run **#629** completed successfully:
 
 | Check | Result |
 |---|---|
@@ -82,7 +82,7 @@ No local build is claimed; these results are from the repository's GitHub Action
 
 ## Known capability boundaries
 
-- The current agent registry still represents manually registered agents. “Start workspace chat” creates a workspace conversation; it does not claim to connect a provider runtime that is not configured.
+- The current agent registry still represents manually registered agents. Configured providers can now execute explicitly assigned tasks; “Start workspace chat” by itself still creates a workspace conversation and does not invoke a provider.
 - Chat progress appears only when tasks are explicitly linked to that conversation. Historical tasks without a source-chat link do not receive invented progress.
 - Publisher moderation is scoped to the owner of each public listing. A privileged, global admin moderation console is not present because the existing identity model does not expose a moderator role.
 - The in-app notification inbox is implemented; no external push-delivery provider was added in this work.
@@ -137,7 +137,7 @@ The mobile header source contains Axon branding/workspace identity, notification
 | External push delivery (FCM/APNs) | No | No | No provider integration in this change | Not implemented |
 | Messaging attachments / upload composer | No attachment workflow verified in the current messaging composer | No attachment workflow verified in the current messaging composer | No attachment workflow added by this PR | Not implemented in this change |
 | Qoin memory indexing from message UI | Yes | Yes | Existing Qoin bridge | Implemented |
-| Native Android APK/device build | Not applicable | TypeScript check only was recorded | N/A | Not verified by CI run #605 |
+| Native Android APK/device build | Not applicable | TypeScript check only was recorded | N/A | Not verified by CI run #629 |
 | External agent runtime invocation from Explore | No runtime invocation | No runtime invocation | Listing start creates a workspace chat only | Not implemented |
 
 ### Remaining work / explicit boundaries
@@ -156,5 +156,49 @@ The mobile header source contains Axon branding/workspace identity, notification
 - Inspected the branch-head source files: frontend/apps/web/src/App.tsx, frontend/apps/web/src/styles.css, frontend/apps/mobile/App.tsx, and frontend/packages/theme/src/tokens.css.
 - The web floating pill is rendered by the mobile-bottom-nav navigation element and styled as fixed/centered at the bottom under the 900px breakpoint.
 - The React Native pill is rendered by mobileBottomNav and styled with absolute positioning, bottom 12, width 258 and rounded corners.
-- Existing successful CI evidence remains GitHub Actions run #605: Rust formatting, Clippy, Rust tests, web typecheck/build, mobile TypeScript check and Python connector tests passed.
+- Existing successful CI evidence remains GitHub Actions run #629: Rust formatting, Clippy, Rust tests, web typecheck/build, mobile TypeScript check and Python connector tests passed.
 - This is a source audit, not a claim that a live browser/device visual test was performed.
+
+
+## Agent execution and connector integration — follow-up implementation
+
+This section supersedes the earlier statement that all agent runtime invocation was unimplemented. It records the task execution path added after the source-level UI audit.
+
+### Implemented and CI-verified
+
+- Added a server-side provider adapter supporting Anthropic Messages and OpenAI Chat Completions-compatible endpoints.
+- Provider credentials and model IDs are resolved from server environment variables using the registered agent's provider identifier. They are not stored in agent records or returned to clients.
+- Added authenticated `POST /api/v1/tasks/:task_id/execute`. Task creation remains non-billable; the user explicitly starts execution from the web or React Native task card.
+- Execution validates workspace membership, verifies that the assigned agent belongs to the task workspace, and uses a process-local concurrent execution claim.
+- Task lifecycle is persisted as offered → acknowledged → in progress → submitted. A provider failure leaves the task in progress and retryable; a successful response is stored as an artifact and remains subject to the existing review/acceptance lifecycle.
+- When a task references a source chat, the runtime injects the approved memory entries, bounded resume brief, bounded recent transcript and attached workspace artifacts. Retrieved conversation/artifact data is explicitly marked as untrusted reference material.
+- When the client supplies a real Qoin vector snapshot, Axon runs the existing QKV/Pareto handover against the latest compatible published memory epoch and can retrieve a bounded progressive batch. No synthetic embedding is created. If no compatible epoch exists, execution continues with the authorized chat/artifact context and records a warning.
+- Successful responses are appended to the source chat when one is linked, and the task owner receives an in-app response notification.
+- Added a Python connector persistence adapter. The Claude-export → DeepSeek CLI can explicitly persist its approved result as a workspace artifact using a Firebase ID token; Axon derives the actor identity from the verified token.
+- Added provider setup and connector persistence instructions in `docs/AGENT_RUNTIME_SETUP.md` and `connectors/python/README.md`.
+
+### Current boundaries — do not overstate completion
+
+1. Provider execution supports Anthropic Messages and OpenAI-compatible chat completions. It is not yet a general A2A protocol negotiation/runtime and does not yet expose provider tool/function calls to the connector permission system.
+2. Agent invocation is task-driven. Starting an Explore conversation still does not automatically invoke the listed agent; a task must be assigned and explicitly executed.
+3. QKV/Qoin historical retrieval is injected when the client supplies an actual Qoin vector snapshot. Without one, execution uses source-chat approved memories, the resume brief, recent chat and artifacts.
+4. The execution claim is process-local. A durable lease/idempotency record is still required before horizontally scaling the API or guaranteeing at-most-once provider billing across multiple instances.
+5. Provider credentials and endpoints must be configured in the backend hosting environment. CI does not have those secrets and therefore does not prove a live paid provider request succeeded.
+6. The Python connector persists the DeepSeek response artifact; it does not yet create an Axon task automatically or upload the imported Claude conversation itself.
+7. External FCM/APNs push delivery, global-admin moderation, messaging attachments, native Android APK/device QA and full visual QA remain outstanding.
+8. Robotics remains separate from general agent execution. The simulator and safety contracts do not authorize physical actuator control; a production device gateway, identity grants, durable command replay protection and hardware interlocks are still required.
+
+### Verification
+
+GitHub Actions run **#629** completed successfully:
+
+| Check | Result |
+|---|---|
+| Rust formatting | Passed |
+| Rust Clippy with warnings denied | Passed |
+| Rust workspace tests | Passed |
+| Web typecheck and production build | Passed |
+| Mobile TypeScript check | Passed |
+| Python connector lint and tests | Passed |
+
+These are CI results. No live provider credentials, paid provider invocation, native Android APK build, physical device test or robotics hardware test was available or claimed.
