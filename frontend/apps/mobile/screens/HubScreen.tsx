@@ -76,7 +76,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
-  const [activeTab, setActiveTab] = useState<"home" | "chats" | "explore">("home");
+  const [activeTab, setActiveTab] = useState<"chats" | "explore">("chats");
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [exploreAgents, setExploreAgents] = useState<ExploreAgent[]>([]);
@@ -755,9 +755,10 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               <ActionButton label="Create Hub" onPress={createWorkspace} disabled={!workspaceName.trim() || busy}/>
               {workspaces.map(workspace => <Pressable key={workspace.id} onPress={() => setSelected(workspace)} style={styles.workspaceRow}><Text style={styles.rowTitle}>{workspace.name}</Text></Pressable>)}
             </View>
-          ) : activeTab === "home" ? (
-            <HomeScreen agentCount={agents.length} chatCount={chats.length} runningCount={tasks.filter(task => task.status === "in_progress").length} completedCount={tasks.filter(task => task.status === "completed").length} artifactCount={artifacts.length} onOpenChats={() => setActiveTab("chats")} onOpenExplore={() => setActiveTab("explore")} />
-          ) : activeTab === "explore" ? (
+          ) : (
+            <>
+            <HomeScreen activeTab={activeTab} unreadCount={chats.reduce((total, chat) => total + chat.unread_count, 0)} onTabChange={tab => { setActiveTab(tab); setMobileChatOpen(false); }} />
+            {activeTab === "explore" ? (
             <ExploreScreen>
               <View style={styles.screenHeading}><Text style={styles.eyebrow}>PUBLIC DISCOVERY</Text><Text style={styles.screenTitle}>Explore agents</Text><Text style={styles.description}>Discover agents that their owners have deliberately published, and read the community discussion.</Text></View>
               <View style={styles.exploreSortRow}>{([{value:"recent",label:"Newest"},{value:"popular",label:"Most liked"},{value:"discussed",label:"Discussed"}] as const).map(option => <Pressable key={option.value} onPress={() => setExploreSort(option.value)} style={[styles.exploreSortChip,exploreSort===option.value && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{option.label}</Text></Pressable>)}</View>
@@ -809,6 +810,8 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               })}
               {chats.length === 0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No conversations yet</Text><Text style={styles.muted}>Create your first chat above.</Text></View> : null}
             </ChatsScreen>
+            )}
+            </>
           )}
         </ScrollView>
 
@@ -816,7 +819,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           {profileContent}
         </ProfileModal>
 
-        {!profileOpen && <View style={styles.mobileBottomNav}><Pressable onPress={() => {setActiveTab("home");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="home" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>⌂</Text><Text style={styles.mobileNavText}>Home</Text></Pressable><Pressable onPress={() => {setActiveTab("chats");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="chats" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>◌</Text><Text style={styles.mobileNavText}>Chats</Text>{chats.reduce((total,chat)=>total+chat.unread_count,0)>0 ? <Text style={styles.mobileNavBadge}>{chats.reduce((total,chat)=>total+chat.unread_count,0)}</Text> : null}</Pressable><Pressable onPress={() => {setActiveTab("explore");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="explore" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>⌕</Text><Text style={styles.mobileNavText}>Explore</Text></Pressable></View>}
+
         {notificationsOpen && <NotificationsModal notifications={notifications} style={styles.notificationsOverlay} onMarkAllRead={markAllNotificationsRead} onClose={() => setNotificationsOpen(false)} onOpenNotification={openNotification} styles={styles} /> }
         {error ? <View style={styles.mobileError}><Text style={styles.errorText}>{error}</Text></View> : null}
       </View>
