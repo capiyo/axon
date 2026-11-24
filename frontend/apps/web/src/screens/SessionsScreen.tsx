@@ -835,14 +835,14 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 </div>
               </div>
             </section></SessionPanel> : <ExploreScreen><section className="panel explore-panel">
-              <div className="panel-heading"><div><span className="kicker">PUBLIC AGENT DISCOVERY</span><h3>Explore agents</h3></div><label className="explore-sort">Sort <select value={exploreSort} onChange={event => setExploreSort(event.target.value as "recent" | "popular" | "discussed")}><option value="recent">Newest</option><option value="popular">Most liked</option><option value="discussed">Most discussed</option></select></label></div>
-              <form className="explore-publish-form" onSubmit={publishExploreAgent}>
+              <div className="panel-heading"><div><span className="kicker">PUBLIC AGENT DISCOVERY</span><h3>Explore agents</h3></div>{!selectedExploreAgent && <label className="explore-sort">Sort <select value={exploreSort} onChange={event => setExploreSort(event.target.value as "recent" | "popular" | "discussed")}><option value="recent">Newest</option><option value="popular">Most liked</option><option value="discussed">Most discussed</option></select></label>}</div>
+              {!selectedExploreAgent && <form className="explore-publish-form" onSubmit={publishExploreAgent}>
                 <strong>Publish one of your agents</strong>
-                <p>Publishing is explicit. Only the selected agent's public description and provider label are exposed; Hub sessions, artifacts and memory remain private.</p>
+                <p>Publishing is explicit. Only the selected agent's public description and provider label are exposed; Sessions, artifacts and memory remain private.</p>
                 <div className="explore-publish-fields"><select value={publishAgentId} onChange={event => setPublishAgentId(event.target.value)} required><option value="">Choose your agent</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.display_name}</option>)}</select><input value={publishCategory} onChange={event => setPublishCategory(event.target.value)} placeholder="Category" maxLength={80} required /></div>
                 <textarea value={publishDescription} onChange={event => setPublishDescription(event.target.value)} placeholder="Describe what this agent does and who it helps…" maxLength={4000} rows={3} required />
                 <button disabled={busy || !publishAgentId || !publishDescription.trim()}>Publish agent</button>
-              </form>
+              </form>}
               {selectedExploreAgent && <section className="explore-detail-heading">
                 <button type="button" onClick={() => setSelectedExploreAgent(null)}>← Back to Explore</button>
                 <span className="kicker">AGENT PROFILE</span>

@@ -773,7 +773,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
             
             {activeTab === "explore" ? (
             <ExploreScreen>
-              <View style={styles.screenHeading}><Text style={styles.eyebrow}>PUBLIC DISCOVERY</Text><Text style={styles.screenTitle}>Explore agents</Text><Text style={styles.description}>Discover agents that their owners have deliberately published, and read the community discussion.</Text></View>
+              <View style={styles.screenHeading}><Text style={styles.eyebrow}>PUBLIC DISCOVERY</Text><Text style={styles.screenTitle}>{selectedExploreAgent ? "Agent details" : "Explore agents"}</Text><Text style={styles.description}>{selectedExploreAgent ? "Review this agent's capabilities and what the Axon community says about it." : "Discover agents that their owners have deliberately published, and read the community discussion."}</Text></View>
               {selectedExploreAgent ? <View style={[styles.panel,{marginBottom:12}]}>
                 <Pressable onPress={() => setSelectedExploreAgent(null)}><Text style={styles.back}>← Back to Explore</Text></Pressable>
                 <Text style={styles.eyebrow}>AGENT PROFILE</Text>
@@ -783,7 +783,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 <Text style={styles.rowMeta}>{selectedExploreAgent.like_count} likes · {selectedExploreAgent.comment_count} community comments</Text>
                 <Text style={styles.muted}>Community reputation comes from member reactions and real discussion by signed-in Axon members.</Text>
               </View> : null}
-              <View style={styles.exploreSortRow}>{([{value:"recent",label:"Newest"},{value:"popular",label:"Most liked"},{value:"discussed",label:"Discussed"}] as const).map(option => <Pressable key={option.value} onPress={() => setExploreSort(option.value)} style={[styles.exploreSortChip,exploreSort===option.value && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{option.label}</Text></Pressable>)}</View>
+              {!selectedExploreAgent ? <View style={styles.exploreSortRow}>{([{value:"recent",label:"Newest"},{value:"popular",label:"Most liked"},{value:"discussed",label:"Discussed"}] as const).map(option => <Pressable key={option.value} onPress={() => setExploreSort(option.value)} style={[styles.exploreSortChip,exploreSort===option.value && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{option.label}</Text></Pressable>)}</View> : null}
               {(selectedExploreAgent ? [selectedExploreAgent] : exploreAgents).map(listing => {
                 const comments = exploreComments[listing.id] ?? [];
                 const roots = comments.filter(comment => !comment.parent_comment_id);
