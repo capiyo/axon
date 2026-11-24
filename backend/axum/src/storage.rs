@@ -273,9 +273,7 @@ impl Storage for SqliteStorage {
     ) -> Result<bool, StorageError> {
         let now = Utc::now();
         let expires_at = now
-            + chrono::Duration::seconds(
-                i64::try_from(lease_seconds.clamp(30, 600)).unwrap_or(240),
-            );
+            + chrono::Duration::seconds(i64::try_from(lease_seconds.clamp(30, 600)).unwrap_or(240));
         let now_text = now.to_rfc3339();
         let mut transaction = self.pool.begin().await?;
         sqlx::query("DELETE FROM task_execution_leases WHERE lease_expires_at <= ?")
