@@ -194,18 +194,38 @@ impl AppState {
         }
     }
 
-    pub fn claim_task_execution(&self, task_id: Uuid) -> bool {
-        self.execution_claims
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(task_id)
+    pub async fn claim_task_execution(
+        &self,
+        task_id: Uuid,
+        owner_token: Uuid,
+    ) -> Result<bool, StorageError> {
+        if let Some(storage) = &self.storage {
+            storage
+                .claim_task_execution(task_id, owner_token, 240)
+                .await
+        } else {
+            Ok(self
+                .execution_claims
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .insert(task_id))
+        }
     }
 
-    pub fn release_task_execution(&self, task_id: Uuid) {
-        self.execution_claims
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(&task_id);
+    pub async fn release_task_execution(
+        &self,
+        task_id: Uuid,
+        owner_token: Uuid,
+    ) -> Result<(), StorageError> {
+        if let Some(storage) = &self.storage {
+            storage.release_task_execution(task_id, owner_token).await
+        } else {
+            self.execution_claims
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .remove(&task_id);
+            Ok(())
+        }
     }
 
     pub fn storage_is_durable(&self) -> bool {
