@@ -540,3 +540,12 @@ body {
 .desktop-primary-nav button { border: 0; border-radius: 999px; padding: 9px 13px; background: transparent; color: #8995a0; font: 700 12px "DM Sans", sans-serif; cursor: pointer; }
 .desktop-primary-nav button.active { background: #ffffff10; color: var(--axon-color-text, #eef3f0); }
 @media (max-width: 900px) { .desktop-primary-nav { display: none; } }
+
+
+/* Home is the single content surface: Chats and Explore are its tabs. */
+.axon-home-tabs { display: flex; align-items: center; gap: 7px; width: fit-content; margin: 12px 0 18px; padding: 5px; border-radius: 999px; background: #ffffff08; }
+.axon-home-tabs button { display: inline-flex; align-items: center; gap: 8px; min-width: 104px; justify-content: center; border: 0; border-radius: 999px; padding: 10px 16px; color: #8995a0; background: transparent; font: 700 12px "DM Sans", sans-serif; cursor: pointer; }
+.axon-home-tabs button.active { color: #e7f6eb; background: #28583d; }
+.axon-home-unread { display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; padding: 0 5px; border-radius: 999px; color: #e7f6eb; background: #356f49; font-size: 9px; font-weight: 900; }
+.desktop-primary-nav { display: none !important; }
+@media (max-width: 900px) { .axon-home-tabs { margin-top: 6px; } }
