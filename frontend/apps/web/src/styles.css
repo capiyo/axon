@@ -549,3 +549,30 @@ body {
 .axon-home-unread { display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; padding: 0 5px; border-radius: 999px; color: #e7f6eb; background: #356f49; font-size: 9px; font-weight: 900; }
 .desktop-primary-nav { display: none !important; }
 @media (max-width: 900px) { .axon-home-tabs { margin-top: 6px; } }
+
+
+/* Final Hub composition: persistent desktop profile rail, Chats column and Messaging column. */
+@media (min-width: 901px) {
+  .desktop-home-tabs { display: none; }
+  .content { min-width: 0; padding: 22px 28px 30px; }
+  .topbar { margin-bottom: 16px; }
+  .workspace-header { margin: 0 0 12px; }
+  .workspace-header h2 { font-size: 14px; }
+  .workspace-header p { display: none; }
+  .workspace-header .back-link { display: none; }
+  .hub-switch { margin-right: 2px; }
+  .chat-panel { margin: 0; padding: 14px 0 0; background: transparent; }
+  .chat-panel > .panel-heading { padding: 0 4px 12px; margin: 0; }
+  .chat-panel > .panel-heading h3 { font-size: 15px; }
+  .chat-layout { grid-template-columns: minmax(285px, 36%) minmax(0, 1fr); gap: 24px; min-height: calc(100vh - 180px); }
+  .chat-sidebar { border-right: 1px solid color-mix(in srgb,var(--axon-color-border) 58%,transparent); padding: 0 18px 0 0; }
+  .chat-main { min-height: 60vh; }
+  .chat-messages { max-height: calc(100vh - 430px); min-height: 180px; }
+  .chat-list-item { padding: 15px; background: color-mix(in srgb,var(--axon-color-surface-raised) 82%,transparent); }
+  .chat-list-item.active { background: var(--axon-color-selected); }
+  .chat-card-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow: hidden; }
+}
+@media (max-width: 900px) {
+  .desktop-home-tabs { display: block; }
+  .hub-switch { display: none; }
+}
