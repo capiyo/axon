@@ -9,7 +9,7 @@ The Python connector is the provider-adapter boundary for explicit, inspectable 
 3. Run the connector in preview mode. It reports source, message count and context size without sending content.
 4. Add `--print-context` to inspect the exact normalized AXP envelope before transfer. Treat this output as private conversation data.
 5. Re-run with `--approve-transfer` to send that selected context to DeepSeek through its API.
-6. DeepSeek's response is returned to the terminal. AXON API persistence and UI handoff integration are a subsequent integration step.
+6. DeepSeek's response is returned to the terminal. Add `--persist-to-axon` to save the response as a workspace artifact through Axon's authenticated API.
 
 Claude's consumer chat history is not exposed by the standard Anthropic Messages API. This implementation therefore imports user-authorized export files; it does not scrape logged-in browser pages, inspect cookies, automate private endpoints, or bypass provider controls.
 
@@ -59,6 +59,23 @@ axon-bridge ./conversation.json \
 
 The `--actor-id` is provenance metadata only. It is not authentication and must not be trusted as an identity claim. When integrated into AXON, the backend must derive the actor from a verified Firebase ID token and authorize the workspace and context transfer server-side. Never trust a client-provided actor ID as proof of identity.
 
+## Persist the response in Axon
+
+After an approved transfer, persistence is an additional explicit action:
+
+```bash
+export AXON_API_URL="https://your-axon-api-host"
+export AXON_FIREBASE_ID_TOKEN="<short-lived-Firebase-ID-token>"
+axon-bridge ./conversation.json \\
+  --workspace-id YOUR_WORKSPACE_ID \\
+  --actor-id YOUR_AXON_ACTOR_PROVENANCE_ID \\
+  --instruction "Independently review the architecture and identify risks." \\
+  --approve-transfer \\
+  --persist-to-axon
+```
+
+The CLI posts only the provider response as an artifact. Axon verifies the Firebase ID token, derives the actor identity server-side, checks workspace membership, and writes the artifact with its audit event. The `--actor-id` remains provenance metadata and is not sent as an authorization claim. Firebase ID tokens are short-lived; obtain a fresh token when needed and never store it in source control or shell history.
+
 ## Configuration
 
 - `DEEPSEEK_API_KEY`: required for approved transfers.
@@ -71,6 +88,6 @@ The `--actor-id` is provenance metadata only. It is not authentication and must 
 - DeepSeek API call is implemented.
 - AXP context payload includes a SHA-256 digest for integrity checking; this digest detects payload changes but is not a signature or proof of origin.
 - Explicit approval is required; preview is the default.
-- The connector currently returns DeepSeek output locally. It does not yet write artifacts/tasks into the AXON backend or create an authenticated provider connection.
+- The connector can persist the approved DeepSeek response as a workspace artifact using a verified Firebase ID token. It does not yet create or manage a long-lived provider connection.
 - Attachments, images, tool-use blocks and very large conversations are not yet transferred.
 - Add server-side Firebase identity verification, workspace authorization, encrypted secret management, durable transfer audit and retention policy before multi-user/production use.
