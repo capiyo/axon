@@ -1,14 +1,28 @@
-import type { Notification } from "../../../../packages/contracts/src";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import type { Notification } from "../../../packages/contracts/src";
+import { Pressable, ScrollView, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 import ModalFrame from "./ModalFrame";
+
+interface NotificationStyles {
+  notificationsHeader: ViewStyle;
+  screenTitle: TextStyle;
+  notificationsHeaderActions: ViewStyle;
+  exploreActionText: TextStyle;
+  notificationsList: ViewStyle;
+  notificationItemMobile: ViewStyle;
+  notificationReadMobile: ViewStyle;
+  rowTitle: TextStyle;
+  rowMeta: TextStyle;
+  notificationTime: TextStyle;
+  muted: TextStyle;
+}
 
 interface NotificationsModalProps {
   notifications: Notification[];
-  style: object;
+  style: StyleProp<ViewStyle>;
   onMarkAllRead: () => void;
   onClose: () => void;
   onOpenNotification: (notification: Notification) => void;
-  styles: Record<string, object>;
+  styles: NotificationStyles;
 }
 
 export default function NotificationsModal({ notifications, style, onMarkAllRead, onClose, onOpenNotification, styles }: NotificationsModalProps) {
