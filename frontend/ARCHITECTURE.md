@@ -34,8 +34,8 @@ Screens are top-level compositions and own the lifecycle of a destination. They 
 
 Current screen destinations:
 - `HomeScreen.tsx` — overview metrics and quick entry points
-- `Chats` — conversations, messages and shared context
-- `Explore` — public agent discovery and community discussion
+- `ChatsScreen.tsx` — dedicated Chats destination boundary
+- `ExploreScreen.tsx` — dedicated Explore destination boundary
 - `HubScreen.tsx` — authenticated shell, navigation and orchestration
 
 Home is the default destination on both platforms. Chats and Explore are first-class navigation destinations; the API's existing workspace resource names are retained internally.
@@ -84,4 +84,4 @@ The mobile profile experience is presented as a slide-up sheet over the active w
 
 ## Current status
 
-The first structural pass is committed on `refactor/axon-funspot-screen-architecture`. Entry points now delegate to screen modules, workspace shells are isolated under `views/`, and profile/notification surfaces have dedicated modal modules. The Home destination is now an explicit screen module on web and mobile. Chats and Explore are distinct destinations in the navigation, while their existing feature controllers remain in the Hub shell for now; extracting those controllers into independent screen modules and completing visual QA are still outstanding. No merge or deployment is part of this refactor.
+The first structural pass is committed on `refactor/axon-funspot-screen-architecture`. Entry points now delegate to screen modules, workspace shells are isolated under `views/`, and profile/notification surfaces have dedicated modal modules. Home, Chats and Explore now have explicit screen modules on both web and mobile. HubScreen owns authentication, navigation and feature orchestration; the existing chat and explore data controllers still live in that shell and are the next extraction target. Visual QA remains outstanding. No merge or deployment is part of this refactor.
