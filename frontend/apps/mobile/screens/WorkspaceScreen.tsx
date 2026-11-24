@@ -675,7 +675,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               <View style={styles.panel}>
                 <View style={styles.profileIdentityMobile}>
                   {user.photoURL ? <Image source={{uri:user.photoURL}} style={styles.profileAvatarMobile}/> : <View style={styles.profileAvatarFallback}><Text style={styles.profileAvatarFallbackText}>{(user.displayName || user.email || "A").slice(0,1).toUpperCase()}</Text></View>}
-                  <View style={{flex:1}}><Text style={styles.rowTitle}>{user.displayName || user.email || "Axon user"}</Text><Text style={styles.rowMeta}>{selected.name}</Text></View>
+                  <View style={{flex:1}}><Text style={styles.rowTitle}>{user.displayName || user.email || "Axon user"}</Text><Text style={styles.rowMeta}>{selected?.name ?? "Personal workspace"}</Text></View>
                 </View>
                 <View style={styles.mobileStatsGrid}>
                   <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{agents.length}</Text><Text style={styles.mobileStatLabel}>Agents</Text></View>
