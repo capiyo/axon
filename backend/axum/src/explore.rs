@@ -244,6 +244,25 @@ impl ExploreStore {
         rows.iter().map(parse_agent).collect()
     }
 
+    pub async fn get_agent(&self, listing_id: Uuid, user_id: Uuid) -> Result<Option<ExploreAgent>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT l.id, l.agent_id, l.workspace_id, l.owner_id, l.title, l.provider, l.description, l.category, l.created_at, l.updated_at,
+             (SELECT COUNT(*) FROM agent_listing_likes x WHERE x.listing_id = l.id) AS like_count,
+             (SELECT COUNT(*) FROM agent_comments c WHERE c.listing_id = l.id AND c.status = 'visible') AS comment_count,
+             EXISTS(SELECT 1 FROM agent_listing_likes x WHERE x.listing_id = l.id AND x.user_id = ?) AS is_liked,
+             EXISTS(SELECT 1 FROM agent_listing_follows f WHERE f.listing_id = l.id AND f.user_id = ?) AS is_following,
+             l.owner_id = ? AS is_owner
+             FROM agent_listings l WHERE l.id = ? LIMIT 1"
+        )
+        .bind(user_id.to_string())
+        .bind(user_id.to_string())
+        .bind(user_id.to_string())
+        .bind(listing_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        row.as_ref().map(parse_agent).transpose()
+    }
+
     pub async fn listing_exists(&self, listing_id: Uuid) -> Result<bool, sqlx::Error> {
         let exists: Option<i64> = sqlx::query_scalar("SELECT 1 FROM agent_listings WHERE id = ?")
             .bind(listing_id.to_string())
@@ -922,6 +941,22 @@ pub async fn list_agents(
             )
         })?;
     Ok(Json(items))
+}
+
+pub async fn get_agent(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path(listing_id): Path<Uuid>,
+) -> ApiResult<Json<ExploreAgent>> {
+    let store = state.explore.as_ref().ok_or_else(|| {
+        error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable.")
+    })?;
+    let listing = store
+        .get_agent(listing_id, user.user_id)
+        .await
+        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load agent details."))?
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Agent listing not found."))?;
+    Ok(Json(listing))
 }
 
 pub async fn publish_agent(

@@ -51,6 +51,7 @@ pub fn app(state: AppState) -> Router {
     Router::new()
         .route("/health", get(routes::health))
         .route("/api/v1/explore/agents", get(explore::list_agents))
+        .route("/api/v1/explore/agents/:listing_id", get(explore::get_agent))
         .route(
             "/api/v1/workspaces/:workspace_id/agents/:agent_id/publish",
             post(explore::publish_agent).delete(explore::unpublish_agent),
