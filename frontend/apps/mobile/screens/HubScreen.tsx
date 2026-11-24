@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import WorkspaceView from "../views/WorkspaceView";
 import HomeScreen from "./HomeScreen";
+import ChatsScreen from "./ChatsScreen";
+import ExploreScreen from "./ExploreScreen";
 import NotificationsModal from "../modals/NotificationsModal";
 import ProfileModal from "../modals/ProfileModal";
 import ChatCard from "../views/ChatCard";
@@ -756,7 +758,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           ) : activeTab === "home" ? (
             <HomeScreen agentCount={agents.length} chatCount={chats.length} runningCount={tasks.filter(task => task.status === "in_progress").length} completedCount={tasks.filter(task => task.status === "completed").length} artifactCount={artifacts.length} onOpenChats={() => setActiveTab("chats")} onOpenExplore={() => setActiveTab("explore")} />
           ) : activeTab === "explore" ? (
-            <>
+            <ExploreScreen>
               <View style={styles.screenHeading}><Text style={styles.eyebrow}>PUBLIC DISCOVERY</Text><Text style={styles.screenTitle}>Explore agents</Text><Text style={styles.description}>Discover agents that their owners have deliberately published, and read the community discussion.</Text></View>
               <View style={styles.exploreSortRow}>{([{value:"recent",label:"Newest"},{value:"popular",label:"Most liked"},{value:"discussed",label:"Discussed"}] as const).map(option => <Pressable key={option.value} onPress={() => setExploreSort(option.value)} style={[styles.exploreSortChip,exploreSort===option.value && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{option.label}</Text></Pressable>)}</View>
               {exploreAgents.map(listing => {
@@ -795,9 +797,9 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 <ActionButton label="Propose memory" onPress={proposeMemory} disabled={!memoryDraft.trim() || busy} secondary/>
                 {chatDetail.memory.map(entry => <View key={entry.id} style={styles.listRow}><Text style={styles.rowTitle}>{entry.type.replaceAll("_"," ")} · {entry.status}</Text><Text style={styles.rowMeta}>{entry.text}</Text>{entry.status==="proposed" ? <><ActionButton label="Approve" onPress={() => approveMemory(entry)} disabled={busy} secondary/><ActionButton label="Reject" onPress={() => changeMemory(entry,"reject")} disabled={busy} secondary/></> : null}<ActionButton label="Edit" onPress={() => {setEditingMemoryId(entry.id);setEditMemoryDraft(entry.text);}} disabled={busy} secondary/>{editingMemoryId===entry.id ? <><TextInput value={editMemoryDraft} onChangeText={setEditMemoryDraft} style={styles.input}/><ActionButton label="Save edit" onPress={() => saveMemoryEdit(entry)} disabled={busy || !editMemoryDraft.trim()}/></> : null}<ActionButton label="Delete" onPress={() => changeMemory(entry,"delete")} disabled={busy} secondary/></View>)}
               </View>
-            </>
+            </ExploreScreen>
           ) : (
-            <>
+            <ChatsScreen>
               <View style={styles.screenHeading}><Text style={styles.eyebrow}>PRIVATE HUB</Text><Text style={styles.screenTitle}>Chats</Text><Text style={styles.description}>Conversations, agent work and project context in one place.</Text></View>
               <View style={styles.newChatRow}><TextInput value={chatTitle} onChangeText={setChatTitle} placeholder="Start a new conversation…" style={[styles.input,styles.newChatInput]} maxLength={160}/><ActionButton label="＋" onPress={createChat} disabled={!chatTitle.trim() || busy}/></View>
               {chats.map(chat => {
@@ -806,7 +808,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 return <ChatCard key={chat.id} chat={chat} linkedTaskCount={linkedTasks.length} progress={progress} styles={styles} onOpen={() => { setActiveChat(chat.id); setMobileChatOpen(true); }} onLike={() => toggleChatLike(chat.id)} onArchive={() => archiveChatById(chat.id)} />;
               })}
               {chats.length === 0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No conversations yet</Text><Text style={styles.muted}>Create your first chat above.</Text></View> : null}
-            </>
+            </ChatsScreen>
           )}
         </ScrollView>
 
