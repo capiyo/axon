@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import WorkspaceView from "../views/WorkspaceView";
+import HomeScreen from "./HomeScreen";
 import ProfileModal from "../modals/ProfileModal";
 import ChatCard from "../views/ChatCard";
 import type { FormEvent } from "react";
@@ -49,7 +50,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
-  const [activeView, setActiveView] = useState<"chats" | "explore">("chats");
+  const [activeView, setActiveView] = useState<"home" | "chats" | "explore">("home");
   const [profileOpen, setProfileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
@@ -724,21 +725,21 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           <div className="profile-identity-copy"><strong>{user.displayName || user.email || "Axon user"}</strong><small>{selected?.name ?? "Personal workspace"}</small></div>
           <span className="profile-presence" title="Signed in" />
         </div>
-        <div className="profile-section"><span className="profile-section-label">WORKSPACE OVERVIEW</span><div className="profile-stat-grid">
+        <div className="profile-section"><span className="profile-section-label">HUB OVERVIEW</span><div className="profile-stat-grid">
           <div><strong>{agents.length}</strong><small>Agents</small></div><div><strong>{chats.length}</strong><small>Chats</small></div>
           <div><strong>{tasks.filter(task => task.status === "in_progress").length}</strong><small>Running</small></div><div><strong>{tasks.filter(task => task.status === "completed").length}</strong><small>Completed</small></div>
           <div><strong>{tasks.filter(task => task.status === "offered" || task.status === "acknowledged").length}</strong><small>Queued</small></div><div><strong>{artifacts.length}</strong><small>Artifacts</small></div>
         </div></div>
         <div className="profile-section"><span className="profile-section-label">MEMORY & CONTEXT</span><div className="profile-metric"><span>Selected chat approved memory entries</span><strong>{(chatDetail?.memory.filter(entry => entry.status === "approved").length ?? 0)}</strong></div><div className="profile-metric"><span>Selected chat resume brief</span><strong>{(chatDetail?.resume_brief ? 1 : 0)}</strong></div><div className="profile-metric"><span>Messages across active chats</span><strong>{chats.reduce((total, chat) => total + chat.message_count, 0)}</strong></div></div>
         <div className="profile-section"><span className="profile-section-label">EXECUTION & HEALTH</span><div className="profile-metric"><span>Awaiting review</span><strong>{tasks.filter(task => task.status === "review_required" || task.status === "submitted").length}</strong></div><div className="profile-metric"><span>Rejected / cancelled</span><strong>{tasks.filter(task => task.status === "rejected" || task.status === "cancelled").length}</strong></div><div className="profile-metric"><span>API status</span><strong>{health?.status === "ok" ? "Connected" : "Unavailable"}</strong></div><div className="profile-metric"><span>Storage</span><strong>{health?.storage === "persistent" ? "Persistent" : health?.storage ?? "Unknown"}</strong></div></div>
-        <div className="profile-section"><span className="profile-section-label">WORKSPACE RESOURCES</span><div className="profile-metric"><span>Captured artifacts</span><strong>{artifacts.length}</strong></div><div className="profile-metric"><span>Total tasks</span><strong>{tasks.length}</strong></div><div className="profile-metric"><span>Active conversations</span><strong>{chats.length} active</strong></div></div>
+        <div className="profile-section"><span className="profile-section-label">HUB RESOURCES</span><div className="profile-metric"><span>Captured artifacts</span><strong>{artifacts.length}</strong></div><div className="profile-metric"><span>Total tasks</span><strong>{tasks.length}</strong></div><div className="profile-metric"><span>Active conversations</span><strong>{chats.length} active</strong></div></div>
         <div className="profile-section profile-activity"><span className="profile-section-label">RECENT WORK</span>{tasks.slice().sort((a,b)=>b.updated_at.localeCompare(a.updated_at)).slice(0,4).map(task => <div className="profile-activity-row" key={task.id}><span className={`activity-dot activity-${task.status}`} /><div><strong>{task.title}</strong><small>{task.status.replaceAll("_"," ")} · {new Date(task.updated_at).toLocaleDateString()}</small></div></div>)}{tasks.length === 0 && <p className="profile-empty">Task activity will appear here as work is assigned.</p>}</div>
-        <div className="profile-bottom"><span>AXON WORKSPACE</span><small>Private · Firebase authenticated</small></div>
+        <div className="profile-bottom"><span>AXON HUB</span><small>Private · Firebase authenticated</small></div>
       </aside>
       <section className="content">
         <header className="topbar">
           <div className="topbar-brand"><span className="brand-mark">A</span><div><p className="eyebrow">AXON WORKSPACE</p><h1>{selected?.name ?? "Your workspace"}</h1></div></div>
-          <div className="topbar-actions"><div className="notification-anchor"><button type="button" className="notification-bell" onClick={() => {setNotificationOpen(value => !value);void refreshNotifications();}} aria-label="Notifications">🔔{notificationUnread > 0 && <span>{notificationUnread}</span>}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-header"><strong>Notifications</strong><button type="button" onClick={() => void markAllNotificationsRead()}>Mark all read</button></div>{notifications.map(item => <button type="button" className={item.read_at ? "notification-item read" : "notification-item"} key={item.id} onClick={() => void openNotification(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString()}</small></button>)}{notifications.length === 0 && <p className="notification-empty">You are all caught up.</p>}</div>}</div><div className="status"><span className={health?.status === "ok" ? "pulse online" : "pulse"} />{health?.status === "ok" ? "Connected" : "API unavailable"}</div><div className="app-menu-anchor"><button type="button" className="topbar-action" onClick={() => setMenuOpen(value => !value)} aria-expanded={menuOpen}>Menu</button>{menuOpen && <div className="app-menu"><button type="button" onClick={() => {setActiveView("explore");setMenuOpen(false);}}>Explore agents</button><button type="button" onClick={() => {setProfileOpen(true);setMenuOpen(false);}}>Profile & workspace</button><button type="button" onClick={() => {setActiveView("chats");setMenuOpen(false);}}>Chats</button></div>}</div><button type="button" className="topbar-profile" onClick={() => setProfileOpen(true)} aria-label="Open profile">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</button></div>
+          <div className="topbar-actions"><div className="notification-anchor"><button type="button" className="notification-bell" onClick={() => {setNotificationOpen(value => !value);void refreshNotifications();}} aria-label="Notifications">🔔{notificationUnread > 0 && <span>{notificationUnread}</span>}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-header"><strong>Notifications</strong><button type="button" onClick={() => void markAllNotificationsRead()}>Mark all read</button></div>{notifications.map(item => <button type="button" className={item.read_at ? "notification-item read" : "notification-item"} key={item.id} onClick={() => void openNotification(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString()}</small></button>)}{notifications.length === 0 && <p className="notification-empty">You are all caught up.</p>}</div>}</div><div className="status"><span className={health?.status === "ok" ? "pulse online" : "pulse"} />{health?.status === "ok" ? "Connected" : "API unavailable"}</div><div className="app-menu-anchor"><button type="button" className="topbar-action" onClick={() => setMenuOpen(value => !value)} aria-expanded={menuOpen}>Menu</button>{menuOpen && <div className="app-menu"><button type="button" onClick={() => {setActiveView("explore");setMenuOpen(false);}}>Explore agents</button><button type="button" onClick={() => {setProfileOpen(true);setMenuOpen(false);}}>Profile & workspace</button><button type="button" onClick={() => {setActiveView("chats");setMenuOpen(false);}}>Chats</button><button type="button" onClick={() => {setActiveView("home");setMenuOpen(false);}}>Home</button></div>}</div><button type="button" className="topbar-profile" onClick={() => setProfileOpen(true)} aria-label="Open profile">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</button></div>
         </header>
 
         {!selected ? (
@@ -791,11 +792,19 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           <>
             <div className="workspace-header">
               <button className="back-link" onClick={() => setSelected(null)}>← All workspaces</button>
-              <span className="count">PROJECT WORKSPACE</span>
+              <span className="count">PROJECT HUB</span>
               <h2>{selected.name}</h2>
               <p>Register agents, capture their work, and create explicit handoffs.</p>
             </div>
-            {activeView === "chats" ? <section className="panel chat-panel">
+            {activeView === "home" ? <HomeScreen
+              agentCount={agents.length}
+              chatCount={chats.length}
+              runningCount={tasks.filter(task => task.status === "in_progress").length}
+              completedCount={tasks.filter(task => task.status === "completed").length}
+              artifactCount={artifacts.length}
+              onOpenChats={() => setActiveView("chats")}
+              onOpenExplore={() => setActiveView("explore")}
+            /> : activeView === "chats" ? <section className="panel chat-panel">
               <div className="panel-heading"><div><span className="kicker">04 · PROJECT CONVERSATIONS</span><h3>Chats & memory</h3></div><span className="count">{chats.length} CHATS</span></div>
               <div className={mobileConversationOpen ? "chat-layout mobile-conversation-open" : "chat-layout"}>
                 <aside className="chat-sidebar">
@@ -957,7 +966,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         )}
 
         {error && <div className="error" role="alert">{error} <button className="retry" onClick={() => selected ? void refreshWorkspace(selected) : void refreshWorkspaces()}>Retry</button></div>}
-        <nav className="mobile-bottom-nav" aria-label="Primary navigation"><button type="button" className={activeView === "chats" ? "active" : ""} onClick={() => { setActiveView("chats"); setMobileConversationOpen(false); }}><span>◌</span>Chats{chats.reduce((total,chat)=>total+chat.unread_count,0)>0 && <span className="chat-unread-count">{chats.reduce((total,chat)=>total+chat.unread_count,0)}</span>}</button><button type="button" className={activeView === "explore" ? "active" : ""} onClick={() => { setActiveView("explore"); setMobileConversationOpen(false); }}><span>⌕</span>Explore</button></nav>
+        <nav className="mobile-bottom-nav" aria-label="Primary navigation"><button type="button" className={activeView === "home" ? "active" : ""} onClick={() => { setActiveView("home"); setMobileConversationOpen(false); }}><span>⌂</span>Home</button><button type="button" className={activeView === "chats" ? "active" : ""} onClick={() => { setActiveView("chats"); setMobileConversationOpen(false); }}><span>◌</span>Chats{chats.reduce((total,chat)=>total+chat.unread_count,0)>0 && <span className="chat-unread-count">{chats.reduce((total,chat)=>total+chat.unread_count,0)}</span>}</button><button type="button" className={activeView === "explore" ? "active" : ""} onClick={() => { setActiveView("explore"); setMobileConversationOpen(false); }}><span>⌕</span>Explore</button></nav>
         {profileOpen && <ProfileModal user={user} selected={selected} agents={agents} chats={chats} tasks={tasks} artifacts={artifacts} onClose={() => setProfileOpen(false)} onSignOut={() => { if (auth) void signOut(auth); }} /> }
         <footer><span>AXON</span><span>Context should travel with the work.</span><span>FOUNDATION BUILD · 0.1</span></footer>
         {health && health.storage !== "persistent" && (
