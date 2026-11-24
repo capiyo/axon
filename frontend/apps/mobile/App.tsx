@@ -633,6 +633,28 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     });
   }
 
+  async function executeTask(task: Task) {
+    if (!selected) return;
+    await perform(async () => {
+      const memoryRequest = qoinVector
+        ? {
+            memory_query: qoinVector.vector,
+            heads: 2,
+            tags: [`symbol:${qoinVector.symbol}`],
+            progressive_limit: 10
+          }
+        : {};
+      await request<{ task: Task; artifact: Artifact }>(`/api/v1/tasks/${task.id}/execute`, {
+        method: "POST",
+        body: JSON.stringify(memoryRequest)
+      });
+      await refreshWorkspace(selected);
+      if (task.source_chat_id && activeChat === task.source_chat_id && mobileChatOpen) {
+        setChatDetail(await request<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`));
+      }
+    });
+  }
+
   const nextTaskStatus: Record<string, string> = {
     offered: "acknowledged",
     acknowledged: "in_progress",
@@ -719,7 +741,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 <TextInput value={taskObjective} onChangeText={setTaskObjective} placeholder="Expected outcome and instructions…" style={[styles.input,styles.multiline]} multiline/>
                 {agents.map(agent => <Pressable key={agent.id} onPress={() => setAssignee(agent.id)} style={[styles.agentChoice,assignee===agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text></Pressable>)}
                 <ActionButton label="Create handoff" onPress={createTask} disabled={!taskTitle.trim() || !taskObjective.trim() || !assignee || busy}/>
-                {tasks.map(task => <View key={task.id} style={styles.listRow}><Text style={styles.rowTitle}>{task.title}</Text><Text style={styles.rowMeta}>{task.status.replaceAll("_"," ")} · {task.transitions.length} events</Text>{nextTaskStatus[task.status] ? <ActionButton label={`Advance to ${nextTaskStatus[task.status].replaceAll("_"," ")}`} onPress={() => advanceTask(task,nextTaskStatus[task.status])} disabled={busy} secondary/> : null}{task.status === "in_progress" ? <><TextInput value={responseDrafts[task.id] ?? ""} onChangeText={value => setResponseDrafts(current => ({...current,[task.id]:value}))} placeholder="Capture agent response…" style={[styles.input,styles.multiline]} multiline/><ActionButton label="Submit response" onPress={() => submitTaskResponse(task)} disabled={busy || !(responseDrafts[task.id] ?? "").trim()} secondary/></> : null}</View>)}
+                {tasks.map(task => <View key={task.id} style={styles.listRow}><Text style={styles.rowTitle}>{task.title}</Text><Text style={styles.rowMeta}>{task.status.replaceAll("_"," ")} · {task.transitions.length} events</Text>{["offered","acknowledged","in_progress","changes_requested"].includes(task.status) ? <ActionButton label="Run assigned agent" onPress={() => void executeTask(task)} disabled={busy}/> : null}{nextTaskStatus[task.status] ? <ActionButton label={`Advance to ${nextTaskStatus[task.status].replaceAll("_"," ")}`} onPress={() => advanceTask(task,nextTaskStatus[task.status])} disabled={busy} secondary/> : null}{task.status === "in_progress" ? <><TextInput value={responseDrafts[task.id] ?? ""} onChangeText={value => setResponseDrafts(current => ({...current,[task.id]:value}))} placeholder="Capture agent response…" style={[styles.input,styles.multiline]} multiline/><ActionButton label="Submit response" onPress={() => submitTaskResponse(task)} disabled={busy || !(responseDrafts[task.id] ?? "").trim()} secondary/></> : null}</View>)}
                 <ActionButton label="Sign out" onPress={() => { if (auth) void signOut(auth); }} secondary/>
               </View>
             </>
