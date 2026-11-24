@@ -857,6 +857,23 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
 }
 
 const styles = StyleSheet.create({
+  authPage: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 26, paddingVertical: 42, backgroundColor: "#0E1612" },
+  authBrand: { flexDirection: "row", alignItems: "center", gap: 11, marginBottom: 42 },
+  authEyebrow: { color: "#9DE4B0", fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 12 },
+  authTitle: { color: "#E7F6EB", fontSize: 30, lineHeight: 36, fontWeight: "700", letterSpacing: -0.8, marginBottom: 10 },
+  authLabel: { color: "#B8CBBE", fontSize: 10, fontWeight: "700", letterSpacing: 1.1, marginTop: 18, marginBottom: 8 },
+  authInput: { height: 52, borderRadius: 13, borderWidth: 1, borderColor: "#294536", backgroundColor: "#14231B", color: "#E7F6EB", paddingHorizontal: 15, fontSize: 14 },
+  authPasswordWrap: { minHeight: 52, flexDirection: "row", alignItems: "center", borderRadius: 13, borderWidth: 1, borderColor: "#294536", backgroundColor: "#14231B" },
+  authPasswordInput: { flex: 1, height: 52, color: "#E7F6EB", paddingHorizontal: 15, fontSize: 14 },
+  authShowPassword: { color: "#9DE4B0", fontSize: 12, fontWeight: "700", paddingHorizontal: 15, paddingVertical: 16 },
+  authForgot: { color: "#9DE4B0", fontSize: 12, fontWeight: "700", textAlign: "right", marginTop: 17 },
+  authDivider: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 28, marginBottom: 15 },
+  authDividerLine: { flex: 1, height: 1, backgroundColor: "#294034" },
+  authDividerText: { color: "#82998A", fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  authLink: { color: "#9DE4B0", fontSize: 13, fontWeight: "700", textAlign: "center", paddingVertical: 12 },
+  authFootnote: { color: "#82998A", fontSize: 10, textAlign: "center", marginTop: 22 },
+  authNotice: { color: "#9DE4B0", backgroundColor: "#173D29", borderRadius: 10, padding: 12, fontSize: 12, lineHeight: 18, marginTop: 12 },
+
   safe: { flex: 1, backgroundColor: axonTheme.color.canvas },
   page: { padding: 22, paddingTop: 26, paddingBottom: 48 },
   brandRow: { flexDirection: "row", alignItems: "center", marginBottom: 42 },
@@ -1008,7 +1025,9 @@ function AuthGate() {
   const [password, setPassword] = useState("");
   const [createAccount, setCreateAccount] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [notice, setNotice] = useState("");
   const [working, setWorking] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
@@ -1019,22 +1038,43 @@ function AuthGate() {
   async function submit() {
     if (!auth) return;
     if (createAccount && !termsAccepted) { setAuthError("Please agree to the Terms & Conditions and Privacy Policy to create your account."); return; }
-    setWorking(true);
-    setAuthError("");
+    setWorking(true); setAuthError(""); setNotice("");
     try {
-      if (createAccount) await createUserWithEmailAndPassword(auth, email.trim(), password);
-      else await signInWithEmailAndPassword(auth, email.trim(), password);
+      if (createAccount) {
+        const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        await sendEmailVerification(credential.user);
+        setNotice("Your account is ready. Verify your email address before entering Axon.");
+      } else {
+        await signInWithEmailAndPassword(auth, email.trim(), password);
+      }
     } catch (cause) {
       setAuthError(cause instanceof Error ? cause.message : "Authentication failed.");
     } finally { setWorking(false); }
   }
 
-  if (!ready) return <SafeAreaView style={styles.safe}><View style={styles.page}><ActivityIndicator/><Text style={styles.muted}>Restoring your secure session…</Text></View></SafeAreaView>;
-  if (!auth) return <SafeAreaView style={styles.safe}><View style={styles.page}><Text style={styles.title}>Firebase configuration required</Text><Text style={styles.description}>Set the EXPO_PUBLIC_FIREBASE_* variables and restart the app.</Text></View></SafeAreaView>;
-  if (user) return <WorkspaceApp user={user}/>;
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled"><View style={styles.brandRow}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.eyebrow}>SECURE ACCESS</Text><Text style={styles.title}>{createAccount ? "Create your account" : "Welcome back"}</Text><Text style={styles.description}>Sign in to access your personal workspace and its data.</Text><TextInput value={email} onChangeText={setEmail} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoComplete="email" style={styles.input}/><TextInput value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry autoCapitalize="none" autoComplete={createAccount ? "new-password" : "password"} style={styles.input}/>{createAccount ? <Pressable onPress={() => {setTermsAccepted(value => !value);setAuthError("");}} accessibilityRole="checkbox" accessibilityState={{checked:termsAccepted}} style={{flexDirection:"row",alignItems:"center",alignSelf:"flex-start",gap:11,marginTop:3,marginBottom:9,paddingVertical:7,paddingRight:8}}><View style={{width:22,height:22,borderRadius:11,borderWidth:2,borderColor:termsAccepted ? "#8bd6a0" : "#70bd87",backgroundColor:termsAccepted ? "#173d29" : "transparent",alignItems:"center",justifyContent:"center"}}>{termsAccepted ? <View style={{width:9,height:9,borderRadius:5,backgroundColor:"#8bd6a0"}}/> : null}</View><Text style={{color:"#E7F6EB",fontSize:12,lineHeight:18,flexShrink:1}}>I agree to the <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Terms &amp; Conditions</Text> and <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Privacy Policy</Text>.</Text></Pressable> : null}<ActionButton label={working ? "Please wait…" : createAccount ? "Create account" : "Sign in"} onPress={()=>void submit()} disabled={working || !email.trim() || password.length<6 || (createAccount && !termsAccepted)}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}<Text onPress={()=>setCreateAccount(value=>!value)} style={styles.back}>{createAccount ? "Already registered? Sign in" : "New to Axon? Create an account"}</Text></ScrollView></SafeAreaView>;
+  async function resendVerification() {
+    if (!auth?.currentUser) return;
+    setWorking(true); setAuthError(""); setNotice("");
+    try { await sendEmailVerification(auth.currentUser); setNotice("Verification email sent. Check your inbox and spam folder."); }
+    catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not send verification email."); }
+    finally { setWorking(false); }
+  }
+
+  async function checkVerification() {
+    if (!auth?.currentUser) return;
+    setWorking(true); setAuthError("");
+    try { await reload(auth.currentUser); setUser(auth.currentUser); if (!auth.currentUser.emailVerified) setAuthError("Your email is not verified yet. Open the link in the email we sent."); }
+    catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not refresh account status."); }
+    finally { setWorking(false); }
+  }
+
+  if (!ready) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><ActivityIndicator/><Text style={styles.muted}>Restoring your secure session…</Text></View></SafeAreaView>;
+  if (!auth) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><Text style={styles.authTitle}>Connect your Firebase project</Text><Text style={styles.description}>Set the EXPO_PUBLIC_FIREBASE_* variables and restart the app.</Text></View></SafeAreaView>;
+  if (user && user.emailVerified) return <WorkspaceApp user={user}/>;
+  if (user) return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.authEyebrow}>ONE MORE STEP</Text><Text style={styles.authTitle}>Verify your email</Text><Text style={styles.description}>We sent a verification link to {user.email}. Verify your address to secure your Axon account.</Text>{notice ? <Text style={styles.authNotice}>{notice}</Text> : null}{authError ? <Text style={styles.errorText}>{authError}</Text> : null}<ActionButton label={working ? "Checking…" : "I’ve verified my email"} onPress={()=>void checkVerification()} disabled={working}/><ActionButton label="Resend verification email" onPress={()=>void resendVerification()} disabled={working} secondary/><Text onPress={()=>{void signOut(auth);setNotice("");}} style={styles.authLink}>Use another account</Text></ScrollView></SafeAreaView>;
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.authEyebrow}>YOUR WORK, IN ONE PLACE</Text><Text style={styles.authTitle}>{createAccount ? "Create your account" : "Welcome back"}</Text><Text style={styles.description}>{createAccount ? "Create a secure account to bring your agents and work together." : "Sign in to continue where your agents left off."}</Text><Text style={styles.authLabel}>EMAIL ADDRESS</Text><TextInput value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor="#82998A" keyboardType="email-address" autoCapitalize="none" autoComplete="email" style={styles.authInput}/><Text style={styles.authLabel}>PASSWORD</Text><View style={styles.authPasswordWrap}><TextInput value={password} onChangeText={setPassword} placeholder="At least 6 characters" placeholderTextColor="#82998A" secureTextEntry={!showPassword} autoCapitalize="none" autoComplete={createAccount ? "new-password" : "password"} style={styles.authPasswordInput}/><Text onPress={()=>setShowPassword(value=>!value)} style={styles.authShowPassword}>{showPassword ? "Hide" : "Show"}</Text></View>{createAccount ? <Pressable onPress={() => {setTermsAccepted(value => !value);setAuthError("");}} accessibilityRole="checkbox" accessibilityState={{checked:termsAccepted}} style={{flexDirection:"row",alignItems:"center",alignSelf:"flex-start",gap:11,marginTop:8,marginBottom:10,paddingVertical:7,paddingRight:8}}><View style={{width:22,height:22,borderRadius:11,borderWidth:2,borderColor:termsAccepted ? "#8bd6a0" : "#70bd87",backgroundColor:termsAccepted ? "#173d29" : "transparent",alignItems:"center",justifyContent:"center"}}>{termsAccepted ? <View style={{width:9,height:9,borderRadius:5,backgroundColor:"#8bd6a0"}}/> : null}</View><Text style={{color:"#E7F6EB",fontSize:12,lineHeight:18,flexShrink:1}}>I agree to the <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Terms &amp; Conditions</Text> and <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Privacy Policy</Text>.</Text></Pressable> : null}<ActionButton label={working ? "Please wait…" : createAccount ? "Create account" : "Continue with email"} onPress={()=>void submit()} disabled={working || !email.trim() || password.length<6 || (createAccount && !termsAccepted)}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}{notice ? <Text style={styles.authNotice}>{notice}</Text> : null}{!createAccount ? <Text onPress={()=>{if(!auth||!email.trim()) {setAuthError("Enter your email address first.");return;}setWorking(true);setAuthError("");setNotice("");void sendPasswordResetEmail(auth,email.trim()).then(()=>setNotice("Password reset link sent. Check your inbox.")).catch(cause=>setAuthError(cause instanceof Error ? cause.message : "Could not send password reset email.")).finally(()=>setWorking(false));}} style={styles.authForgot}>Forgot password?</Text> : null}<View style={styles.authDivider}><View style={styles.authDividerLine}/><Text style={styles.authDividerText}>{createAccount ? "ALREADY HAVE AN ACCOUNT?" : "NEW TO AXON?"}</Text><View style={styles.authDividerLine}/></View><Text onPress={()=>{setCreateAccount(value=>!value);setAuthError("");setNotice("");}} style={styles.authLink}>{createAccount ? "Sign in instead" : "Create an account"}</Text><Text style={styles.authFootnote}>Secure access powered by Firebase Authentication.</Text></ScrollView></SafeAreaView>;
 }
 
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, sendEmailVerification, reload } from "firebase/auth";
 
 export default function App() { return <AuthGate />; }
