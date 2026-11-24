@@ -33,6 +33,7 @@ pub struct AgentRuntime {
     api_key: String,
     model: String,
     provider: String,
+    anthropic: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +49,16 @@ struct CompletionChoice {
 #[derive(Debug, Deserialize)]
 struct CompletionMessage {
     content: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicResponse {
+    content: Vec<AnthropicContent>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AnthropicContent {
+    text: Option<String>,
 }
 
 impl AgentRuntime {
@@ -73,6 +84,8 @@ impl AgentRuntime {
             return Err(AgentRuntimeError::MissingConfiguration(provider.into()));
         }
 
+        let anthropic = provider.to_ascii_lowercase().contains("claude")
+            || provider.to_ascii_lowercase().contains("anthropic");
         let mut endpoint = Url::parse(&base_url)
             .map_err(|error| AgentRuntimeError::InvalidEndpoint(error.to_string()))?;
         if !matches!(endpoint.scheme(), "https" | "http") || endpoint.host_str().is_none() {
@@ -81,7 +94,10 @@ impl AgentRuntime {
             ));
         }
         let path = endpoint.path().trim_end_matches('/');
-        endpoint.set_path(&format!("{path}/chat/completions"));
+        endpoint.set_path(&format!(
+            "{path}/{}",
+            if anthropic { "messages" } else { "chat/completions" }
+        ));
         endpoint.set_query(None);
         endpoint.set_fragment(None);
 
@@ -94,6 +110,7 @@ impl AgentRuntime {
             api_key,
             model,
             provider: provider.to_owned(),
+            anthropic,
         })
     }
 
@@ -108,36 +125,63 @@ impl AgentRuntime {
         system_context: &str,
         objective: &str,
     ) -> Result<String, AgentRuntimeError> {
-        let response = self
-            .client
-            .post(self.endpoint.clone())
-            .header(header::AUTHORIZATION, format!("Bearer {}", self.api_key))
-            .header(header::CONTENT_TYPE, "application/json")
-            .json(&json!({
-                "model": self.model,
-                "temperature": 0.2,
-                "messages": [
-                    {"role": "system", "content": system_context},
-                    {"role": "user", "content": objective}
-                ]
-            }))
-            .send()
-            .await?;
+        let request = self.client.post(self.endpoint.clone());
+        let response = if self.anthropic {
+            request
+                .header("x-api-key", &self.api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header(header::CONTENT_TYPE, "application/json")
+                .json(&json!({
+                    "model": self.model,
+                    "max_tokens": 8192,
+                    "system": system_context,
+                    "messages": [{"role": "user", "content": objective}]
+                }))
+                .send()
+                .await?
+        } else {
+            request
+                .header(header::AUTHORIZATION, format!("Bearer {}", self.api_key))
+                .header(header::CONTENT_TYPE, "application/json")
+                .json(&json!({
+                    "model": self.model,
+                    "temperature": 0.2,
+                    "messages": [
+                        {"role": "system", "content": system_context},
+                        {"role": "user", "content": objective}
+                    ]
+                }))
+                .send()
+                .await?
+        };
         if !response.status().is_success() {
             return Err(AgentRuntimeError::HttpStatus(response.status()));
         }
-        let body: CompletionResponse = response
-            .json()
-            .await
-            .map_err(|error| AgentRuntimeError::InvalidResponse(error.to_string()))?;
-        let content = body
-            .choices
-            .into_iter()
-            .next()
-            .and_then(|choice| choice.message.content)
-            .map(|content| content.trim().to_owned())
-            .filter(|content| !content.is_empty())
-            .ok_or(AgentRuntimeError::EmptyResponse)?;
+        let content = if self.anthropic {
+            let body: AnthropicResponse = response
+                .json()
+                .await
+                .map_err(|error| AgentRuntimeError::InvalidResponse(error.to_string()))?;
+            body.content
+                .into_iter()
+                .filter_map(|block| block.text)
+                .collect::<Vec<_>>()
+                .join("\\n")
+        } else {
+            let body: CompletionResponse = response
+                .json()
+                .await
+                .map_err(|error| AgentRuntimeError::InvalidResponse(error.to_string()))?;
+            body.choices
+                .into_iter()
+                .next()
+                .and_then(|choice| choice.message.content)
+                .unwrap_or_default()
+        };
+        let content = content.trim().to_owned();
+        if content.is_empty() {
+            return Err(AgentRuntimeError::EmptyResponse);
+        }
         Ok(content)
     }
 }
