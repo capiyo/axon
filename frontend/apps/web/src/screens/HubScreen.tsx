@@ -792,12 +792,6 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           </>
         ) : (
           <>
-            <div className="workspace-header">
-              <button className="back-link" onClick={() => setSelected(null)}>← All Hubs</button>
-              <span className="count">PROJECT HUB</span>
-              <h2>{selected.name}</h2>
-              <p>Register agents, capture their work, and create explicit handoffs.</p>
-            </div>
             <div className="desktop-home-tabs"><HomeScreen activeTab={activeView} unreadCount={chats.reduce((total, chat) => total + chat.unread_count, 0)} onTabChange={tab => { setActiveView(tab); setMobileConversationOpen(false); }} /></div>
             {activeView === "chats" ? <ChatsScreen><section className="panel chat-panel">
               <div className="panel-heading"><div><span className="kicker">04 · PROJECT CONVERSATIONS</span><h3>Chats & memory</h3></div><span className="count">{chats.length} CHATS</span></div>
