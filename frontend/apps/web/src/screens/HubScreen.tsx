@@ -973,7 +973,9 @@ function AuthGate() {
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"sign_in" | "create">("sign_in");
   const [authError, setAuthError] = useState("");
+  const [notice, setNotice] = useState("");
   const [working, setWorking] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
@@ -985,22 +987,43 @@ function AuthGate() {
     event.preventDefault();
     if (!auth) return;
     if (mode === "create" && !termsAccepted) { setAuthError("Please agree to the Terms & Conditions and Privacy Policy to create your account."); return; }
-    setWorking(true);
-    setAuthError("");
+    setWorking(true); setAuthError(""); setNotice("");
     try {
-      if (mode === "create") await createUserWithEmailAndPassword(auth, email.trim(), password);
-      else await signInWithEmailAndPassword(auth, email.trim(), password);
+      if (mode === "create") {
+        const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        await sendEmailVerification(credential.user);
+        setNotice("Your account is ready. Verify your email address before entering Axon.");
+      } else {
+        await signInWithEmailAndPassword(auth, email.trim(), password);
+      }
     } catch (cause) {
       setAuthError(cause instanceof Error ? cause.message : "Authentication failed.");
     } finally { setWorking(false); }
   }
 
-  if (!ready) return <main className="shell"><section className="content"><p>Restoring your secure session…</p></section></main>;
-  if (!auth) return <main className="shell"><section className="content"><h1>Firebase configuration required</h1><p>Set the VITE_FIREBASE_* environment variables for this web app, then restart it.</p></section></main>;
-  if (user) return <WorkspaceApp user={user} />;
-  return <main className="shell"><section className="content" style={{maxWidth:520,margin:"12vh auto"}}><p className="eyebrow">AXON · SECURE ACCESS</p><h1>{mode === "create" ? "Create your account" : "Welcome back"}</h1><p>Sign in to access your personal workspace and its data.</p><form className="stack-form" onSubmit={submit}><label htmlFor="auth-email">Email</label><input id="auth-email" type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)}/><label htmlFor="auth-password">Password</label><input id="auth-password" type="password" minLength={6} autoComplete={mode === "create" ? "new-password" : "current-password"} required value={password} onChange={e=>setPassword(e.target.value)}/>{mode === "create" && <label className="terms-consent" htmlFor="auth-terms"><input id="auth-terms" type="checkbox" checked={termsAccepted} onChange={e=>{setTermsAccepted(e.target.checked);setAuthError("");}}/><span className="terms-consent-copy">I agree to the <strong>Terms &amp; Conditions</strong> and <strong>Privacy Policy</strong>.</span></label>}<button disabled={working || (mode === "create" && !termsAccepted)}>{working ? "Please wait…" : mode === "create" ? "Create account" : "Sign in"}</button></form>{authError && <p role="alert">{authError}</p>}<button className="back-link" onClick={()=>setMode(mode === "create" ? "sign_in" : "create")}>{mode === "create" ? "Already registered? Sign in" : "New to Axon? Create an account"}</button></section></main>;
+  async function resendVerification() {
+    if (!auth?.currentUser) return;
+    setWorking(true); setAuthError(""); setNotice("");
+    try { await sendEmailVerification(auth.currentUser); setNotice("Verification email sent. Check your inbox and spam folder."); }
+    catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not send verification email."); }
+    finally { setWorking(false); }
+  }
+
+  async function checkVerification() {
+    if (!auth?.currentUser) return;
+    setWorking(true); setAuthError("");
+    try { await reload(auth.currentUser); setUser(auth.currentUser); if (!auth.currentUser.emailVerified) setAuthError("Your email is not verified yet. Open the link in the email we sent."); }
+    catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not refresh account status."); }
+    finally { setWorking(false); }
+  }
+
+  if (!ready) return <main className="auth-shell"><section className="auth-card"><p>Restoring your secure session…</p></section></main>;
+  if (!auth) return <main className="auth-shell"><section className="auth-card"><h1>Connect your Firebase project</h1><p>Set the VITE_FIREBASE_* environment variables and restart the web app.</p></section></main>;
+  if (user && user.emailVerified) return <WorkspaceApp user={user} />;
+  if (user) return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><span className="auth-mark">A</span><span>AXON</span></div><p className="eyebrow">ONE MORE STEP</p><h1>Verify your email</h1><p>We sent a verification link to <strong>{user.email}</strong>. Verify your address to secure your Axon account.</p>{notice && <p className="auth-notice" role="status">{notice}</p>}{authError && <p className="auth-error" role="alert">{authError}</p>}<button className="auth-primary" disabled={working} onClick={()=>void checkVerification()}>{working ? "Checking…" : "I’ve verified my email"}</button><button className="auth-secondary" disabled={working} onClick={()=>void resendVerification()}>Resend verification email</button><button className="auth-text-button" onClick={()=>{void signOut(auth);setNotice("");}}>Use another account</button></section></main>;
+  return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><span className="auth-mark">A</span><span>AXON</span></div><p className="eyebrow">YOUR WORK, IN ONE PLACE</p><h1>{mode === "create" ? "Create your account" : "Welcome back"}</h1><p className="auth-description">{mode === "create" ? "Create a secure account to bring your agents and work together." : "Sign in to continue where your agents left off."}</p><form className="auth-form" onSubmit={submit}><label htmlFor="auth-email">Email address</label><input id="auth-email" type="email" autoComplete="email" autoCapitalize="none" required value={email} onChange={e=>setEmail(e.target.value)}/><label htmlFor="auth-password">Password</label><div className="auth-password-wrap"><input id="auth-password" type={showPassword ? "text" : "password"} minLength={6} autoComplete={mode === "create" ? "new-password" : "current-password"} required value={password} onChange={e=>setPassword(e.target.value)}/><button type="button" className="auth-password-toggle" onClick={()=>setShowPassword(value=>!value)}>{showPassword ? "Hide" : "Show"}</button></div>{mode === "create" && <label className="terms-consent" htmlFor="auth-terms"><input id="auth-terms" type="checkbox" checked={termsAccepted} onChange={e=>{setTermsAccepted(e.target.checked);setAuthError("");}}/><span className="terms-consent-copy">I agree to the <strong>Terms &amp; Conditions</strong> and <strong>Privacy Policy</strong>.</span></label>}<button className="auth-primary" disabled={working || (mode === "create" && !termsAccepted)}>{working ? "Please wait…" : mode === "create" ? "Create account" : "Continue with email"}</button></form>{authError && <p className="auth-error" role="alert">{authError}</p>}{notice && <p className="auth-notice" role="status">{notice}</p>}{mode === "sign_in" && <button className="auth-text-button auth-forgot" disabled={working || !email.trim()} onClick={async()=>{setWorking(true);setAuthError("");setNotice("");try{await sendPasswordResetEmail(auth,email.trim());setNotice("Password reset link sent. Check your inbox.");}catch(cause){setAuthError(cause instanceof Error ? cause.message : "Could not send password reset email.");}finally{setWorking(false);}}}>Forgot password?</button>}<div className="auth-divider"><span> {mode === "create" ? "ALREADY HAVE AN ACCOUNT?" : "NEW TO AXON?"} </span></div><button className="auth-text-button" onClick={()=>{setMode(mode === "create" ? "sign_in" : "create");setAuthError("");setNotice("");}}>{mode === "create" ? "Sign in instead" : "Create an account"}</button><p className="auth-footnote">Secure access powered by Firebase Authentication.</p></section></main>;
 }
 
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, sendEmailVerification, reload } from "firebase/auth";
 
 export default function App() { return <AuthGate />; }
