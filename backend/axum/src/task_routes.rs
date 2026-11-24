@@ -171,7 +171,12 @@ pub async fn execute_task(
     Path(task_id): Path<Uuid>,
     request: Option<Json<ExecuteTaskRequest>>,
 ) -> TaskResult<Json<TaskSubmission>> {
-    if !state.claim_task_execution(task_id) {
+    let execution_token = Uuid::new_v4();
+    let claimed = state
+        .claim_task_execution(task_id, execution_token)
+        .await
+        .map_err(|_| storage_failure())?;
+    if !claimed {
         return Err(error(
             StatusCode::CONFLICT,
             "This task is already being executed.",
@@ -179,7 +184,12 @@ pub async fn execute_task(
     }
     let request = request.map(|Json(value)| value).unwrap_or_default();
     let result = execute_task_claimed(state.clone(), user, task_id, request).await;
-    state.release_task_execution(task_id);
+    if let Err(release_error) = state
+        .release_task_execution(task_id, execution_token)
+        .await
+    {
+        tracing::error!(%release_error, %task_id, "could not release task execution lease");
+    }
     result
 }
 
