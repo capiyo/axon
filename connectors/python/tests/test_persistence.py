@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import httpx
 
@@ -11,7 +12,7 @@ def test_persist_artifact_uses_firebase_token_and_workspace_route():
     async def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
         captured["authorization"] = request.headers.get("authorization")
-        captured["payload"] = __import__("json").loads(request.content)
+        captured["payload"] = json.loads(request.content)
         return httpx.Response(201, json={"id": "artifact-123"})
 
     async def run() -> str:
