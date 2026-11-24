@@ -658,6 +658,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn task_execution_leases_are_exclusive_and_owner_scoped() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let task_id = Uuid::new_v4();
+        let first_owner = Uuid::new_v4();
+        let second_owner = Uuid::new_v4();
+
+        assert!(storage
+            .claim_task_execution(task_id, first_owner, 240)
+            .await
+            .unwrap());
+        assert!(!storage
+            .claim_task_execution(task_id, second_owner, 240)
+            .await
+            .unwrap());
+
+        storage
+            .release_task_execution(task_id, second_owner)
+            .await
+            .unwrap();
+        assert!(!storage
+            .claim_task_execution(task_id, second_owner, 240)
+            .await
+            .unwrap());
+
+        storage
+            .release_task_execution(task_id, first_owner)
+            .await
+            .unwrap();
+        assert!(storage
+            .claim_task_execution(task_id, second_owner, 240)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
+    async fn expired_task_execution_lease_can_be_reclaimed() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let task_id = Uuid::new_v4();
+        let first_owner = Uuid::new_v4();
+        let second_owner = Uuid::new_v4();
+
+        assert!(storage
+            .claim_task_execution(task_id, first_owner, 240)
+            .await
+            .unwrap());
+        sqlx::query(
+            "UPDATE task_execution_leases SET lease_expires_at = '2000-01-01T00:00:00+00:00' WHERE task_id = ?",
+        )
+        .bind(task_id.to_string())
+        .execute(&storage.pool)
+        .await
+        .unwrap();
+
+        assert!(storage
+            .claim_task_execution(task_id, second_owner, 240)
+            .await
+            .unwrap());
+    }
+
+    #[tokio::test]
     async fn firebase_first_login_is_idempotent_under_concurrent_requests() {
         let database_path =
             std::env::temp_dir().join(format!("axon-identity-{}.db", Uuid::new_v4()));
