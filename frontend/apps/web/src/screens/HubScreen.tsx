@@ -52,7 +52,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
-  const [activeView, setActiveView] = useState<"home" | "chats" | "explore">("home");
+  const [activeView, setActiveView] = useState<"chats" | "explore">("chats");
   const [profileOpen, setProfileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileConversationOpen, setMobileConversationOpen] = useState(false);
@@ -741,11 +741,6 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       <section className="content">
         <header className="topbar">
           <div className="topbar-brand"><span className="brand-mark">A</span><div><p className="eyebrow">AXON HUB</p><h1>{selected?.name ?? "Your Hub"}</h1></div></div>
-          <nav className="desktop-primary-nav" aria-label="Primary navigation">
-            <button type="button" className={activeView === "home" ? "active" : ""} onClick={() => { setActiveView("home"); setMobileConversationOpen(false); }}>Home</button>
-            <button type="button" className={activeView === "chats" ? "active" : ""} onClick={() => { setActiveView("chats"); setMobileConversationOpen(false); }}>Chats</button>
-            <button type="button" className={activeView === "explore" ? "active" : ""} onClick={() => { setActiveView("explore"); setMobileConversationOpen(false); }}>Explore</button>
-          </nav>
           <div className="topbar-actions"><div className="notification-anchor"><button type="button" className="notification-bell" onClick={() => {setNotificationOpen(value => !value);void refreshNotifications();}} aria-label="Notifications">🔔{notificationUnread > 0 && <span>{notificationUnread}</span>}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-header"><strong>Notifications</strong><button type="button" onClick={() => void markAllNotificationsRead()}>Mark all read</button></div>{notifications.map(item => <button type="button" className={item.read_at ? "notification-item read" : "notification-item"} key={item.id} onClick={() => void openNotification(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString()}</small></button>)}{notifications.length === 0 && <p className="notification-empty">You are all caught up.</p>}</div>}</div><div className="status"><span className={health?.status === "ok" ? "pulse online" : "pulse"} />{health?.status === "ok" ? "Connected" : "API unavailable"}</div><div className="app-menu-anchor"><button type="button" className="topbar-action" onClick={() => setMenuOpen(value => !value)} aria-expanded={menuOpen}>Menu</button>{menuOpen && <div className="app-menu"><button type="button" onClick={() => {setActiveView("explore");setMenuOpen(false);}}>Explore agents</button><button type="button" onClick={() => {setProfileOpen(true);setMenuOpen(false);}}>Profile & workspace</button><button type="button" onClick={() => {setActiveView("chats");setMenuOpen(false);}}>Chats</button><button type="button" onClick={() => {setActiveView("home");setMenuOpen(false);}}>Home</button></div>}</div><button type="button" className="topbar-profile" onClick={() => setProfileOpen(true)} aria-label="Open profile">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</button></div>
         </header>
 
@@ -803,15 +798,8 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               <h2>{selected.name}</h2>
               <p>Register agents, capture their work, and create explicit handoffs.</p>
             </div>
-            {activeView === "home" ? <HomeScreen
-              agentCount={agents.length}
-              chatCount={chats.length}
-              runningCount={tasks.filter(task => task.status === "in_progress").length}
-              completedCount={tasks.filter(task => task.status === "completed").length}
-              artifactCount={artifacts.length}
-              onOpenChats={() => setActiveView("chats")}
-              onOpenExplore={() => setActiveView("explore")}
-            /> : activeView === "chats" ? <ChatsScreen><section className="panel chat-panel">
+            <HomeScreen activeTab={activeView} unreadCount={chats.reduce((total, chat) => total + chat.unread_count, 0)} onTabChange={tab => { setActiveView(tab); setMobileConversationOpen(false); }} />
+            {activeView === "chats" ? <ChatsScreen><section className="panel chat-panel">
               <div className="panel-heading"><div><span className="kicker">04 · PROJECT CONVERSATIONS</span><h3>Chats & memory</h3></div><span className="count">{chats.length} CHATS</span></div>
               <div className={mobileConversationOpen ? "chat-layout mobile-conversation-open" : "chat-layout"}>
                 <aside className="chat-sidebar">
@@ -973,7 +961,6 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         )}
 
         {error && <div className="error" role="alert">{error} <button className="retry" onClick={() => selected ? void refreshWorkspace(selected) : void refreshWorkspaces()}>Retry</button></div>}
-        <nav className="mobile-bottom-nav" aria-label="Primary navigation"><button type="button" className={activeView === "home" ? "active" : ""} onClick={() => { setActiveView("home"); setMobileConversationOpen(false); }}><span>⌂</span>Home</button><button type="button" className={activeView === "chats" ? "active" : ""} onClick={() => { setActiveView("chats"); setMobileConversationOpen(false); }}><span>◌</span>Chats{chats.reduce((total,chat)=>total+chat.unread_count,0)>0 && <span className="chat-unread-count">{chats.reduce((total,chat)=>total+chat.unread_count,0)}</span>}</button><button type="button" className={activeView === "explore" ? "active" : ""} onClick={() => { setActiveView("explore"); setMobileConversationOpen(false); }}><span>⌕</span>Explore</button></nav>
         {profileOpen && <ProfileModal user={user} selected={selected} agents={agents} chats={chats} tasks={tasks} artifacts={artifacts} onClose={() => setProfileOpen(false)} onSignOut={() => { if (auth) void signOut(auth); }} /> }
         <footer><span>AXON</span><span>Context should travel with the work.</span><span>FOUNDATION BUILD · 0.1</span></footer>
         {health && health.storage !== "persistent" && (
