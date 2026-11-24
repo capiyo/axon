@@ -1,8 +1,10 @@
 use crate::agent_runtime::AgentRuntime;
 use crate::auth_middleware::AuthenticatedUser;
 use crate::chat_memory::CreateMessage;
-use crate::memory_architecture::{HandoverRequest, ParetoPolicy, ProgressiveRetrievalRequest, QoinVector};
 use crate::explore::NotificationInput;
+use crate::memory_architecture::{
+    HandoverRequest, ParetoPolicy, ProgressiveRetrievalRequest, QoinVector,
+};
 use crate::{
     audit::AuditEvent,
     model::{Artifact, CreateTask, SubmitTask, Task, TaskStatus, TaskTransition, TransitionTask},
@@ -269,7 +271,11 @@ async fn execute_task_claimed(
                     task_id: Some(task.id),
                     project_id: None,
                     query: query.clone(),
-                    heads: if request.heads == 0 { 2 } else { request.heads.min(8) },
+                    heads: if request.heads == 0 {
+                        2
+                    } else {
+                        request.heads.min(8)
+                    },
                     tags: request.tags.clone(),
                     dependency_ids: BTreeSet::new(),
                     pareto: ParetoPolicy::default(),
@@ -282,7 +288,12 @@ async fn execute_task_claimed(
                             "QKV/QOIN INITIAL MEMORY (epoch {}, coverage {:.3}):\\n{}",
                             handover.epoch.epoch_number,
                             handover.achieved_coverage,
-                            handover.initial.iter().map(|memory| memory.payload_json.as_str()).collect::<Vec<_>>().join("\\n")
+                            handover
+                                .initial
+                                .iter()
+                                .map(|memory| memory.payload_json.as_str())
+                                .collect::<Vec<_>>()
+                                .join("\\n")
                         ));
                     }
                     let progressive_limit = request.progressive_limit.min(20);
@@ -294,7 +305,11 @@ async fn execute_task_claimed(
                                 handover.session_id,
                                 ProgressiveRetrievalRequest {
                                     query,
-                                    heads: if request.heads == 0 { 2 } else { request.heads.min(8) },
+                                    heads: if request.heads == 0 {
+                                        2
+                                    } else {
+                                        request.heads.min(8)
+                                    },
                                     tags: request.tags,
                                     dependency_ids: BTreeSet::new(),
                                     limit: progressive_limit,
@@ -305,11 +320,18 @@ async fn execute_task_claimed(
                             Ok(additional) if !additional.memories.is_empty() => {
                                 context_sections.push(format!(
                                     "QKV/QOIN PROGRESSIVE MEMORY:\\n{}",
-                                    additional.memories.iter().map(|memory| memory.payload_json.as_str()).collect::<Vec<_>>().join("\\n")
+                                    additional
+                                        .memories
+                                        .iter()
+                                        .map(|memory| memory.payload_json.as_str())
+                                        .collect::<Vec<_>>()
+                                        .join("\\n")
                                 ));
                             }
                             Ok(_) => {}
-                            Err(error) => tracing::warn!(%error, %task_id, "progressive memory retrieval unavailable; continuing with initial context"),
+                            Err(error) => {
+                                tracing::warn!(%error, %task_id, "progressive memory retrieval unavailable; continuing with initial context")
+                            }
                         }
                     }
                 }
@@ -318,7 +340,9 @@ async fn execute_task_claimed(
                 }
                 Err(error) => {
                     tracing::warn!(%error, %task_id, "QKV/Qoin handover unavailable; continuing with chat and artifact context");
-                    context_sections.push("Historical QKV/Qoin retrieval was unavailable for this execution.".into());
+                    context_sections.push(
+                        "Historical QKV/Qoin retrieval was unavailable for this execution.".into(),
+                    );
                 }
             }
         } else {
@@ -341,7 +365,13 @@ async fn execute_task_claimed(
             .iter()
             .filter(|entry| entry.status == "approved")
             .take(20)
-            .map(|entry| format!("- [{}] {}", entry.entry_type, entry.text.chars().take(1_200).collect::<String>()))
+            .map(|entry| {
+                format!(
+                    "- [{}] {}",
+                    entry.entry_type,
+                    entry.text.chars().take(1_200).collect::<String>()
+                )
+            })
             .collect::<Vec<_>>();
         if !approved_memories.is_empty() {
             context_sections.push(format!(
@@ -386,14 +416,14 @@ async fn execute_task_claimed(
     // provider times out, the task remains retryable and the claim is released.
     let now = Utc::now();
     if task.status == TaskStatus::Offered {
-            task.transitions.push(TaskTransition {
-                from: Some(TaskStatus::Offered),
-                to: TaskStatus::Acknowledged,
-                note: "Agent runtime accepted the task.".into(),
-                occurred_at: now,
-            });
-            task.status = TaskStatus::Acknowledged;
-            task.version += 1;
+        task.transitions.push(TaskTransition {
+            from: Some(TaskStatus::Offered),
+            to: TaskStatus::Acknowledged,
+            note: "Agent runtime accepted the task.".into(),
+            occurred_at: now,
+        });
+        task.status = TaskStatus::Acknowledged;
+        task.version += 1;
     }
     if task.status != TaskStatus::InProgress {
         let previous = task.status.clone();
@@ -513,7 +543,10 @@ async fn execute_task_claimed(
                     event_type: "task.response_submitted",
                     entity_type: "task",
                     title: "Agent response submitted",
-                    body: &format!("{} submitted a response for {}.", agent.display_name, task.title),
+                    body: &format!(
+                        "{} submitted a response for {}.",
+                        agent.display_name, task.title
+                    ),
                 })
                 .await;
         }
