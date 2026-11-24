@@ -70,7 +70,7 @@ The runtime loads approved memory entries and a bounded recent chat transcript w
 - Axon authorizes workspace membership and confirms that the assigned agent belongs to the same workspace.
 - The task is durably moved to `in_progress` before the provider call.
 - A successful provider response is saved as an artifact and moves the task to `submitted`; the response is also appended to the source chat when one is attached.
-- A provider timeout or error leaves the task `in_progress` and retryable. A process-local claim prevents duplicate concurrent calls in one API process.
+- A provider timeout or error leaves the task `in_progress` and retryable. A durable SQLite lease with an owner token prevents concurrent execution across API instances sharing the same database; the 240-second lease is released on completion and can be reclaimed after expiry.
 - The task still follows the existing review lifecycle; provider output is not automatically accepted or marked completed.
 
-The current claim guard is process-local. Before horizontally scaling the API, replace it with a durable lease/idempotency record in SQLite or the production database so two API instances cannot execute the same task simultaneously.
+Axon sends a stable idempotency key derived from task ID and task version to the provider on retries. Providers that honor idempotency keys can deduplicate a retry after a process interruption. A provider that ignores the header may still perform duplicate work if the process crashes after the provider completes but before Axon persists the response. The SQLite lease coordinates API instances that share the same database; a horizontally scaled deployment must use a shared durable database rather than per-instance SQLite files.
