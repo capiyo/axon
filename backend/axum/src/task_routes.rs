@@ -464,8 +464,9 @@ async fn execute_task_claimed(
         .map_err(|_| storage_failure())?;
     state.tasks.write().await.insert(task.id, task.clone());
 
+    let idempotency_key = format!("axon-task-{}-v{}", task.id, task.version);
     let output = runtime
-        .execute(&system_context, &task.objective)
+        .execute(&system_context, &task.objective, &idempotency_key)
         .await
         .map_err(|_| {
             error(
