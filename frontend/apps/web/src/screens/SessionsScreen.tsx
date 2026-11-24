@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import WorkspaceView from "../views/WorkspaceView";
 import HomeScreen from "./HomeScreen";
-import ChatsScreen from "./ChatsScreen";
+import ChatsScreen from "./SessionPanel";
 import ExploreScreen from "./ExploreScreen";
 import ProfileModal from "../modals/ProfileModal";
-import ChatCard from "../views/ChatCard";
+import ChatCard from "../views/SessionCard";
 import type { FormEvent } from "react";
 import { auth } from "../firebase";
 
 import type {
-  Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage,
+  Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatPrompt,
   ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext,
-  QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt, ExploreAgent, ExploreComment, ModerationReport, Notification, NotificationPage
+  QoinMemoryIndexReceipt, QoinChatPromptIndexReceipt, ExploreAgent, ExploreComment, ModerationReport, Notification, NotificationPage
 } from "../../../../packages/contracts/src";
 
 
@@ -76,7 +76,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [activeChat, setActiveChat] = useState<string>("");
   const [chatDetail, setChatDetail] = useState<ChatDetail | null>(null);
   const [chatTitle, setChatTitle] = useState("");
-  const [messageDraft, setMessageDraft] = useState("");
+  const [promptDraft, setPromptDraft] = useState("");
   const [memoryDraft, setMemoryDraft] = useState("");
   const [memoryType, setMemoryType] = useState<ProjectMemoryEntry["type"]>("note");
   const [editingMemoryId, setEditingMemoryId] = useState("");
@@ -197,7 +197,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       await api(path, { method: "POST" });
       await refreshExplore();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Explore action failed.");
+      setError(cause instanceof Error ? cause.prompt : "Explore action failed.");
     } finally { setBusy(false); }
   }
 
@@ -215,7 +215,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setReplyTarget(null);
       await refreshExplore();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not post comment.");
+      setError(cause instanceof Error ? cause.prompt : "Could not post comment.");
     } finally { setBusy(false); }
   }
 
@@ -235,7 +235,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       await api(`/api/v1/explore/reports/${reportId}/resolve`, { method: "POST", body: JSON.stringify({ action }) });
       await loadModerationReports(listingId);
       await refreshExplore();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not resolve report."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.prompt : "Could not resolve report."); }
     finally { setBusy(false); }
   }
 
@@ -246,7 +246,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       await api("/api/v1/explore/reports", { method: "POST", body: JSON.stringify({ listing_id: reportTarget.listingId, comment_id: reportTarget.commentId ?? null, reason: reportReason.trim() }) });
       setReportTarget(null);
       setReportReason("");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not submit report."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.prompt : "Could not submit report."); }
     finally { setBusy(false); }
   }
 
@@ -258,7 +258,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setEditingCommentId(null);
       setEditingCommentDraft("");
       await refreshExplore();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not edit comment."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.prompt : "Could not edit comment."); }
     finally { setBusy(false); }
   }
 
@@ -267,7 +267,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     try {
       await api(`/api/v1/explore/comments/${commentId}`, { method: "DELETE" });
       await refreshExplore();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not delete comment."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.prompt : "Could not delete comment."); }
     finally { setBusy(false); }
   }
 
@@ -276,7 +276,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     try {
       await api(`/api/v1/workspaces/${listing.workspace_id}/agents/${listing.agent_id}/publish`, { method: "DELETE" });
       await refreshExplore();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not unpublish agent."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.prompt : "Could not unpublish agent."); }
     finally { setBusy(false); }
   }
 
@@ -294,7 +294,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setActiveView("chats");
       setMobileConversationOpen(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not start a session.");
+      setError(cause instanceof Error ? cause.prompt : "Could not start a session.");
     } finally { setBusy(false); }
   }
 
@@ -303,12 +303,12 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   }, []);
 
   useEffect(() => {
-    void refreshWorkspaces().catch(cause => setError(cause instanceof Error ? cause.message : "Could not reach the Axon API."));
+    void refreshWorkspaces().catch(cause => setError(cause instanceof Error ? cause.prompt : "Could not reach the Axon API."));
   }, []);
 
   useEffect(() => {
     if (activeView === "explore") {
-      void refreshExplore().catch(cause => setError(cause instanceof Error ? cause.message : "Could not load Explore."));
+      void refreshExplore().catch(cause => setError(cause instanceof Error ? cause.prompt : "Could not load Explore."));
     }
   }, [activeView, exploreSort, selected?.id]);
 
@@ -320,7 +320,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setQoinNotice("");
       setSelectedArtifactIds([]);
       setResponseDrafts({});
-      void refreshWorkspace(selected).catch(cause => setError(cause instanceof Error ? cause.message : "Could not load workspace."));
+      void refreshWorkspace(selected).catch(cause => setError(cause instanceof Error ? cause.prompt : "Could not load workspace."));
     } else {
       setAgents([]);
       setArtifacts([]);
@@ -337,7 +337,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         api<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`)
       ]))
       .then(([detail, items]) => { setChatDetail(detail); setChats(items); })
-      .catch(cause => setError(cause instanceof Error ? cause.message : "Could not load session."));
+      .catch(cause => setError(cause instanceof Error ? cause.prompt : "Could not load session."));
   }, [selected?.id, activeChat]);
 
   async function createChat(event: FormEvent<HTMLFormElement>) {
@@ -362,7 +362,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setChatDetail(null);
       setActiveChat(remaining[0]?.id ?? "");
       setMobileConversationOpen(false);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not archive session."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.prompt : "Could not archive session."); }
     finally { setBusy(false); }
   }
 
@@ -372,7 +372,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       await api(`/api/v1/workspaces/${selected.id}/chats/${chatId}/like`, { method: "POST" });
       setChats(await api<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not update session reaction.");
+      setError(cause instanceof Error ? cause.prompt : "Could not update session reaction.");
     }
   }
 
@@ -384,17 +384,17 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       await refreshWorkspace(selected);
       if (activeChat === chatId) setMobileConversationOpen(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not archive session.");
+      setError(cause instanceof Error ? cause.prompt : "Could not archive session.");
     } finally { setBusy(false); }
   }
 
-  async function sendChatMessage(event: FormEvent<HTMLFormElement>) {
-    if (!selected || !activeChat || !messageDraft.trim()) return;
+  async function sendChatPrompt(event: FormEvent<HTMLFormElement>) {
+    if (!selected || !activeChat || !promptDraft.trim()) return;
     await runForm(event, async () => {
-      await api<ChatMessage>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}/messages`, {
-        method: "POST", body: JSON.stringify({ role: "user", content: messageDraft.trim() })
+      await api<ChatPrompt>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}/prompts`, {
+        method: "POST", body: JSON.stringify({ role: "user", content: promptDraft.trim() })
       });
-      setMessageDraft("");
+      setPromptDraft("");
       const [detail, chatItems] = await Promise.all([
         api<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`),
         api<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`)
@@ -425,7 +425,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setEditingMemoryId("");
       setEditMemoryDraft("");
       setChatDetail(await api<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`));
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Memory edit failed."); }
+    } catch (cause) { setError(cause instanceof Error ? cause.prompt : "Memory edit failed."); }
     finally { setBusy(false); }
   }
 
@@ -437,7 +437,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       await api<ProjectMemoryEntry>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}/memory/${entry.id}/${action}`, { method: "POST" });
       setChatDetail(await api<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Memory update failed.");
+      setError(cause instanceof Error ? cause.prompt : "Memory update failed.");
     } finally { setBusy(false); }
   }
 
@@ -457,31 +457,31 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setProgressiveContext(null);
     } catch (cause) {
       setQoinVector(null);
-      setError(cause instanceof Error ? cause.message : "Could not load the Qoin market vector.");
+      setError(cause instanceof Error ? cause.prompt : "Could not load the Qoin market vector.");
     } finally { setBusy(false); }
   }
 
-  async function indexChatMessageWithQoin(message: ChatMessage) {
+  async function indexChatPromptWithQoin(prompt: ChatPrompt) {
     if (!selected || !activeChat || !qoinSymbol.trim()) return;
     setBusy(true);
     setError("");
     try {
-      const receipt = await api<QoinChatMessageIndexReceipt>(
-        `/api/v1/workspaces/${selected.id}/chats/${activeChat}/messages/${message.id}/qoin-index`,
+      const receipt = await api<QoinChatPromptIndexReceipt>(
+        `/api/v1/workspaces/${selected.id}/chats/${activeChat}/prompts/${prompt.id}/qoin-index`,
         {
           method: "POST",
           body: JSON.stringify({
             symbol: qoinSymbol.trim(),
-            tags: [message.role, "source:chat_message", `symbol:${qoinSymbol.trim().toUpperCase()}`],
+            tags: [prompt.role, "source:chat_prompt", `symbol:${qoinSymbol.trim().toUpperCase()}`],
             dependency_ids: [],
             evidence_score: 0.5
           })
         }
       );
-      setQoinNotice(`Indexed session message ${receipt.message_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()} · available after the next hourly epoch.`);
+      setQoinNotice(`Indexed session turn ${receipt.prompt_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()} · available after the next hourly epoch.`);
       setError("");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not index this session message with Qoin.");
+      setError(cause instanceof Error ? cause.prompt : "Could not index this session prompt with Qoin.");
     } finally { setBusy(false); }
   }
 
@@ -507,7 +507,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setQoinNotice(`Indexed ${receipt.memory_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()} · available after the next hourly epoch.`);
       setError("");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not index this memory with Qoin.");
+      setError(cause instanceof Error ? cause.prompt : "Could not index this memory with Qoin.");
     } finally { setBusy(false); }
   }
 
@@ -536,7 +536,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setHandover(result);
       setProgressiveContext(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not prepare agent memory context.");
+      setError(cause instanceof Error ? cause.prompt : "Could not prepare agent memory context.");
     } finally { setBusy(false); }
   }
 
@@ -560,7 +560,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       );
       setProgressiveContext(result);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not retrieve additional context.");
+      setError(cause instanceof Error ? cause.prompt : "Could not retrieve additional context.");
     } finally { setBusy(false); }
   }
 
@@ -572,7 +572,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     try {
       await action();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The request failed.");
+      setError(cause instanceof Error ? cause.prompt : "The request failed.");
     } finally {
       setBusy(false);
     }
@@ -650,7 +650,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       });
       await refreshWorkspace(selected);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Task update failed.");
+      setError(cause instanceof Error ? cause.prompt : "Task update failed.");
     } finally {
       setBusy(false);
     }
@@ -674,7 +674,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setResponseDrafts(current => ({ ...current, [task.id]: "" }));
       await refreshWorkspace(selected);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Response submission failed.");
+      setError(cause instanceof Error ? cause.prompt : "Response submission failed.");
     } finally {
       setBusy(false);
     }
@@ -702,7 +702,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         setChatDetail(await api<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`));
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Agent execution failed.");
+      setError(cause instanceof Error ? cause.prompt : "Agent execution failed.");
       await refreshWorkspace(selected);
     } finally {
       setBusy(false);
@@ -724,31 +724,31 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       <aside className="rail profile-sidebar">
         <div className="profile-identity">
           <div className="profile-avatar">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0, 1).toUpperCase()}</div>
-          <div className="profile-identity-copy"><strong>{user.displayName || user.email || "Axon user"}</strong><small>{selected?.name ?? "Personal Hub"}</small></div>
+          <div className="profile-identity-copy"><strong>{user.displayName || user.email || "Axon user"}</strong><small>{selected?.name ?? "Personal workspace"}</small></div>
           <span className="profile-presence" title="Signed in" />
         </div>
-        <div className="profile-section"><span className="profile-section-label">HUB OVERVIEW</span><div className="profile-stat-grid">
+        <div className="profile-section"><span className="profile-section-label">WORKSPACE OVERVIEW</span><div className="profile-stat-grid">
           <div><strong>{agents.length}</strong><small>Agents</small></div><div><strong>{chats.length}</strong><small>Sessions</small></div>
           <div><strong>{tasks.filter(task => task.status === "in_progress").length}</strong><small>Running</small></div><div><strong>{tasks.filter(task => task.status === "completed").length}</strong><small>Completed</small></div>
           <div><strong>{tasks.filter(task => task.status === "offered" || task.status === "acknowledged").length}</strong><small>Queued</small></div><div><strong>{artifacts.length}</strong><small>Artifacts</small></div>
         </div></div>
-        <div className="profile-section"><span className="profile-section-label">MEMORY & CONTEXT</span><div className="profile-metric"><span>Selected session approved memory entries</span><strong>{(chatDetail?.memory.filter(entry => entry.status === "approved").length ?? 0)}</strong></div><div className="profile-metric"><span>Selected session resume brief</span><strong>{(chatDetail?.resume_brief ? 1 : 0)}</strong></div><div className="profile-metric"><span>Messages across active sessions</span><strong>{chats.reduce((total, chat) => total + chat.message_count, 0)}</strong></div></div>
+        <div className="profile-section"><span className="profile-section-label">MEMORY & CONTEXT</span><div className="profile-metric"><span>Selected session approved memory entries</span><strong>{(chatDetail?.memory.filter(entry => entry.status === "approved").length ?? 0)}</strong></div><div className="profile-metric"><span>Selected session resume brief</span><strong>{(chatDetail?.resume_brief ? 1 : 0)}</strong></div><div className="profile-metric"><span>Session turns across active sessions</span><strong>{chats.reduce((total, chat) => total + chat.prompt_count, 0)}</strong></div></div>
         <div className="profile-section"><span className="profile-section-label">EXECUTION & HEALTH</span><div className="profile-metric"><span>Awaiting review</span><strong>{tasks.filter(task => task.status === "review_required" || task.status === "submitted").length}</strong></div><div className="profile-metric"><span>Rejected / cancelled</span><strong>{tasks.filter(task => task.status === "rejected" || task.status === "cancelled").length}</strong></div><div className="profile-metric"><span>API status</span><strong>{health?.status === "ok" ? "Connected" : "Unavailable"}</strong></div><div className="profile-metric"><span>Storage</span><strong>{health?.storage === "persistent" ? "Persistent" : health?.storage ?? "Unknown"}</strong></div></div>
-        <div className="profile-section"><span className="profile-section-label">HUB RESOURCES</span><div className="profile-metric"><span>Captured artifacts</span><strong>{artifacts.length}</strong></div><div className="profile-metric"><span>Total tasks</span><strong>{tasks.length}</strong></div><div className="profile-metric"><span>Active sessions</span><strong>{chats.length} active</strong></div></div>
+        <div className="profile-section"><span className="profile-section-label">WORKSPACE RESOURCES</span><div className="profile-metric"><span>Captured artifacts</span><strong>{artifacts.length}</strong></div><div className="profile-metric"><span>Total tasks</span><strong>{tasks.length}</strong></div><div className="profile-metric"><span>Active sessions</span><strong>{chats.length} active</strong></div></div>
         <div className="profile-section profile-activity"><span className="profile-section-label">RECENT WORK</span>{tasks.slice().sort((a,b)=>b.updated_at.localeCompare(a.updated_at)).slice(0,4).map(task => <div className="profile-activity-row" key={task.id}><span className={`activity-dot activity-${task.status}`} /><div><strong>{task.title}</strong><small>{task.status.replaceAll("_"," ")} · {new Date(task.updated_at).toLocaleDateString()}</small></div></div>)}{tasks.length === 0 && <p className="profile-empty">Task activity will appear here as work is assigned.</p>}</div>
-        <div className="profile-bottom"><span>AXON HUB</span><small>Private · Firebase authenticated</small></div>
+        <div className="profile-bottom"><span>AXON WORKSPACE</span><small>Private · Firebase authenticated</small></div>
       </aside>
       <section className="content">
         <header className="topbar">
-          <div className="topbar-brand"><span className="brand-mark">A</span><div><p className="eyebrow">AXON HUB</p><h1>{selected?.name ?? "Your Hub"}</h1></div></div>
-          <div className="topbar-actions">{selected && <button type="button" className="topbar-action hub-switch" onClick={() => {setSelected(null);setActiveView("chats");}}>All Hubs</button>}<div className="notification-anchor"><button type="button" className="notification-bell" onClick={() => {setNotificationOpen(value => !value);void refreshNotifications();}} aria-label="Notifications">🔔{notificationUnread > 0 && <span>{notificationUnread}</span>}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-header"><strong>Notifications</strong><button type="button" onClick={() => void markAllNotificationsRead()}>Mark all read</button></div>{notifications.map(item => <button type="button" className={item.read_at ? "notification-item read" : "notification-item"} key={item.id} onClick={() => void openNotification(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString()}</small></button>)}{notifications.length === 0 && <p className="notification-empty">You are all caught up.</p>}</div>}</div><div className="status"><span className={health?.status === "ok" ? "pulse online" : "pulse"} />{health?.status === "ok" ? "Connected" : "API unavailable"}</div><div className="app-menu-anchor"><button type="button" className="topbar-action" onClick={() => setMenuOpen(value => !value)} aria-expanded={menuOpen}>Menu</button>{menuOpen && <div className="app-menu"><button type="button" onClick={() => {setActiveView("chats");setMobileConversationOpen(false);setMenuOpen(false);}}>Sessions</button><button type="button" onClick={() => {setActiveView("explore");setMobileConversationOpen(false);setMenuOpen(false);}}>Explore agents</button><button type="button" onClick={() => {setProfileOpen(true);setMenuOpen(false);}}>Profile & workspace</button></div>}</div><button type="button" className="topbar-profile" onClick={() => setProfileOpen(true)} aria-label="Open profile">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</button></div>
+          <div className="topbar-brand"><span className="brand-mark">A</span><div><p className="eyebrow">AXON WORKSPACE</p><h1>{selected?.name ?? "Your workspace"}</h1></div></div>
+          <div className="topbar-actions">{selected && <button type="button" className="topbar-action hub-switch" onClick={() => {setSelected(null);setActiveView("chats");}}>All workspaces</button>}<div className="notification-anchor"><button type="button" className="notification-bell" onClick={() => {setNotificationOpen(value => !value);void refreshNotifications();}} aria-label="Notifications">🔔{notificationUnread > 0 && <span>{notificationUnread}</span>}</button>{notificationOpen && <div className="notification-panel"><div className="notification-panel-header"><strong>Notifications</strong><button type="button" onClick={() => void markAllNotificationsRead()}>Mark all read</button></div>{notifications.map(item => <button type="button" className={item.read_at ? "notification-item read" : "notification-item"} key={item.id} onClick={() => void openNotification(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString()}</small></button>)}{notifications.length === 0 && <p className="notification-empty">You are all caught up.</p>}</div>}</div><div className="status"><span className={health?.status === "ok" ? "pulse online" : "pulse"} />{health?.status === "ok" ? "Connected" : "API unavailable"}</div><div className="app-menu-anchor"><button type="button" className="topbar-action" onClick={() => setMenuOpen(value => !value)} aria-expanded={menuOpen}>Menu</button>{menuOpen && <div className="app-menu"><button type="button" onClick={() => {setActiveView("chats");setMobileConversationOpen(false);setMenuOpen(false);}}>Sessions</button><button type="button" onClick={() => {setActiveView("explore");setMobileConversationOpen(false);setMenuOpen(false);}}>Explore agents</button><button type="button" onClick={() => {setProfileOpen(true);setMenuOpen(false);}}>Profile & workspace</button></div>}</div><button type="button" className="topbar-profile" onClick={() => setProfileOpen(true)} aria-label="Open profile">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</button></div>
         </header>
 
         {!selected ? (
           <>
             <section className="intro">
               <div>
-                <span className="kicker">YOUR AXON HUB</span>
+                <span className="kicker">YOUR AXON WORKSPACE</span>
                 <h2>Give every agent the context it needs.</h2>
                 <p>Capture work once. Hand it off with its evidence, decisions and history intact.</p>
               </div>
@@ -760,7 +760,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               </div>
             </section>
             <section className="section-heading">
-              <div><span className="kicker">START HERE</span><h2>Your Hubs</h2></div>
+              <div><span className="kicker">START HERE</span><h2>Your workspaces</h2></div>
               <span className="count">{workspaces.length.toString().padStart(2, "0")} WORKSPACES</span>
             </section>
             <form className="create-card" onSubmit={createWorkspace}>
@@ -770,7 +770,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 <span>Start with a project, a problem, or a team of agents.</span>
               </div>
               <input id="workspace-name" value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Funspot engineering" maxLength={120} required />
-              <button disabled={!name.trim() || busy}>{busy ? "Creating…" : "Create Hub"}</button>
+              <button disabled={!name.trim() || busy}>{busy ? "Creating…" : "Create workspace"}</button>
             </form>
             <div className="workspace-grid">
               {workspaces.map(workspace => (
@@ -793,7 +793,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         ) : (
           <>
             <div className="desktop-home-tabs"><HomeScreen activeTab={activeView} unreadCount={chats.reduce((total, chat) => total + chat.unread_count, 0)} onTabChange={tab => { setActiveView(tab); setMobileConversationOpen(false); }} /></div>
-            {activeView === "chats" ? <ChatsScreen><section className="panel chat-panel">
+            {activeView === "chats" ? <SessionPanel><section className="panel chat-panel">
               <div className="panel-heading"><div><span className="kicker">04 · PROJECT SESSIONS</span><h3>Sessions</h3></div><span className="count">{chats.length} SESSIONS</span></div>
               <div className={mobileConversationOpen ? "chat-layout mobile-conversation-open" : "chat-layout"}>
                 <aside className="chat-sidebar">
@@ -806,17 +806,17 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                     {chats.map(chat => {
                       const linkedTasks = tasks.filter(task => task.source_chat_id === chat.id);
                       const progress = linkedTasks.length ? Math.round(linkedTasks.reduce((sum, task) => sum + taskProgress(task.status), 0) / linkedTasks.length) : null;
-                      return <ChatCard key={chat.id} chat={chat} linkedTaskCount={linkedTasks.length} progress={progress} active={activeChat === chat.id} onOpen={() => { setActiveChat(chat.id); setMobileConversationOpen(true); }} onLike={() => void toggleChatLike(chat.id)} onArchive={() => void archiveChatById(chat.id)} />;
+                      return <SessionCard key={chat.id} chat={chat} linkedTaskCount={linkedTasks.length} progress={progress} active={activeChat === chat.id} onOpen={() => { setActiveChat(chat.id); setMobileConversationOpen(true); }} onLike={() => void toggleChatLike(chat.id)} onArchive={() => void archiveChatById(chat.id)} />;
                     })}
                     {chats.length === 0 && <div className="chat-list-empty"><span className="chat-empty-mark">＋</span><strong>No sessions yet</strong><p>Create a session to start working and capture project discussions and decisions.</p></div>}
                   </div>
                 </aside>
                 <div className="chat-main">
                   {!chatDetail ? <div className="chat-welcome"><span className="chat-welcome-mark">✳</span><span className="kicker">SESSIONS</span><h3>Start a session.</h3><p>Choose a session or create one to start a session, exchange updates, record decisions and build shared context for your agents.</p><div className="chat-welcome-note"><strong>{selected.name}</strong><span>Shared project Hub</span></div></div> : <>
-                    <div className="chat-mobile-back"><button type="button" onClick={() => setMobileConversationOpen(false)}>← Sessions</button></div><div className="chat-conversation-heading"><div><span className="kicker">SESSION · {selected.name}</span><h3>{chatDetail.chat.title}</h3><p>{chatDetail.messages.length} {chatDetail.messages.length === 1 ? "message" : "messages"} · Updated {new Date(chatDetail.chat.updated_at).toLocaleString()}</p></div><span className="chat-live-mark">●</span></div>
-                    <div className="resume-brief"><div className="panel-heading"><span className="kicker">RESUME BRIEF · APPROVED MEMORY ONLY</span><button type="button" className="secondary" disabled={busy} onClick={() => void archiveChat()}>Archive session</button></div><p>{chatDetail.resume_brief || "No context yet. Add messages and approve useful memory to build a concise handoff."}</p></div>
-                    <div className="chat-messages">{chatDetail.messages.map(message => <article className={`chat-message message-${message.role}`} key={message.id}><div className="chat-message-heading"><strong>{message.role === "user" ? "You" : message.role === "assistant" ? "Axon assistant" : "System"}</strong><small>{message.answered_by ? ` · ${message.answered_by} · ` : " · "}{new Date(message.created_at).toLocaleString()}</small></div><p>{message.content}</p><button type="button" className="secondary qoin-message-index" disabled={busy} onClick={() => void indexChatMessageWithQoin(message)}>Index with Qoin</button></article>)}{chatDetail.messages.length === 0 && <div className="chat-first-message"><span>✳</span><h4>{chatDetail.chat.title}</h4><p>This session is ready. Send the first message to give your agents a shared starting point.</p></div>}</div>
-                    <form className="chat-compose" onSubmit={sendChatMessage}><textarea value={messageDraft} onChange={event => setMessageDraft(event.target.value)} rows={3} maxLength={256000} placeholder="Write a message to this project session…" required /><button disabled={!messageDraft.trim() || busy}>Send message</button></form>
+                    <div className="chat-mobile-back"><button type="button" onClick={() => setMobileConversationOpen(false)}>← Sessions</button></div><div className="chat-conversation-heading"><div><span className="kicker">SESSION · {selected.name}</span><h3>{chatDetail.chat.title}</h3><p>{chatDetail.prompts.length} {chatDetail.prompts.length === 1 ? "prompt" : "prompts"} · Updated {new Date(chatDetail.chat.updated_at).toLocaleString()}</p></div><span className="chat-live-mark">●</span></div>
+                    <div className="resume-brief"><div className="panel-heading"><span className="kicker">RESUME BRIEF · APPROVED MEMORY ONLY</span><button type="button" className="secondary" disabled={busy} onClick={() => void archiveChat()}>Archive session</button></div><p>{chatDetail.resume_brief || "No context yet. Add turns and approve useful memory to build a concise handoff."}</p></div>
+                    <div className="chat-prompts">{chatDetail.prompts.map(prompt => <article className={`chat-prompt prompt-${prompt.role}`} key={prompt.id}><div className="chat-prompt-heading"><strong>{prompt.role === "user" ? "You" : prompt.role === "assistant" ? "Axon assistant" : "System"}</strong><small>{prompt.answered_by ? ` · ${prompt.answered_by} · ` : " · "}{new Date(prompt.created_at).toLocaleString()}</small></div><p>{prompt.content}</p><button type="button" className="secondary qoin-prompt-index" disabled={busy} onClick={() => void indexChatPromptWithQoin(prompt)}>Index with Qoin</button></article>)}{chatDetail.prompts.length === 0 && <div className="chat-first-prompt"><span>✳</span><h4>{chatDetail.chat.title}</h4><p>This session is ready. Send the first prompt to give your agents a shared starting point.</p></div>}</div>
+                    <form className="chat-compose" onSubmit={sendChatPrompt}><textarea value={promptDraft} onChange={event => setPromptDraft(event.target.value)} rows={3} maxLength={256000} placeholder="Write a prompt to this project session…" required /><button disabled={!promptDraft.trim() || busy}>Send prompt</button></form>
                     <div className="memory-section">
                       <div className="panel-heading"><div><span className="kicker">PROJECT MEMORY</span><h3>Review proposed knowledge</h3></div></div>
                       <form className="memory-compose" onSubmit={proposeMemory}><select value={memoryType} onChange={event => setMemoryType(event.target.value as ProjectMemoryEntry["type"])}><option value="decision">Decision</option><option value="fact">Fact</option><option value="constraint">Constraint</option><option value="open_task">Open task</option><option value="note">Note</option></select><input value={memoryDraft} onChange={event => setMemoryDraft(event.target.value)} placeholder="Capture a decision, fact, constraint or open task…" maxLength={4000} required /><button disabled={!memoryDraft.trim() || busy}>Propose memory</button></form>
@@ -826,7 +826,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                   </>}
                 </div>
               </div>
-            </section></ChatsScreen> : <ExploreScreen><section className="panel explore-panel">
+            </section></SessionPanel> : <ExploreScreen><section className="panel explore-panel">
               <div className="panel-heading"><div><span className="kicker">PUBLIC AGENT DISCOVERY</span><h3>Explore agents</h3></div><label className="explore-sort">Sort <select value={exploreSort} onChange={event => setExploreSort(event.target.value as "recent" | "popular" | "discussed")}><option value="recent">Newest</option><option value="popular">Most liked</option><option value="discussed">Most discussed</option></select></label></div>
               <form className="explore-publish-form" onSubmit={publishExploreAgent}>
                 <strong>Publish one of your agents</strong>
@@ -997,7 +997,7 @@ function AuthGate() {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       }
     } catch (cause) {
-      setAuthError(cause instanceof Error ? cause.message : "Authentication failed.");
+      setAuthError(cause instanceof Error ? cause.prompt : "Authentication failed.");
     } finally { setWorking(false); }
   }
 
@@ -1005,7 +1005,7 @@ function AuthGate() {
     if (!auth?.currentUser) return;
     setWorking(true); setAuthError(""); setNotice("");
     try { await sendEmailVerification(auth.currentUser); setNotice("Verification email sent. Check your inbox and spam folder."); }
-    catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not send verification email."); }
+    catch (cause) { setAuthError(cause instanceof Error ? cause.prompt : "Could not send verification email."); }
     finally { setWorking(false); }
   }
 
@@ -1013,7 +1013,7 @@ function AuthGate() {
     if (!auth?.currentUser) return;
     setWorking(true); setAuthError("");
     try { await reload(auth.currentUser); setUser(auth.currentUser); if (!auth.currentUser.emailVerified) setAuthError("Your email is not verified yet. Open the link in the email we sent."); }
-    catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not refresh account status."); }
+    catch (cause) { setAuthError(cause instanceof Error ? cause.prompt : "Could not refresh account status."); }
     finally { setWorking(false); }
   }
 
@@ -1021,7 +1021,7 @@ function AuthGate() {
   if (!auth) return <main className="auth-shell"><section className="auth-card"><h1>Connect your Firebase project</h1><p>Set the VITE_FIREBASE_* environment variables and restart the web app.</p></section></main>;
   if (user && user.emailVerified) return <WorkspaceApp user={user} />;
   if (user) return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><span className="auth-mark">A</span><span>AXON</span></div><p className="eyebrow">ONE MORE STEP</p><h1>Verify your email</h1><p>We sent a verification link to <strong>{user.email}</strong>. Verify your address to secure your Axon account.</p>{notice && <p className="auth-notice" role="status">{notice}</p>}{authError && <p className="auth-error" role="alert">{authError}</p>}<button className="auth-primary" disabled={working} onClick={()=>void checkVerification()}>{working ? "Checking…" : "I’ve verified my email"}</button><button className="auth-secondary" disabled={working} onClick={()=>void resendVerification()}>Resend verification email</button><button className="auth-text-button" onClick={()=>{void signOut(auth);setNotice("");}}>Use another account</button></section></main>;
-  return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><span className="auth-mark">A</span><span>AXON</span></div><p className="eyebrow">YOUR WORK, IN ONE PLACE</p><h1>{mode === "create" ? "Create your account" : "Welcome back"}</h1><p className="auth-description">{mode === "create" ? "Create a secure account to bring your agents and work together." : "Sign in to continue where your agents left off."}</p><form className="auth-form" onSubmit={submit}><label htmlFor="auth-email">Email address</label><input id="auth-email" type="email" autoComplete="email" autoCapitalize="none" required value={email} onChange={e=>setEmail(e.target.value)}/><label htmlFor="auth-password">Password</label><div className="auth-password-wrap"><input id="auth-password" type={showPassword ? "text" : "password"} minLength={6} autoComplete={mode === "create" ? "new-password" : "current-password"} required value={password} onChange={e=>setPassword(e.target.value)}/><button type="button" className="auth-password-toggle" onClick={()=>setShowPassword(value=>!value)}>{showPassword ? "Hide" : "Show"}</button></div>{mode === "create" && <label className="terms-consent" htmlFor="auth-terms"><input id="auth-terms" type="checkbox" checked={termsAccepted} onChange={e=>{setTermsAccepted(e.target.checked);setAuthError("");}}/><span className="terms-consent-copy">I agree to the <strong>Terms &amp; Conditions</strong> and <strong>Privacy Policy</strong>.</span></label>}<button className="auth-primary" disabled={working || (mode === "create" && !termsAccepted)}>{working ? "Please wait…" : mode === "create" ? "Create account" : "Continue with email"}</button></form>{authError && <p className="auth-error" role="alert">{authError}</p>}{notice && <p className="auth-notice" role="status">{notice}</p>}{mode === "sign_in" && <button className="auth-text-button auth-forgot" disabled={working || !email.trim()} onClick={async()=>{setWorking(true);setAuthError("");setNotice("");try{await sendPasswordResetEmail(auth,email.trim());setNotice("Password reset link sent. Check your inbox.");}catch(cause){setAuthError(cause instanceof Error ? cause.message : "Could not send password reset email.");}finally{setWorking(false);}}}>Forgot password?</button>}<div className="auth-divider"><span> {mode === "create" ? "ALREADY HAVE AN ACCOUNT?" : "NEW TO AXON?"} </span></div><button className="auth-text-button" onClick={()=>{setMode(mode === "create" ? "sign_in" : "create");setAuthError("");setNotice("");}}>{mode === "create" ? "Sign in instead" : "Create an account"}</button><p className="auth-footnote">Secure access powered by Firebase Authentication.</p></section></main>;
+  return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><span className="auth-mark">A</span><span>AXON</span></div><p className="eyebrow">YOUR WORK, IN ONE PLACE</p><h1>{mode === "create" ? "Create your account" : "Welcome back"}</h1><p className="auth-description">{mode === "create" ? "Create a secure account to bring your agents and work together." : "Sign in to continue where your agents left off."}</p><form className="auth-form" onSubmit={submit}><label htmlFor="auth-email">Email address</label><input id="auth-email" type="email" autoComplete="email" autoCapitalize="none" required value={email} onChange={e=>setEmail(e.target.value)}/><label htmlFor="auth-password">Password</label><div className="auth-password-wrap"><input id="auth-password" type={showPassword ? "text" : "password"} minLength={6} autoComplete={mode === "create" ? "new-password" : "current-password"} required value={password} onChange={e=>setPassword(e.target.value)}/><button type="button" className="auth-password-toggle" onClick={()=>setShowPassword(value=>!value)}>{showPassword ? "Hide" : "Show"}</button></div>{mode === "create" && <label className="terms-consent" htmlFor="auth-terms"><input id="auth-terms" type="checkbox" checked={termsAccepted} onChange={e=>{setTermsAccepted(e.target.checked);setAuthError("");}}/><span className="terms-consent-copy">I agree to the <strong>Terms &amp; Conditions</strong> and <strong>Privacy Policy</strong>.</span></label>}<button className="auth-primary" disabled={working || (mode === "create" && !termsAccepted)}>{working ? "Please wait…" : mode === "create" ? "Create account" : "Continue with email"}</button></form>{authError && <p className="auth-error" role="alert">{authError}</p>}{notice && <p className="auth-notice" role="status">{notice}</p>}{mode === "sign_in" && <button className="auth-text-button auth-forgot" disabled={working || !email.trim()} onClick={async()=>{setWorking(true);setAuthError("");setNotice("");try{await sendPasswordResetEmail(auth,email.trim());setNotice("Password reset link sent. Check your inbox.");}catch(cause){setAuthError(cause instanceof Error ? cause.prompt : "Could not send password reset email.");}finally{setWorking(false);}}}>Forgot password?</button>}<div className="auth-divider"><span> {mode === "create" ? "ALREADY HAVE AN ACCOUNT?" : "NEW TO AXON?"} </span></div><button className="auth-text-button" onClick={()=>{setMode(mode === "create" ? "sign_in" : "create");setAuthError("");setNotice("");}}>{mode === "create" ? "Sign in instead" : "Create an account"}</button><p className="auth-footnote">Secure access powered by Firebase Authentication.</p></section></main>;
 }
 
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, sendEmailVerification, reload } from "firebase/auth";

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import WorkspaceView from "../views/WorkspaceView";
 import HomeScreen from "./HomeScreen";
-import ChatsScreen from "./ChatsScreen";
+import ChatsScreen from "./SessionPanel";
 import ExploreScreen from "./ExploreScreen";
 import NotificationsModal from "../modals/NotificationsModal";
 import ProfileModal from "../modals/ProfileModal";
-import ChatCard from "../views/ChatCard";
+import ChatCard from "../views/SessionCard";
 import {
   ActivityIndicator,
   Image,
@@ -21,7 +21,7 @@ import { StatusBar } from "expo-status-bar";
 import { axonTheme } from "../../../packages/theme/src";
 import { auth } from "../firebase";
 
-import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext, QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt, ExploreAgent, ExploreComment, ModerationReport, Notification, NotificationPage } from "../../../packages/contracts/src";
+import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatPrompt, ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext, QoinMemoryIndexReceipt, QoinChatPromptIndexReceipt, ExploreAgent, ExploreComment, ModerationReport, Notification, NotificationPage } from "../../../packages/contracts/src";
 
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_AXON_API_URL ?? "http://127.0.0.1:8080";
@@ -101,7 +101,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [activeChat, setActiveChat] = useState("");
   const [chatDetail, setChatDetail] = useState<ChatDetail | null>(null);
   const [chatTitle, setChatTitle] = useState("");
-  const [messageDraft, setMessageDraft] = useState("");
+  const [promptDraft, setPromptDraft] = useState("");
   const [memoryDraft, setMemoryDraft] = useState("");
   const [memoryType, setMemoryType] = useState<ProjectMemoryEntry["type"]>("note");
   const [editingMemoryId, setEditingMemoryId] = useState("");
@@ -153,7 +153,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   }
 
   useEffect(() => {
-    refreshHome().catch(cause => setError(cause instanceof Error ? cause.message : "API unavailable"));
+    refreshHome().catch(cause => setError(cause instanceof Error ? cause.prompt : "API unavailable"));
   }, []);
 
   async function refreshNotifications() {
@@ -310,7 +310,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
 
   useEffect(() => {
     if (activeTab === "explore") {
-      refreshExplore().catch(cause => setError(cause instanceof Error ? cause.message : "Could not load Explore."));
+      refreshExplore().catch(cause => setError(cause instanceof Error ? cause.prompt : "Could not load Explore."));
     }
   }, [activeTab, exploreSort, selected?.id]);
 
@@ -322,7 +322,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       setQoinNotice("");
       setSelectedArtifactIds([]);
       setResponseDrafts({});
-      refreshWorkspace(selected).catch(cause => setError(cause instanceof Error ? cause.message : "Could not load workspace"));
+      refreshWorkspace(selected).catch(cause => setError(cause instanceof Error ? cause.prompt : "Could not load workspace"));
     }
   }, [selected?.id]);
 
@@ -335,7 +335,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         request<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`)
       ]))
       .then(([detail, items]) => { setChatDetail(detail); setChats(items); })
-      .catch(cause => setError(cause instanceof Error ? cause.message : "Could not load session"));
+      .catch(cause => setError(cause instanceof Error ? cause.prompt : "Could not load session"));
   }, [selected?.id, activeChat, mobileChatOpen]);
 
   function createChat() {
@@ -365,13 +365,13 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     });
   }
 
-  function sendChatMessage() {
-    if (!selected || !activeChat || !messageDraft.trim()) return;
+  function sendChatPrompt() {
+    if (!selected || !activeChat || !promptDraft.trim()) return;
     void perform(async () => {
-      await request<ChatMessage>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}/messages`, {
-        method: "POST", body: JSON.stringify({ role: "user", content: messageDraft.trim() })
+      await request<ChatPrompt>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}/prompts`, {
+        method: "POST", body: JSON.stringify({ role: "user", content: promptDraft.trim() })
       });
-      setMessageDraft("");
+      setPromptDraft("");
       const [detail, items] = await Promise.all([
         request<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`),
         request<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`)
@@ -456,22 +456,22 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     });
   }
 
-  async function indexChatMessageWithQoin(message: ChatMessage) {
+  async function indexChatPromptWithQoin(prompt: ChatPrompt) {
     if (!selected || !activeChat || !qoinSymbol.trim()) return;
     await perform(async () => {
-      const receipt = await request<QoinChatMessageIndexReceipt>(
-        `/api/v1/workspaces/${selected.id}/chats/${activeChat}/messages/${message.id}/qoin-index`,
+      const receipt = await request<QoinChatPromptIndexReceipt>(
+        `/api/v1/workspaces/${selected.id}/chats/${activeChat}/prompts/${prompt.id}/qoin-index`,
         {
           method: "POST",
           body: JSON.stringify({
             symbol: qoinSymbol.trim(),
-            tags: [message.role, "source:chat_message", `symbol:${qoinSymbol.trim().toUpperCase()}`],
+            tags: [prompt.role, "source:chat_prompt", `symbol:${qoinSymbol.trim().toUpperCase()}`],
             dependency_ids: [],
             evidence_score: 0.5
           })
         }
       );
-      setQoinNotice(`Indexed session message ${receipt.message_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()}; available after the next hourly epoch.`);
+      setQoinNotice(`Indexed session turn ${receipt.prompt_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()}; available after the next hourly epoch.`);
     });
   }
 
@@ -548,7 +548,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     try {
       await action();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The request failed");
+      setError(cause instanceof Error ? cause.prompt : "The request failed");
     } finally {
       setBusy(false);
     }
@@ -682,7 +682,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               <View style={styles.panel}>
                 <View style={styles.profileIdentityMobile}>
                   {user.photoURL ? <Image source={{uri:user.photoURL}} style={styles.profileAvatarMobile}/> : <View style={styles.profileAvatarFallback}><Text style={styles.profileAvatarFallbackText}>{(user.displayName || user.email || "A").slice(0,1).toUpperCase()}</Text></View>}
-                  <View style={{flex:1}}><Text style={styles.rowTitle}>{user.displayName || user.email || "Axon user"}</Text><Text style={styles.rowMeta}>{selected?.name ?? "Personal Hub"}</Text></View>
+                  <View style={{flex:1}}><Text style={styles.rowTitle}>{user.displayName || user.email || "Axon user"}</Text><Text style={styles.rowMeta}>{selected?.name ?? "Personal workspace"}</Text></View>
                 </View>
                 <View style={styles.mobileStatsGrid}>
                   <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{agents.length}</Text><Text style={styles.mobileStatLabel}>Agents</Text></View>
@@ -695,7 +695,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 <View style={styles.profileMetricsMobile}>
                   <Text style={styles.fieldLabel}>MEMORY & CONTEXT</Text>
                   <Text style={styles.rowMeta}>Selected session approved memory entries · {(chatDetail?.memory.filter(entry=>entry.status==="approved").length ?? 0)}</Text>
-                  <Text style={styles.rowMeta}>Messages across active sessions · {chats.reduce((total,chat)=>total+chat.message_count,0)}</Text>
+                  <Text style={styles.rowMeta}>Session turns across active sessions · {chats.reduce((total,chat)=>total+chat.prompt_count,0)}</Text>
                   <Text style={styles.rowMeta}>Captured artifacts · {artifacts.length}</Text>
                   <Text style={styles.fieldLabel}>EXECUTION & HEALTH</Text>
                   <Text style={styles.rowMeta}>Awaiting review · {tasks.filter(task=>task.status==="review_required" || task.status==="submitted").length}</Text>
@@ -742,9 +742,9 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       <StatusBar style="light" />
       <View style={styles.mobileRoot}>
         <View style={styles.mobileHeader}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Open Hub menu" accessibilityState={{ expanded: menuOpen }} onPress={() => setMenuOpen(value => !value)} style={styles.mobileMenuButton}><Text style={styles.mobileMenuIcon}>☰</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open Session workspace menu" accessibilityState={{ expanded: menuOpen }} onPress={() => setMenuOpen(value => !value)} style={styles.mobileMenuButton}><Text style={styles.mobileMenuIcon}>☰</Text></Pressable>
           <View style={styles.mobileBrandMark}><Text style={styles.mobileBrandMarkText}>A</Text></View>
-          <View style={styles.mobileHeaderCopy}><Text style={styles.mobileBrand}>AXON</Text><Text style={styles.mobileWorkspace}>{selected?.name ?? "Your Hub"}</Text></View>
+          <View style={styles.mobileHeaderCopy}><Text style={styles.mobileBrand}>AXON</Text><Text style={styles.mobileWorkspace}>{selected?.name ?? "Your workspace"}</Text></View>
           <Pressable onPress={() => {setNotificationsOpen(true);void refreshNotifications();}} style={styles.mobileNotificationButton} accessibilityLabel="Notifications"><Text style={styles.mobileNotificationIcon}>🔔</Text>{notificationUnread > 0 ? <Text style={styles.mobileNotificationBadge}>{notificationUnread}</Text> : null}</Pressable>
           <Pressable onPress={() => setProfileOpen(true)} style={styles.mobileProfileButton} accessibilityLabel="Open profile">
             {user.photoURL ? <Image source={{uri:user.photoURL}} style={styles.mobileProfileImage}/> : <Text style={styles.mobileProfileInitial}>{(user.displayName || user.email || "A").slice(0,1).toUpperCase()}</Text>}
@@ -754,10 +754,10 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         <ScrollView contentContainerStyle={styles.mobileContent} keyboardShouldPersistTaps="handled">
           {!selected ? (
             <View style={styles.panel}>
-              <Text style={styles.panelTitle}>Create your Hub</Text>
-              <Text style={styles.muted}>Start a private Hub for your agents and conversations.</Text>
-              <TextInput value={workspaceName} onChangeText={setWorkspaceName} placeholder="Hub name" style={styles.input}/>
-              <ActionButton label="Create Hub" onPress={createWorkspace} disabled={!workspaceName.trim() || busy}/>
+              <Text style={styles.panelTitle}>Create your workspace</Text>
+              <Text style={styles.muted}>Start a private workspace for your agents and sessions.</Text>
+              <TextInput value={workspaceName} onChangeText={setWorkspaceName} placeholder="Workspace name" style={styles.input}/>
+              <ActionButton label="Create workspace" onPress={createWorkspace} disabled={!workspaceName.trim() || busy}/>
               {workspaces.map(workspace => <Pressable key={workspace.id} onPress={() => setSelected(workspace)} style={styles.workspaceRow}><Text style={styles.rowTitle}>{workspace.name}</Text></Pressable>)}
             </View>
           ) : (
@@ -789,14 +789,14 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
             </>
           ) : mobileChatOpen && chatDetail ? (
             <>
-              <View style={styles.screenHeading}><Pressable onPress={() => setMobileChatOpen(false)}><Text style={styles.back}>← Sessions</Text></Pressable><Text style={styles.screenTitle}>{chatDetail.chat.title}</Text><Text style={styles.description}>{chatDetail.messages.length} messages · Updated {new Date(chatDetail.chat.updated_at).toLocaleString()}</Text></View>
+              <View style={styles.screenHeading}><Pressable onPress={() => setMobileChatOpen(false)}><Text style={styles.back}>← Sessions</Text></Pressable><Text style={styles.screenTitle}>{chatDetail.chat.title}</Text><Text style={styles.description}>{chatDetail.prompts.length} turns · Updated {new Date(chatDetail.chat.updated_at).toLocaleString()}</Text></View>
               <View style={styles.panel}>
                 <View style={styles.chatAgentHeader}><View style={styles.exploreAvatar}><Text style={styles.exploreAvatarText}>A</Text></View><View style={{flex:1}}><Text style={styles.rowTitle}>{chatDetail.chat.title}</Text><Text style={styles.rowMeta}>Session</Text></View><Pressable onPress={archiveChat}><Text style={styles.back}>Archive</Text></Pressable></View>
                 <View style={styles.resumeBriefMobile}><Text style={styles.fieldLabel}>APPROVED MEMORY · RESUME BRIEF</Text><Text style={styles.rowMeta}>{chatDetail.resume_brief || "No approved context yet."}</Text></View>
-                {chatDetail.messages.map(message => <View key={message.id} style={[styles.messageBubbleMobile,message.role==="user" && styles.userMessageBubble]}><Text style={styles.messageSenderMobile}>{message.role === "user" ? "You" : message.role === "assistant" ? (message.answered_by || "Agent") : "System"} · {new Date(message.created_at).toLocaleString()}</Text><Text style={styles.messageTextMobile}>{message.content}</Text><ActionButton label="Index with Qoin" onPress={() => indexChatMessageWithQoin(message)} disabled={busy} secondary/></View>)}
-                {chatDetail.messages.length === 0 ? <Text style={styles.muted}>No messages yet. Send the first message to begin.</Text> : null}
-                <TextInput value={messageDraft} onChangeText={setMessageDraft} placeholder="Write a message…" style={[styles.input,styles.multiline]} multiline/>
-                <ActionButton label="Send message" onPress={sendChatMessage} disabled={!messageDraft.trim() || busy}/>
+                {chatDetail.prompts.map(prompt => <View key={prompt.id} style={[styles.promptBubbleMobile,prompt.role==="user" && styles.userPromptBubble]}><Text style={styles.promptSenderMobile}>{prompt.role === "user" ? "You" : prompt.role === "assistant" ? (prompt.answered_by || "Agent") : "System"} · {new Date(prompt.created_at).toLocaleString()}</Text><Text style={styles.promptTextMobile}>{prompt.content}</Text><ActionButton label="Index with Qoin" onPress={() => indexChatPromptWithQoin(prompt)} disabled={busy} secondary/></View>)}
+                {chatDetail.prompts.length === 0 ? <Text style={styles.muted}>No activity yet. Prompt Axon to begin.</Text> : null}
+                <TextInput value={promptDraft} onChangeText={setPromptDraft} placeholder="Prompt Axon…" style={[styles.input,styles.multiline]} multiline/>
+                <ActionButton label="Send prompt" onPress={sendChatPrompt} disabled={!promptDraft.trim() || busy}/>
                 <Text style={styles.fieldLabel}>PROJECT MEMORY</Text>
                 <TextInput value={memoryDraft} onChangeText={setMemoryDraft} placeholder="Propose a decision, fact or constraint…" style={[styles.input,styles.multiline]} multiline maxLength={4000}/>
                 <View style={styles.memoryTypeRow}>{(["decision","fact","constraint","open_task","note"] as const).map(kind => <Pressable key={kind} onPress={() => setMemoryType(kind)} style={[styles.memoryTypeChip,memoryType===kind && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{kind.replaceAll("_"," ")}</Text></Pressable>)}</View>
@@ -805,26 +805,26 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               </View>
             </ExploreScreen>
           ) : (
-            <ChatsScreen>
-              <View style={styles.screenHeading}><Text style={styles.eyebrow}>PRIVATE HUB</Text><Text style={styles.screenTitle}>Sessions</Text><Text style={styles.description}>Sessions, agent work and project context in one place.</Text></View>
+            <SessionPanel>
+              <View style={styles.screenHeading}><Text style={styles.eyebrow}>PRIVATE WORKSPACE</Text><Text style={styles.screenTitle}>Sessions</Text><Text style={styles.description}>Sessions, agent work and project context in one place.</Text></View>
               <View style={styles.newChatRow}><TextInput value={chatTitle} onChangeText={setChatTitle} placeholder="Start a new session…" style={[styles.input,styles.newChatInput]} maxLength={160}/><ActionButton label="＋" onPress={createChat} disabled={!chatTitle.trim() || busy}/></View>
               {chats.map(chat => {
                 const linkedTasks = tasks.filter(task => task.source_chat_id === chat.id);
                 const progress = linkedTasks.length ? Math.round(linkedTasks.reduce((sum, task) => sum + taskProgress(task.status), 0) / linkedTasks.length) : null;
-                return <ChatCard key={chat.id} chat={chat} linkedTaskCount={linkedTasks.length} progress={progress} styles={styles} onOpen={() => { setActiveChat(chat.id); setMobileChatOpen(true); }} onLike={() => toggleChatLike(chat.id)} onArchive={() => archiveChatById(chat.id)} />;
+                return <SessionCard key={chat.id} chat={chat} linkedTaskCount={linkedTasks.length} progress={progress} styles={styles} onOpen={() => { setActiveChat(chat.id); setMobileChatOpen(true); }} onLike={() => toggleChatLike(chat.id)} onArchive={() => archiveChatById(chat.id)} />;
               })}
               {chats.length === 0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No sessions yet</Text><Text style={styles.muted}>Create your first session above to open a session.</Text></View> : null}
-            </ChatsScreen>
+            </SessionPanel>
             )}
             </>
           )}
         </ScrollView>
 
-        {menuOpen ? <View style={styles.mobileMenu} accessibilityLabel="Hub menu">
+        {menuOpen ? <View style={styles.mobileMenu} accessibilityLabel="Session workspace menu">
           <Pressable style={styles.mobileMenuItem} onPress={() => { setActiveTab("chats"); setMobileChatOpen(false); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Sessions</Text></Pressable>
           <Pressable style={styles.mobileMenuItem} onPress={() => { setActiveTab("explore"); setMobileChatOpen(false); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Explore agents</Text></Pressable>
-          <Pressable style={styles.mobileMenuItem} onPress={() => { setProfileOpen(true); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Profile & Hub settings</Text></Pressable>
-          <Pressable style={styles.mobileMenuItem} onPress={() => { setSelected(null); setActiveTab("chats"); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>All Hubs</Text></Pressable>
+          <Pressable style={styles.mobileMenuItem} onPress={() => { setProfileOpen(true); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Profile & workspace settings</Text></Pressable>
+          <Pressable style={styles.mobileMenuItem} onPress={() => { setSelected(null); setActiveTab("chats"); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>All workspaces</Text></Pressable>
           <Pressable style={styles.mobileMenuItem} onPress={() => { setMenuOpen(false); if (auth) void signOut(auth); }}><Text style={[styles.mobileMenuItemText, { color: "#F0A0A0" }]}>Sign out</Text></Pressable>
         </View> : null}
         {selected ? <HomeScreen activeTab={activeTab} unreadCount={chats.reduce((total, chat) => total + chat.unread_count, 0)} onTabChange={tab => { setActiveTab(tab); setMobileChatOpen(false); }} /> : null}
@@ -991,10 +991,10 @@ const styles = StyleSheet.create({
   exploreMeta: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   chatAgentHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
   resumeBriefMobile: { padding: 12, borderRadius: 12, backgroundColor: "#17271D", marginBottom: 12 },
-  messageBubbleMobile: { padding: 13, borderRadius: 14, backgroundColor: "#17271D", marginBottom: 10, gap: 7 },
-  userMessageBubble: { backgroundColor: "#244B33", marginLeft: 18 },
-  messageSenderMobile: { color: "#9DE4B0", fontSize: 9, fontWeight: "700" },
-  messageTextMobile: { color: "#E7F6EB", fontSize: 12, lineHeight: 19 },
+  promptBubbleMobile: { padding: 13, borderRadius: 14, backgroundColor: "#17271D", marginBottom: 10, gap: 7 },
+  userPromptBubble: { backgroundColor: "#244B33", marginLeft: 18 },
+  promptSenderMobile: { color: "#9DE4B0", fontSize: 9, fontWeight: "700" },
+  promptTextMobile: { color: "#E7F6EB", fontSize: 12, lineHeight: 19 },
   memoryTypeRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 8 },
   memoryTypeChip: { paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, backgroundColor: "#17271D" },
   newChatRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 13 },
@@ -1048,7 +1048,7 @@ function AuthGate() {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       }
     } catch (cause) {
-      setAuthError(cause instanceof Error ? cause.message : "Authentication failed.");
+      setAuthError(cause instanceof Error ? cause.prompt : "Authentication failed.");
     } finally { setWorking(false); }
   }
 
@@ -1056,7 +1056,7 @@ function AuthGate() {
     if (!auth?.currentUser) return;
     setWorking(true); setAuthError(""); setNotice("");
     try { await sendEmailVerification(auth.currentUser); setNotice("Verification email sent. Check your inbox and spam folder."); }
-    catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not send verification email."); }
+    catch (cause) { setAuthError(cause instanceof Error ? cause.prompt : "Could not send verification email."); }
     finally { setWorking(false); }
   }
 
@@ -1064,7 +1064,7 @@ function AuthGate() {
     if (!auth?.currentUser) return;
     setWorking(true); setAuthError("");
     try { await reload(auth.currentUser); setUser(auth.currentUser); if (!auth.currentUser.emailVerified) setAuthError("Your email is not verified yet. Open the link in the email we sent."); }
-    catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not refresh account status."); }
+    catch (cause) { setAuthError(cause instanceof Error ? cause.prompt : "Could not refresh account status."); }
     finally { setWorking(false); }
   }
 
@@ -1072,7 +1072,7 @@ function AuthGate() {
   if (!auth) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><Text style={styles.authTitle}>Connect your Firebase project</Text><Text style={styles.description}>Set the EXPO_PUBLIC_FIREBASE_* variables and restart the app.</Text></View></SafeAreaView>;
   if (user && user.emailVerified) return <WorkspaceApp user={user}/>;
   if (user) return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.authEyebrow}>ONE MORE STEP</Text><Text style={styles.authTitle}>Verify your email</Text><Text style={styles.description}>We sent a verification link to {user.email}. Verify your address to secure your Axon account.</Text>{notice ? <Text style={styles.authNotice}>{notice}</Text> : null}{authError ? <Text style={styles.errorText}>{authError}</Text> : null}<ActionButton label={working ? "Checking…" : "I’ve verified my email"} onPress={()=>void checkVerification()} disabled={working}/><ActionButton label="Resend verification email" onPress={()=>void resendVerification()} disabled={working} secondary/><Text onPress={()=>{void signOut(auth);setNotice("");}} style={styles.authLink}>Use another account</Text></ScrollView></SafeAreaView>;
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.authEyebrow}>YOUR WORK, IN ONE PLACE</Text><Text style={styles.authTitle}>{createAccount ? "Create your account" : "Welcome back"}</Text><Text style={styles.description}>{createAccount ? "Create a secure account to bring your agents and work together." : "Sign in to continue where your agents left off."}</Text><Text style={styles.authLabel}>EMAIL ADDRESS</Text><TextInput value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor="#82998A" keyboardType="email-address" autoCapitalize="none" autoComplete="email" style={styles.authInput}/><Text style={styles.authLabel}>PASSWORD</Text><View style={styles.authPasswordWrap}><TextInput value={password} onChangeText={setPassword} placeholder="At least 6 characters" placeholderTextColor="#82998A" secureTextEntry={!showPassword} autoCapitalize="none" autoComplete={createAccount ? "new-password" : "password"} style={styles.authPasswordInput}/><Text onPress={()=>setShowPassword(value=>!value)} style={styles.authShowPassword}>{showPassword ? "Hide" : "Show"}</Text></View>{createAccount ? <Pressable onPress={() => {setTermsAccepted(value => !value);setAuthError("");}} accessibilityRole="checkbox" accessibilityState={{checked:termsAccepted}} style={{flexDirection:"row",alignItems:"center",alignSelf:"flex-start",gap:11,marginTop:8,marginBottom:10,paddingVertical:7,paddingRight:8}}><View style={{width:22,height:22,borderRadius:11,borderWidth:2,borderColor:termsAccepted ? "#8bd6a0" : "#70bd87",backgroundColor:termsAccepted ? "#173d29" : "transparent",alignItems:"center",justifyContent:"center"}}>{termsAccepted ? <View style={{width:9,height:9,borderRadius:5,backgroundColor:"#8bd6a0"}}/> : null}</View><Text style={{color:"#E7F6EB",fontSize:12,lineHeight:18,flexShrink:1}}>I agree to the <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Terms &amp; Conditions</Text> and <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Privacy Policy</Text>.</Text></Pressable> : null}<ActionButton label={working ? "Please wait…" : createAccount ? "Create account" : "Continue with email"} onPress={()=>void submit()} disabled={working || !email.trim() || password.length<6 || (createAccount && !termsAccepted)}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}{notice ? <Text style={styles.authNotice}>{notice}</Text> : null}{!createAccount ? <Text onPress={()=>{if(!auth||!email.trim()) {setAuthError("Enter your email address first.");return;}setWorking(true);setAuthError("");setNotice("");void sendPasswordResetEmail(auth,email.trim()).then(()=>setNotice("Password reset link sent. Check your inbox.")).catch(cause=>setAuthError(cause instanceof Error ? cause.message : "Could not send password reset email.")).finally(()=>setWorking(false));}} style={styles.authForgot}>Forgot password?</Text> : null}<View style={styles.authDivider}><View style={styles.authDividerLine}/><Text style={styles.authDividerText}>{createAccount ? "ALREADY HAVE AN ACCOUNT?" : "NEW TO AXON?"}</Text><View style={styles.authDividerLine}/></View><Text onPress={()=>{setCreateAccount(value=>!value);setAuthError("");setNotice("");}} style={styles.authLink}>{createAccount ? "Sign in instead" : "Create an account"}</Text><Text style={styles.authFootnote}>Secure access powered by Firebase Authentication.</Text></ScrollView></SafeAreaView>;
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.authEyebrow}>YOUR WORK, IN ONE PLACE</Text><Text style={styles.authTitle}>{createAccount ? "Create your account" : "Welcome back"}</Text><Text style={styles.description}>{createAccount ? "Create a secure account to bring your agents and work together." : "Sign in to continue where your agents left off."}</Text><Text style={styles.authLabel}>EMAIL ADDRESS</Text><TextInput value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor="#82998A" keyboardType="email-address" autoCapitalize="none" autoComplete="email" style={styles.authInput}/><Text style={styles.authLabel}>PASSWORD</Text><View style={styles.authPasswordWrap}><TextInput value={password} onChangeText={setPassword} placeholder="At least 6 characters" placeholderTextColor="#82998A" secureTextEntry={!showPassword} autoCapitalize="none" autoComplete={createAccount ? "new-password" : "password"} style={styles.authPasswordInput}/><Text onPress={()=>setShowPassword(value=>!value)} style={styles.authShowPassword}>{showPassword ? "Hide" : "Show"}</Text></View>{createAccount ? <Pressable onPress={() => {setTermsAccepted(value => !value);setAuthError("");}} accessibilityRole="checkbox" accessibilityState={{checked:termsAccepted}} style={{flexDirection:"row",alignItems:"center",alignSelf:"flex-start",gap:11,marginTop:8,marginBottom:10,paddingVertical:7,paddingRight:8}}><View style={{width:22,height:22,borderRadius:11,borderWidth:2,borderColor:termsAccepted ? "#8bd6a0" : "#70bd87",backgroundColor:termsAccepted ? "#173d29" : "transparent",alignItems:"center",justifyContent:"center"}}>{termsAccepted ? <View style={{width:9,height:9,borderRadius:5,backgroundColor:"#8bd6a0"}}/> : null}</View><Text style={{color:"#E7F6EB",fontSize:12,lineHeight:18,flexShrink:1}}>I agree to the <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Terms &amp; Conditions</Text> and <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Privacy Policy</Text>.</Text></Pressable> : null}<ActionButton label={working ? "Please wait…" : createAccount ? "Create account" : "Continue with email"} onPress={()=>void submit()} disabled={working || !email.trim() || password.length<6 || (createAccount && !termsAccepted)}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}{notice ? <Text style={styles.authNotice}>{notice}</Text> : null}{!createAccount ? <Text onPress={()=>{if(!auth||!email.trim()) {setAuthError("Enter your email address first.");return;}setWorking(true);setAuthError("");setNotice("");void sendPasswordResetEmail(auth,email.trim()).then(()=>setNotice("Password reset link sent. Check your inbox.")).catch(cause=>setAuthError(cause instanceof Error ? cause.prompt : "Could not send password reset email.")).finally(()=>setWorking(false));}} style={styles.authForgot}>Forgot password?</Text> : null}<View style={styles.authDivider}><View style={styles.authDividerLine}/><Text style={styles.authDividerText}>{createAccount ? "ALREADY HAVE AN ACCOUNT?" : "NEW TO AXON?"}</Text><View style={styles.authDividerLine}/></View><Text onPress={()=>{setCreateAccount(value=>!value);setAuthError("");setNotice("");}} style={styles.authLink}>{createAccount ? "Sign in instead" : "Create an account"}</Text><Text style={styles.authFootnote}>Secure access powered by Firebase Authentication.</Text></ScrollView></SafeAreaView>;
 }
 
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, sendEmailVerification, reload } from "firebase/auth";
