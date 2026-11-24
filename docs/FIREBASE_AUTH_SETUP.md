@@ -56,4 +56,4 @@ Only `GET /health` is public. Every registered `/api/v1` route requires `Authori
 
 ## Current provider scope
 
-The current client implementation supports Email/Password sign-in and account creation. Google, email-link, and phone-first sign-in are not yet implemented; do not advertise those providers as available. Invitations and workspace role management are also outside this authentication slice.
+The web and mobile clients support Email/Password sign-in, account creation with mandatory Terms & Conditions and Privacy Policy consent, email verification, verification-email resend, password visibility, and password-reset email. Users must verify their email before entering the Hub. Google, email-link, and phone-first sign-in are not implemented; do not advertise those providers as available. Invitations and workspace role management are also outside this authentication slice.
