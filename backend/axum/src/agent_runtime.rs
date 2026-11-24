@@ -96,7 +96,11 @@ impl AgentRuntime {
         let path = endpoint.path().trim_end_matches('/');
         endpoint.set_path(&format!(
             "{path}/{}",
-            if anthropic { "messages" } else { "chat/completions" }
+            if anthropic {
+                "messages"
+            } else {
+                "chat/completions"
+            }
         ));
         endpoint.set_query(None);
         endpoint.set_fragment(None);
