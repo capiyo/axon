@@ -760,7 +760,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
             </View>
           ) : (
             <>
-            <HomeScreen activeTab={activeTab} unreadCount={chats.reduce((total, chat) => total + chat.unread_count, 0)} onTabChange={tab => { setActiveTab(tab); setMobileChatOpen(false); }} />
+            
             {activeTab === "explore" ? (
             <ExploreScreen>
               <View style={styles.screenHeading}><Text style={styles.eyebrow}>PUBLIC DISCOVERY</Text><Text style={styles.screenTitle}>Explore agents</Text><Text style={styles.description}>Discover agents that their owners have deliberately published, and read the community discussion.</Text></View>
@@ -817,6 +817,8 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
             </>
           )}
         </ScrollView>
+
+        {selected ? <HomeScreen activeTab={activeTab} unreadCount={chats.reduce((total, chat) => total + chat.unread_count, 0)} onTabChange={tab => { setActiveTab(tab); setMobileChatOpen(false); }} /> : null}
 
         {selected && !profileOpen ? (
           <>
@@ -903,7 +905,7 @@ const styles = StyleSheet.create({
   mobileNotificationBadge: { position: "absolute", top: -4, right: -4, minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4, backgroundColor: "#28583D", color: "#E7F6EB", fontSize: 8, fontWeight: "900", textAlign: "center", textAlignVertical: "center" },
   mobileProfileImage: { width: 38, height: 38, borderRadius: 19 },
   mobileProfileInitial: { color: "#E7F6EB", fontSize: 14, fontWeight: "800" },
-  mobileContent: { paddingHorizontal: 13, paddingTop: 10, paddingBottom: 104 },
+  mobileContent: { paddingHorizontal: 13, paddingTop: 10, paddingBottom: 160 },
   screenHeading: { marginBottom: 15, gap: 6 },
   screenTitle: { color: "#E7F6EB", fontSize: 25, fontWeight: "800", letterSpacing: -0.6 },
   profileIdentityMobile: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 },
@@ -932,7 +934,7 @@ const styles = StyleSheet.create({
   chatCardMobileArchive: { color: "#9AAFA1", fontSize: 9, fontWeight: "700" },
   chatCardMobileMeta: { color: "#9AAFA1", fontSize: 9, flex: 1 },
   chatCardMobileOpen: { color: "#9DE4B0", fontSize: 9, fontWeight: "800" },
-  homeFab: { position: "absolute", right: 22, bottom: 24, width: 58, height: 58, borderRadius: 29, backgroundColor: "#2F8A52", alignItems: "center", justifyContent: "center", elevation: 16, shadowColor: "#000", shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
+  homeFab: { position: "absolute", right: 22, bottom: 88, width: 58, height: 58, borderRadius: 29, backgroundColor: "#2F8A52", alignItems: "center", justifyContent: "center", elevation: 16, shadowColor: "#000", shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
   homeFabText: { color: "#F2FFF5", fontSize: 32, fontWeight: "400", lineHeight: 36 },
   quickChatComposer: { position: "absolute", zIndex: 30, left: 14, right: 14, bottom: 94, padding: 15, borderRadius: 18, backgroundColor: "#17271D", gap: 10, elevation: 18 },
 
