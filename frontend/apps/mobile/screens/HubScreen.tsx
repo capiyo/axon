@@ -77,6 +77,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeTab, setActiveTab] = useState<"chats" | "explore">("chats");
+  const [quickChatOpen, setQuickChatOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [exploreAgents, setExploreAgents] = useState<ExploreAgent[]>([]);
@@ -343,6 +344,8 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         method: "POST", body: JSON.stringify({ title: chatTitle.trim() })
       });
       setChatTitle("");
+      setQuickChatOpen(false);
+      setActiveTab("chats");
       setChats(current => [chat, ...current]);
       setActiveChat(chat.id);
       setMobileChatOpen(true);
@@ -815,6 +818,21 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           )}
         </ScrollView>
 
+        {selected && !profileOpen ? (
+          <>
+            {quickChatOpen ? <View style={styles.quickChatComposer}>
+              <Text style={styles.fieldLabel}>NEW CONVERSATION</Text>
+              <TextInput autoFocus value={chatTitle} onChangeText={setChatTitle} onSubmitEditing={createChat} returnKeyType="done" placeholder="What are we working on?" style={styles.input} maxLength={160} />
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flex: 1 }}><ActionButton label="Create chat" onPress={createChat} disabled={!chatTitle.trim() || busy} /></View>
+                <ActionButton label="Cancel" onPress={() => { setQuickChatOpen(false); setChatTitle(""); }} secondary />
+              </View>
+            </View> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel="Create a new chat" onPress={() => { setActiveTab("chats"); setMobileChatOpen(false); setQuickChatOpen(value => !value); }} style={styles.homeFab}>
+              <Text style={styles.homeFabText}>{quickChatOpen ? "×" : "+"}</Text>
+            </Pressable>
+          </>
+        ) : null}
         <ProfileModal visible={profileOpen} onClose={() => setProfileOpen(false)}>
           {profileContent}
         </ProfileModal>
@@ -885,7 +903,7 @@ const styles = StyleSheet.create({
   mobileNotificationBadge: { position: "absolute", top: -4, right: -4, minWidth: 17, height: 17, borderRadius: 9, paddingHorizontal: 4, backgroundColor: "#28583D", color: "#E7F6EB", fontSize: 8, fontWeight: "900", textAlign: "center", textAlignVertical: "center" },
   mobileProfileImage: { width: 38, height: 38, borderRadius: 19 },
   mobileProfileInitial: { color: "#E7F6EB", fontSize: 14, fontWeight: "800" },
-  mobileContent: { paddingHorizontal: 13, paddingTop: 10, paddingBottom: 112 },
+  mobileContent: { paddingHorizontal: 13, paddingTop: 10, paddingBottom: 104 },
   screenHeading: { marginBottom: 15, gap: 6 },
   screenTitle: { color: "#E7F6EB", fontSize: 25, fontWeight: "800", letterSpacing: -0.6 },
   profileIdentityMobile: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 },
@@ -914,7 +932,10 @@ const styles = StyleSheet.create({
   chatCardMobileArchive: { color: "#9AAFA1", fontSize: 9, fontWeight: "700" },
   chatCardMobileMeta: { color: "#9AAFA1", fontSize: 9, flex: 1 },
   chatCardMobileOpen: { color: "#9DE4B0", fontSize: 9, fontWeight: "800" },
-  mobileBottomNav: { position: "absolute", bottom: 12, alignSelf: "center", width: 258, borderRadius: 28, backgroundColor: "#1C3024", padding: 7, flexDirection: "row", justifyContent: "space-around", gap: 8, elevation: 12 },
+  homeFab: { position: "absolute", right: 22, bottom: 24, width: 58, height: 58, borderRadius: 29, backgroundColor: "#2F8A52", alignItems: "center", justifyContent: "center", elevation: 16, shadowColor: "#000", shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
+  homeFabText: { color: "#F2FFF5", fontSize: 32, fontWeight: "400", lineHeight: 36 },
+  quickChatComposer: { position: "absolute", zIndex: 30, left: 14, right: 14, bottom: 94, padding: 15, borderRadius: 18, backgroundColor: "#17271D", gap: 10, elevation: 18 },
+
   mobileNavItem: { flex: 1, borderRadius: 22, paddingVertical: 9, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 7 },
   mobileNavItemActive: { backgroundColor: "#244B33" },
   mobileNavIcon: { color: "#9AAFA1", fontSize: 17 },
