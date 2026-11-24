@@ -50,7 +50,7 @@ Current boundaries:
 - Web workspace shell: `apps/web/src/views/WorkspaceView.tsx`
 - Mobile workspace shell: `apps/mobile/views/WorkspaceView.tsx`
 
-The web shell owns the desktop workspace landmark. The native shell owns safe-area containment. Both are deliberately thin platform adapters.
+The web shell owns the desktop Hub landmark. The native shell owns safe-area containment. Both are deliberately thin platform adapters.
 
 ### Modals
 
@@ -62,12 +62,12 @@ Current boundaries:
 - Mobile notifications overlay: `apps/mobile/modals/NotificationsModal.tsx`
 - Shared platform modal frames: `apps/web/src/modals/ModalFrame.tsx`, `apps/mobile/modals/ModalFrame.tsx`
 
-The mobile profile experience is presented as a slide-up sheet over the active workspace rather than taking over the main screen. Native back requests close the sheet.
+The mobile profile experience is presented as a slide-up sheet over the active Hub rather than taking over the main screen. Native back requests close the sheet.
 
 ## Funspot parity rules
 
 1. Desktop keeps the profile/sidebar context on the left and the active Chats/Messaging work area alongside it.
-2. Mobile uses the compact app header and one floating pill navigation for Chats and Explore.
+2. Desktop exposes Home, Chats and Explore in the top navigation; mobile uses the compact app header and one floating pill navigation for the same three destinations.
 3. Messaging is opened from a chat card; it is not a separate primary navigation destination.
 4. Profile and notification surfaces are overlays/sheets, not replacement pages.
 5. Cards blend into the page surface, retain useful metadata and previews, and grow with their content.
