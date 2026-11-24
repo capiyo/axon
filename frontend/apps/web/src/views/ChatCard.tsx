@@ -19,7 +19,7 @@ export default function ChatCard({ chat, linkedTaskCount, progress, active, onOp
       <span className="chat-card-content">
         <span className="chat-card-heading"><strong>{chat.title}</strong><small>{new Date(chat.updated_at).toLocaleString()}</small></span>
         <small className="chat-card-agent">{lastMessage?.answered_by || "Session"}</small>
-        <span className="chat-card-preview">{lastMessage?.content || "No messages yet. Open this chat to begin."}</span>
+        <span className="chat-card-preview">{lastMessage?.content || "No messages yet. Open this session to begin."}</span>
         {progress !== null && <span className="chat-card-progress"><span style={{ width: `${progress}%` }} /></span>}
         <span className="chat-card-footer">
           <small>{chat.message_count} messages · {linkedTaskCount} tasks · {replyLabel}</small>
