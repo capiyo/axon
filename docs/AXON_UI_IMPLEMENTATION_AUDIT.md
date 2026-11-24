@@ -20,13 +20,13 @@
 ### Shared visual system and layout
 
 - Applied the Forest & Mint palette across shared theme tokens.
-- Web desktop shell now uses the agreed profile / Chats / Messaging structure.
+- Web desktop shell now uses the agreed profile / Chats / Sessions structure.
 - Desktop Explore is accessed through the app menu.
 - Mobile starts on Chats and has only Chats and Explore floating navigation destinations.
 - Profile is accessible from the app header on mobile and from the desktop app menu/avatar.
 - Profile now surfaces workspace identity, agent/task/conversation counts, selected-conversation memory context, execution state, API/storage health and workspace resources.
 
-### ChatCards and Messaging
+### ChatCards and Sessions
 
 - ChatCards now render the complete last message rather than an arbitrary one-line preview.
 - Cards expand naturally with message content and retain full-width mobile layout.
@@ -34,7 +34,7 @@
 - Added per-user read-state persistence, green unread counters, like/unlike and archive actions.
 - Tasks can be explicitly linked to a source conversation. ChatCards show progress only when linked task records exist; the progress is derived from task lifecycle states.
 - Desktop selects the first available conversation when chats load.
-- Mobile opens Messaging from a card and returns to Chats through back navigation.
+- Mobile opens a session by tapping a chat card and returns to Chats through back navigation.
 - Marking a conversation read also clears its related in-app chat notifications.
 
 ### Explore and community
@@ -104,7 +104,7 @@ This section records a source-level inspection of the web and React Native imple
 |---|---|---|
 | Web, viewport <= 900px | A centered, fixed-position, rounded pill at the bottom of the viewport. It contains Chats and Explore, has an active-state surface, and includes the aggregate unread-chat count. | Implemented |
 | React Native / Android UI source | A centered, 258px-wide rounded pill with Chats and Explore pressables. It is absolutely positioned 12px from the bottom of the mobile root and has an elevated surface. | Implemented, with polish gaps |
-| Desktop web | Profile sidebar and Chats/Messaging workspace are present; Explore is selected through the application menu. | Implemented |
+| Desktop web | Profile sidebar and Chats/Sessions workspace are present; Explore is selected through the application menu. | Implemented |
 | Mobile profile access | The app header has notification and circular profile controls. | Implemented |
 
 **Important clarification:** Chats and Explore are implemented as two destinations inside one floating pill navigation. They are **not two separate circular floating-action buttons (FABs)**. The React Native implementation uses absolute positioning inside the root view rather than a viewport-fixed control; it does not currently apply a safe-area inset to the bottom offset. The web version does account for the safe-area inset.
@@ -116,12 +116,12 @@ The mobile header source contains Axon branding/workspace identity, notification
 | Requirement | Web | React Native / Android source | Backend | Audit result |
 |---|---|---|---|---|
 | Forest & Mint theme | Yes | Yes, shared tokens | N/A | Implemented |
-| Desktop profile / Chats / Messaging shell | Yes | N/A | N/A | Implemented |
+| Desktop profile / Chats / Sessions shell | Yes | N/A | N/A | Implemented |
 | Desktop Explore through menu | Yes | N/A | Yes | Implemented |
 | Mobile initial Chats destination | Yes | Yes | Yes | Implemented |
 | Floating Chats + Explore navigation | Fixed bottom pill | Absolute bottom pill | N/A | Implemented; native safe-area polish remains |
 | Mobile app header and profile entry | Yes | Yes | Firebase identity | Implemented |
-| Messaging as a child of a chat, not a navigation tab | Yes | Yes | Chat APIs | Implemented |
+| Sessions open from a chat card, not a navigation tab | Yes | Yes | Chat APIs | Implemented |
 | ChatCard full last-message preview | No fixed line clamp in card source | No fixed line clamp in card source | Last-message summary | Implemented |
 | ChatCard dynamic height and full-width mobile layout | Yes | Yes | N/A | Implemented |
 | Chat title, last activity, agent/sender label and message count | Yes | Yes | Summary fields | Implemented |
