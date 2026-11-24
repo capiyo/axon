@@ -242,14 +242,16 @@ async fn execute_task_claimed(
     ));
 
     let artifacts = state.artifacts.read().await;
-    for artifact_id in &task.context_artifact_ids {
+    for artifact_id in task.context_artifact_ids.iter().take(5) {
         if let Some(artifact) = artifacts
             .get(artifact_id)
             .filter(|artifact| artifact.workspace_id == task.workspace_id)
         {
             context_sections.push(format!(
                 "REFERENCE ARTIFACT [{}]: {}\n{}",
-                artifact.id, artifact.title, artifact.content
+                artifact.id,
+                artifact.title,
+                artifact.content.chars().take(10_000).collect::<String>()
             ));
         }
     }
@@ -259,59 +261,71 @@ async fn execute_task_claimed(
     // historical memories from the pinned hourly epoch using Axon's QKV and
     // Pareto selector. No synthetic embedding or current-market fallback is used.
     if let Some(query) = request.memory_query.clone() {
-        let coordinator = state.memory_epochs.as_ref().ok_or_else(storage_failure)?;
-        let handover = coordinator
-            .prepare_handover(HandoverRequest {
-                workspace_id: task.workspace_id,
-                agent_id: agent.id,
-                task_id: Some(task.id),
-                project_id: None,
-                query: query.clone(),
-                heads: if request.heads == 0 { 2 } else { request.heads.min(8) },
-                tags: request.tags.clone(),
-                dependency_ids: BTreeSet::new(),
-                pareto: ParetoPolicy::default(),
-            })
-            .await
-            .map_err(|_| error(
-                StatusCode::CONFLICT,
-                "No compatible published memory epoch is available for this agent and Qoin vector.",
-            ))?;
-        if !handover.initial.is_empty() {
-            context_sections.push(format!(
-                "QKV/QOIN INITIAL MEMORY (epoch {}, coverage {:.3}):\\n{}",
-                handover.epoch.epoch_number,
-                handover.achieved_coverage,
-                handover.initial.iter().map(|memory| memory.payload_json.as_str()).collect::<Vec<_>>().join("\\n")
-            ));
-        }
-        let progressive_limit = request.progressive_limit.min(20);
-        if progressive_limit > 0 && handover.deferred_count > 0 {
-            let additional = coordinator
-                .retrieve_progressive(
-                    task.workspace_id,
-                    agent.id,
-                    handover.session_id,
-                    ProgressiveRetrievalRequest {
-                        query,
-                        heads: if request.heads == 0 { 2 } else { request.heads.min(8) },
-                        tags: request.tags,
-                        dependency_ids: BTreeSet::new(),
-                        limit: progressive_limit,
-                    },
-                )
+        if let Some(coordinator) = state.memory_epochs.as_ref() {
+            match coordinator
+                .prepare_handover(HandoverRequest {
+                    workspace_id: task.workspace_id,
+                    agent_id: agent.id,
+                    task_id: Some(task.id),
+                    project_id: None,
+                    query: query.clone(),
+                    heads: if request.heads == 0 { 2 } else { request.heads.min(8) },
+                    tags: request.tags.clone(),
+                    dependency_ids: BTreeSet::new(),
+                    pareto: ParetoPolicy::default(),
+                })
                 .await
-                .map_err(|_| storage_failure())?;
-            if !additional.memories.is_empty() {
-                context_sections.push(format!(
-                    "QKV/QOIN PROGRESSIVE MEMORY:\\n{}",
-                    additional.memories.iter().map(|memory| memory.payload_json.as_str()).collect::<Vec<_>>().join("\\n")
-                ));
+            {
+                Ok(handover) => {
+                    if !handover.initial.is_empty() {
+                        context_sections.push(format!(
+                            "QKV/QOIN INITIAL MEMORY (epoch {}, coverage {:.3}):\\n{}",
+                            handover.epoch.epoch_number,
+                            handover.achieved_coverage,
+                            handover.initial.iter().map(|memory| memory.payload_json.as_str()).collect::<Vec<_>>().join("\\n")
+                        ));
+                    }
+                    let progressive_limit = request.progressive_limit.min(20);
+                    if progressive_limit > 0 && handover.deferred_count > 0 {
+                        match coordinator
+                            .retrieve_progressive(
+                                task.workspace_id,
+                                agent.id,
+                                handover.session_id,
+                                ProgressiveRetrievalRequest {
+                                    query,
+                                    heads: if request.heads == 0 { 2 } else { request.heads.min(8) },
+                                    tags: request.tags,
+                                    dependency_ids: BTreeSet::new(),
+                                    limit: progressive_limit,
+                                },
+                            )
+                            .await
+                        {
+                            Ok(additional) if !additional.memories.is_empty() => {
+                                context_sections.push(format!(
+                                    "QKV/QOIN PROGRESSIVE MEMORY:\\n{}",
+                                    additional.memories.iter().map(|memory| memory.payload_json.as_str()).collect::<Vec<_>>().join("\\n")
+                                ));
+                            }
+                            Ok(_) => {}
+                            Err(error) => tracing::warn!(%error, %task_id, "progressive memory retrieval unavailable; continuing with initial context"),
+                        }
+                    }
+                }
+                Err(sqlx::Error::RowNotFound) => {
+                    context_sections.push("No compatible published QKV/Qoin memory epoch was available; execution continues with chat and artifact context.".into());
+                }
+                Err(error) => {
+                    tracing::warn!(%error, %task_id, "QKV/Qoin handover unavailable; continuing with chat and artifact context");
+                    context_sections.push("Historical QKV/Qoin retrieval was unavailable for this execution.".into());
+                }
             }
+        } else {
+            context_sections.push("Historical QKV/Qoin retrieval is not configured; execution continues with chat and artifact context.".into());
         }
     }
 
-    let mut source_chat_title = None;
     if let Some(chat_id) = task.source_chat_id {
         let chat_store = state.chat_memory.as_ref().ok_or_else(storage_failure)?;
         let detail = chat_store
@@ -319,7 +333,6 @@ async fn execute_task_claimed(
             .await
             .map_err(|_| storage_failure())?
             .ok_or_else(|| error(StatusCode::NOT_FOUND, "Source conversation not found."))?;
-        source_chat_title = Some(detail.chat.title.clone());
 
         // Approved memory entries are durable, reviewed context. Raw messages
         // are bounded and explicitly marked as untrusted reference material.
@@ -327,7 +340,8 @@ async fn execute_task_claimed(
             .memory
             .iter()
             .filter(|entry| entry.status == "approved")
-            .map(|entry| format!("- [{}] {}", entry.entry_type, entry.text))
+            .take(20)
+            .map(|entry| format!("- [{}] {}", entry.entry_type, entry.text.chars().take(1_200).collect::<String>()))
             .collect::<Vec<_>>();
         if !approved_memories.is_empty() {
             context_sections.push(format!(
@@ -338,19 +352,19 @@ async fn execute_task_claimed(
         if !detail.resume_brief.trim().is_empty() {
             context_sections.push(format!(
                 "CHAT RESUME BRIEF (reference data):\n{}",
-                detail.resume_brief
+                detail.resume_brief.chars().take(6_000).collect::<String>()
             ));
         }
         let recent_messages = detail
             .messages
             .iter()
             .rev()
-            .take(24)
+            .take(16)
             .collect::<Vec<_>>()
             .into_iter()
             .rev()
             .map(|message| {
-                let content: String = message.content.chars().take(8_000).collect();
+                let content: String = message.content.chars().take(3_000).collect();
                 format!("[{}] {}", message.role, content)
             })
             .collect::<Vec<_>>();
@@ -505,7 +519,6 @@ async fn execute_task_claimed(
         }
     }
 
-    let _ = source_chat_title;
     Ok(Json(TaskSubmission { task, artifact }))
 }
 
