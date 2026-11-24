@@ -150,7 +150,6 @@ pub async fn create_task(
     Ok((StatusCode::CREATED, Json(task)))
 }
 
-
 /// Execute an assigned task through its configured provider and persist the
 /// response as an artifact. This endpoint is explicit: task creation never
 /// triggers billable provider calls implicitly.
