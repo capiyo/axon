@@ -1,3 +1,4 @@
+pub mod agent_runtime;
 pub mod audit;
 pub mod auth_middleware;
 #[cfg(test)]
