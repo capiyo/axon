@@ -9,7 +9,7 @@ import os
 import sys
 
 from .models import AxonEnvelope
-from .persistence import persist_artifact
+from .persistence import AxonPersistenceError, persist_artifact
 from .providers.claude import load_claude_export
 from .providers.deepseek import DeepSeekClient, DeepSeekError
 from .transfer import transfer_to_deepseek
@@ -76,8 +76,27 @@ async def _run(args: argparse.Namespace) -> int:
         )
         print("\n--- DeepSeek response ---\n")
         print(result)
+        if args.persist_to_axon:
+            if not args.axon_api_url or not args.axon_id_token:
+                raise ValueError(
+                    "--persist-to-axon requires AXON_API_URL and AXON_FIREBASE_ID_TOKEN."
+                )
+            artifact_content = (
+                f"Provider: DeepSeek\n"
+                f"Source: Claude export — {conversation.title}\n"
+                f"Conversation ID: {conversation.conversation_id}\n\n"
+                f"{result}"
+            )
+            artifact_id = await persist_artifact(
+                args.axon_api_url,
+                args.axon_id_token,
+                args.workspace_id,
+                f"DeepSeek handoff: {conversation.title}",
+                artifact_content,
+            )
+            print(f"\nSaved to Axon workspace artifact: {artifact_id}")
         return 0
-    except (OSError, ValueError, PermissionError, DeepSeekError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, PermissionError, DeepSeekError, AxonPersistenceError, json.JSONDecodeError) as exc:
         print(f"axon-bridge: {exc}", file=sys.stderr)
         return 2
 
