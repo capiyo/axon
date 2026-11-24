@@ -977,6 +977,7 @@ function AuthGate() {
   const [mode, setMode] = useState<"sign_in" | "create">("sign_in");
   const [authError, setAuthError] = useState("");
   const [working, setWorking] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
     if (!auth) { setReady(true); return; }
@@ -986,6 +987,7 @@ function AuthGate() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!auth) return;
+    if (mode === "create" && !termsAccepted) { setAuthError("Please agree to the Terms & Conditions and Privacy Policy to create your account."); return; }
     setWorking(true);
     setAuthError("");
     try {
@@ -999,7 +1001,7 @@ function AuthGate() {
   if (!ready) return <main className="shell"><section className="content"><p>Restoring your secure session…</p></section></main>;
   if (!auth) return <main className="shell"><section className="content"><h1>Firebase configuration required</h1><p>Set the VITE_FIREBASE_* environment variables for this web app, then restart it.</p></section></main>;
   if (user) return <WorkspaceApp user={user} />;
-  return <main className="shell"><section className="content" style={{maxWidth:520,margin:"12vh auto"}}><p className="eyebrow">AXON · SECURE ACCESS</p><h1>{mode === "create" ? "Create your account" : "Welcome back"}</h1><p>Sign in to access your personal workspace and its data.</p><form className="stack-form" onSubmit={submit}><label htmlFor="auth-email">Email</label><input id="auth-email" type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)}/><label htmlFor="auth-password">Password</label><input id="auth-password" type="password" minLength={6} autoComplete={mode === "create" ? "new-password" : "current-password"} required value={password} onChange={e=>setPassword(e.target.value)}/><button disabled={working}>{working ? "Please wait…" : mode === "create" ? "Create account" : "Sign in"}</button></form>{authError && <p role="alert">{authError}</p>}<button className="back-link" onClick={()=>setMode(mode === "create" ? "sign_in" : "create")}>{mode === "create" ? "Already registered? Sign in" : "New to Axon? Create an account"}</button></section></main>;
+  return <main className="shell"><section className="content" style={{maxWidth:520,margin:"12vh auto"}}><p className="eyebrow">AXON · SECURE ACCESS</p><h1>{mode === "create" ? "Create your account" : "Welcome back"}</h1><p>Sign in to access your personal workspace and its data.</p><form className="stack-form" onSubmit={submit}><label htmlFor="auth-email">Email</label><input id="auth-email" type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)}/><label htmlFor="auth-password">Password</label><input id="auth-password" type="password" minLength={6} autoComplete={mode === "create" ? "new-password" : "current-password"} required value={password} onChange={e=>setPassword(e.target.value)}/>{mode === "create" && <label className="terms-consent" htmlFor="auth-terms"><input id="auth-terms" type="checkbox" checked={termsAccepted} onChange={e=>{setTermsAccepted(e.target.checked);setAuthError("");}}/><span className="terms-consent-copy">I agree to the <strong>Terms &amp; Conditions</strong> and <strong>Privacy Policy</strong>.</span></label>}<button disabled={working || (mode === "create" && !termsAccepted)}>{working ? "Please wait…" : mode === "create" ? "Create account" : "Sign in"}</button></form>{authError && <p role="alert">{authError}</p>}<button className="back-link" onClick={()=>setMode(mode === "create" ? "sign_in" : "create")}>{mode === "create" ? "Already registered? Sign in" : "New to Axon? Create an account"}</button></section></main>;
 }
 
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
