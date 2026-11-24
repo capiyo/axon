@@ -335,7 +335,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         request<Chat[]>(`/api/v1/workspaces/${selected.id}/chats`)
       ]))
       .then(([detail, items]) => { setChatDetail(detail); setChats(items); })
-      .catch(cause => setError(cause instanceof Error ? cause.message : "Could not load chat"));
+      .catch(cause => setError(cause instanceof Error ? cause.message : "Could not load session"));
   }, [selected?.id, activeChat, mobileChatOpen]);
 
   function createChat() {
@@ -686,7 +686,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 </View>
                 <View style={styles.mobileStatsGrid}>
                   <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{agents.length}</Text><Text style={styles.mobileStatLabel}>Agents</Text></View>
-                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{chats.length}</Text><Text style={styles.mobileStatLabel}>Chats</Text></View>
+                  <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{chats.length}</Text><Text style={styles.mobileStatLabel}>Sessions</Text></View>
                   <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "in_progress").length}</Text><Text style={styles.mobileStatLabel}>Running</Text></View>
                   <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "completed").length}</Text><Text style={styles.mobileStatLabel}>Completed</Text></View>
                   <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{tasks.filter(task => task.status === "offered" || task.status === "acknowledged").length}</Text><Text style={styles.mobileStatLabel}>Queued</Text></View>
@@ -694,8 +694,8 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 </View>
                 <View style={styles.profileMetricsMobile}>
                   <Text style={styles.fieldLabel}>MEMORY & CONTEXT</Text>
-                  <Text style={styles.rowMeta}>Selected chat approved memory entries · {(chatDetail?.memory.filter(entry=>entry.status==="approved").length ?? 0)}</Text>
-                  <Text style={styles.rowMeta}>Messages across active chats · {chats.reduce((total,chat)=>total+chat.message_count,0)}</Text>
+                  <Text style={styles.rowMeta}>Selected session approved memory entries · {(chatDetail?.memory.filter(entry=>entry.status==="approved").length ?? 0)}</Text>
+                  <Text style={styles.rowMeta}>Messages across active sessions · {chats.reduce((total,chat)=>total+chat.message_count,0)}</Text>
                   <Text style={styles.rowMeta}>Captured artifacts · {artifacts.length}</Text>
                   <Text style={styles.fieldLabel}>EXECUTION & HEALTH</Text>
                   <Text style={styles.rowMeta}>Awaiting review · {tasks.filter(task=>task.status==="review_required" || task.status==="submitted").length}</Text>
@@ -789,7 +789,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
             </>
           ) : mobileChatOpen && chatDetail ? (
             <>
-              <View style={styles.screenHeading}><Pressable onPress={() => setMobileChatOpen(false)}><Text style={styles.back}>← Chats</Text></Pressable><Text style={styles.screenTitle}>{chatDetail.chat.title}</Text><Text style={styles.description}>{chatDetail.messages.length} messages · Updated {new Date(chatDetail.chat.updated_at).toLocaleString()}</Text></View>
+              <View style={styles.screenHeading}><Pressable onPress={() => setMobileChatOpen(false)}><Text style={styles.back}>← Sessions</Text></Pressable><Text style={styles.screenTitle}>{chatDetail.chat.title}</Text><Text style={styles.description}>{chatDetail.messages.length} messages · Updated {new Date(chatDetail.chat.updated_at).toLocaleString()}</Text></View>
               <View style={styles.panel}>
                 <View style={styles.chatAgentHeader}><View style={styles.exploreAvatar}><Text style={styles.exploreAvatarText}>A</Text></View><View style={{flex:1}}><Text style={styles.rowTitle}>{chatDetail.chat.title}</Text><Text style={styles.rowMeta}>Session</Text></View><Pressable onPress={archiveChat}><Text style={styles.back}>Archive</Text></Pressable></View>
                 <View style={styles.resumeBriefMobile}><Text style={styles.fieldLabel}>APPROVED MEMORY · RESUME BRIEF</Text><Text style={styles.rowMeta}>{chatDetail.resume_brief || "No approved context yet."}</Text></View>
@@ -806,14 +806,14 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
             </ExploreScreen>
           ) : (
             <ChatsScreen>
-              <View style={styles.screenHeading}><Text style={styles.eyebrow}>PRIVATE HUB</Text><Text style={styles.screenTitle}>Chats</Text><Text style={styles.description}>Sessions, agent work and project context in one place.</Text></View>
-              <View style={styles.newChatRow}><TextInput value={chatTitle} onChangeText={setChatTitle} placeholder="Start a new chat…" style={[styles.input,styles.newChatInput]} maxLength={160}/><ActionButton label="＋" onPress={createChat} disabled={!chatTitle.trim() || busy}/></View>
+              <View style={styles.screenHeading}><Text style={styles.eyebrow}>PRIVATE HUB</Text><Text style={styles.screenTitle}>Sessions</Text><Text style={styles.description}>Sessions, agent work and project context in one place.</Text></View>
+              <View style={styles.newChatRow}><TextInput value={chatTitle} onChangeText={setChatTitle} placeholder="Start a new session…" style={[styles.input,styles.newChatInput]} maxLength={160}/><ActionButton label="＋" onPress={createChat} disabled={!chatTitle.trim() || busy}/></View>
               {chats.map(chat => {
                 const linkedTasks = tasks.filter(task => task.source_chat_id === chat.id);
                 const progress = linkedTasks.length ? Math.round(linkedTasks.reduce((sum, task) => sum + taskProgress(task.status), 0) / linkedTasks.length) : null;
                 return <ChatCard key={chat.id} chat={chat} linkedTaskCount={linkedTasks.length} progress={progress} styles={styles} onOpen={() => { setActiveChat(chat.id); setMobileChatOpen(true); }} onLike={() => toggleChatLike(chat.id)} onArchive={() => archiveChatById(chat.id)} />;
               })}
-              {chats.length === 0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No chats yet</Text><Text style={styles.muted}>Create your first chat above to open a session.</Text></View> : null}
+              {chats.length === 0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No sessions yet</Text><Text style={styles.muted}>Create your first session above to open a session.</Text></View> : null}
             </ChatsScreen>
             )}
             </>
@@ -821,7 +821,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         </ScrollView>
 
         {menuOpen ? <View style={styles.mobileMenu} accessibilityLabel="Hub menu">
-          <Pressable style={styles.mobileMenuItem} onPress={() => { setActiveTab("chats"); setMobileChatOpen(false); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Chats</Text></Pressable>
+          <Pressable style={styles.mobileMenuItem} onPress={() => { setActiveTab("chats"); setMobileChatOpen(false); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Sessions</Text></Pressable>
           <Pressable style={styles.mobileMenuItem} onPress={() => { setActiveTab("explore"); setMobileChatOpen(false); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Explore agents</Text></Pressable>
           <Pressable style={styles.mobileMenuItem} onPress={() => { setProfileOpen(true); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Profile & Hub settings</Text></Pressable>
           <Pressable style={styles.mobileMenuItem} onPress={() => { setSelected(null); setActiveTab("chats"); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>All Hubs</Text></Pressable>
@@ -832,14 +832,14 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         {selected && !profileOpen ? (
           <>
             {quickChatOpen ? <View style={styles.quickChatComposer}>
-              <Text style={styles.fieldLabel}>NEW CHAT</Text>
+              <Text style={styles.fieldLabel}>NEW SESSION</Text>
               <TextInput autoFocus value={chatTitle} onChangeText={setChatTitle} onSubmitEditing={createChat} returnKeyType="done" placeholder="What are we working on?" style={styles.input} maxLength={160} />
               <View style={{ flexDirection: "row", gap: 8 }}>
-                <View style={{ flex: 1 }}><ActionButton label="Create chat" onPress={createChat} disabled={!chatTitle.trim() || busy} /></View>
+                <View style={{ flex: 1 }}><ActionButton label="Create session" onPress={createChat} disabled={!chatTitle.trim() || busy} /></View>
                 <ActionButton label="Cancel" onPress={() => { setQuickChatOpen(false); setChatTitle(""); }} secondary />
               </View>
             </View> : null}
-            <Pressable accessibilityRole="button" accessibilityLabel="Create a new chat" onPress={() => { setActiveTab("chats"); setMobileChatOpen(false); setQuickChatOpen(value => !value); }} style={styles.homeFab}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Create a new session" onPress={() => { setActiveTab("chats"); setMobileChatOpen(false); setQuickChatOpen(value => !value); }} style={styles.homeFab}>
               <Text style={styles.homeFabText}>{quickChatOpen ? "×" : "+"}</Text>
             </Pressable>
           </>
