@@ -956,6 +956,7 @@ function AuthGate() {
   const [createAccount, setCreateAccount] = useState(false);
   const [authError, setAuthError] = useState("");
   const [working, setWorking] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
     if (!auth) { setReady(true); return; }
@@ -964,6 +965,7 @@ function AuthGate() {
 
   async function submit() {
     if (!auth) return;
+    if (createAccount && !termsAccepted) { setAuthError("Please agree to the Terms & Conditions and Privacy Policy to create your account."); return; }
     setWorking(true);
     setAuthError("");
     try {
@@ -977,7 +979,7 @@ function AuthGate() {
   if (!ready) return <SafeAreaView style={styles.safe}><View style={styles.page}><ActivityIndicator/><Text style={styles.muted}>Restoring your secure session…</Text></View></SafeAreaView>;
   if (!auth) return <SafeAreaView style={styles.safe}><View style={styles.page}><Text style={styles.title}>Firebase configuration required</Text><Text style={styles.description}>Set the EXPO_PUBLIC_FIREBASE_* variables and restart the app.</Text></View></SafeAreaView>;
   if (user) return <WorkspaceApp user={user}/>;
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled"><View style={styles.brandRow}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.eyebrow}>SECURE ACCESS</Text><Text style={styles.title}>{createAccount ? "Create your account" : "Welcome back"}</Text><Text style={styles.description}>Sign in to access your personal workspace and its data.</Text><TextInput value={email} onChangeText={setEmail} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoComplete="email" style={styles.input}/><TextInput value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry autoCapitalize="none" autoComplete={createAccount ? "new-password" : "password"} style={styles.input}/><ActionButton label={working ? "Please wait…" : createAccount ? "Create account" : "Sign in"} onPress={()=>void submit()} disabled={working || !email.trim() || password.length<6}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}<Text onPress={()=>setCreateAccount(value=>!value)} style={styles.back}>{createAccount ? "Already registered? Sign in" : "New to Axon? Create an account"}</Text></ScrollView></SafeAreaView>;
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled"><View style={styles.brandRow}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.eyebrow}>SECURE ACCESS</Text><Text style={styles.title}>{createAccount ? "Create your account" : "Welcome back"}</Text><Text style={styles.description}>Sign in to access your personal workspace and its data.</Text><TextInput value={email} onChangeText={setEmail} placeholder="Email address" keyboardType="email-address" autoCapitalize="none" autoComplete="email" style={styles.input}/><TextInput value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry autoCapitalize="none" autoComplete={createAccount ? "new-password" : "password"} style={styles.input}/>{createAccount ? <Pressable onPress={() => {setTermsAccepted(value => !value);setAuthError("");}} accessibilityRole="checkbox" accessibilityState={{checked:termsAccepted}} style={{flexDirection:"row",alignItems:"center",alignSelf:"flex-start",gap:11,marginTop:3,marginBottom:9,paddingVertical:7,paddingRight:8}}><View style={{width:22,height:22,borderRadius:11,borderWidth:2,borderColor:termsAccepted ? "#8bd6a0" : "#70bd87",backgroundColor:termsAccepted ? "#173d29" : "transparent",alignItems:"center",justifyContent:"center"}}>{termsAccepted ? <View style={{width:9,height:9,borderRadius:5,backgroundColor:"#8bd6a0"}}/> : null}</View><Text style={{color:"#E7F6EB",fontSize:12,lineHeight:18,flexShrink:1}}>I agree to the <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Terms &amp; Conditions</Text> and <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Privacy Policy</Text>.</Text></Pressable> : null}<ActionButton label={working ? "Please wait…" : createAccount ? "Create account" : "Sign in"} onPress={()=>void submit()} disabled={working || !email.trim() || password.length<6 || (createAccount && !termsAccepted)}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}<Text onPress={()=>setCreateAccount(value=>!value)} style={styles.back}>{createAccount ? "Already registered? Sign in" : "New to Axon? Create an account"}</Text></ScrollView></SafeAreaView>;
 }
 
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
