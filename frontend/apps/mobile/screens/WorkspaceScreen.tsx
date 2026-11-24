@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import WorkspaceView from "../views/WorkspaceView";
-import ModalFrame from "../modals/ModalFrame";
+import NotificationsModal from "../modals/NotificationsModal";
 import {
   ActivityIndicator,
   Image,
@@ -806,7 +806,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         </ScrollView>
 
         {!profileOpen && <View style={styles.mobileBottomNav}><Pressable onPress={() => {setActiveTab("chats");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="chats" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>◌</Text><Text style={styles.mobileNavText}>Chats</Text>{chats.reduce((total,chat)=>total+chat.unread_count,0)>0 ? <Text style={styles.mobileNavBadge}>{chats.reduce((total,chat)=>total+chat.unread_count,0)}</Text> : null}</Pressable><Pressable onPress={() => {setActiveTab("explore");setMobileChatOpen(false);}} style={[styles.mobileNavItem,activeTab==="explore" && styles.mobileNavItemActive]}><Text style={styles.mobileNavIcon}>⌕</Text><Text style={styles.mobileNavText}>Explore</Text></Pressable></View>}
-        {notificationsOpen && <ModalFrame style={styles.notificationsOverlay}><View style={styles.notificationsHeader}><Text style={styles.screenTitle}>Notifications</Text><View style={styles.notificationsHeaderActions}><Pressable onPress={markAllNotificationsRead}><Text style={styles.exploreActionText}>Mark all read</Text></Pressable><Pressable onPress={() => setNotificationsOpen(false)}><Text style={styles.exploreActionText}>Close</Text></Pressable></View></View><ScrollView contentContainerStyle={styles.notificationsList}>{notifications.map(item => <Pressable key={item.id} onPress={() => openNotification(item)} style={[styles.notificationItemMobile,Boolean(item.read_at) && styles.notificationReadMobile]}><Text style={styles.rowTitle}>{item.title}</Text><Text style={styles.rowMeta}>{item.body}</Text><Text style={styles.notificationTime}>{new Date(item.created_at).toLocaleString()}</Text></Pressable>)}{notifications.length===0 ? <Text style={styles.muted}>You are all caught up.</Text> : null}</ScrollView></ModalFrame>}
+        {notificationsOpen && <NotificationsModal notifications={notifications} style={styles.notificationsOverlay} onMarkAllRead={markAllNotificationsRead} onClose={() => setNotificationsOpen(false)} onOpenNotification={openNotification} styles={styles} /> }
         {error ? <View style={styles.mobileError}><Text style={styles.errorText}>{error}</Text></View> : null}
       </View>
     </WorkspaceView>

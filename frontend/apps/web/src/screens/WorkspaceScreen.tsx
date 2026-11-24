@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import WorkspaceView from "../views/WorkspaceView";
-import ModalFrame from "../modals/ModalFrame";
+import ProfileModal from "../modals/ProfileModal";
 import type { FormEvent } from "react";
 import { auth } from "../firebase";
 
@@ -955,7 +955,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
 
         {error && <div className="error" role="alert">{error} <button className="retry" onClick={() => selected ? void refreshWorkspace(selected) : void refreshWorkspaces()}>Retry</button></div>}
         <nav className="mobile-bottom-nav" aria-label="Primary navigation"><button type="button" className={activeView === "chats" ? "active" : ""} onClick={() => { setActiveView("chats"); setMobileConversationOpen(false); }}><span>◌</span>Chats{chats.reduce((total,chat)=>total+chat.unread_count,0)>0 && <span className="chat-unread-count">{chats.reduce((total,chat)=>total+chat.unread_count,0)}</span>}</button><button type="button" className={activeView === "explore" ? "active" : ""} onClick={() => { setActiveView("explore"); setMobileConversationOpen(false); }}><span>⌕</span>Explore</button></nav>
-        {profileOpen && <ModalFrame className="profile-overlay" role="dialog" ariaModal="true" ariaLabel="Profile and workspace overview"><div className="profile-overlay-header"><strong>Profile & workspace</strong><button type="button" onClick={() => setProfileOpen(false)}>Close</button></div><div className="profile-overlay-body"><div className="profile-identity"><div className="profile-avatar">{user.photoURL ? <img src={user.photoURL} alt="" /> : (user.displayName || user.email || "A").slice(0,1).toUpperCase()}</div><div className="profile-identity-copy"><strong>{user.displayName || user.email || "Axon user"}</strong><small>{selected?.name ?? "Personal workspace"}</small></div></div><div className="profile-stat-grid"><div><strong>{agents.length}</strong><small>Agents</small></div><div><strong>{chats.length}</strong><small>Chats</small></div><div><strong>{tasks.filter(task => task.status === "in_progress").length}</strong><small>Running</small></div><div><strong>{tasks.filter(task => task.status === "completed").length}</strong><small>Completed</small></div><div><strong>{tasks.filter(task => task.status === "offered" || task.status === "acknowledged").length}</strong><small>Queued</small></div><div><strong>{artifacts.length}</strong><small>Artifacts</small></div></div><p className="profile-overlay-email">{user.email}</p><button type="button" className="signout-button" onClick={() => { if (auth) void signOut(auth); }}>Sign out</button></div></ModalFrame>}
+        {profileOpen && <ProfileModal user={user} selected={selected} agents={agents} chats={chats} tasks={tasks} artifacts={artifacts} onClose={() => setProfileOpen(false)} onSignOut={() => { if (auth) void signOut(auth); }} /> }
         <footer><span>AXON</span><span>Context should travel with the work.</span><span>FOUNDATION BUILD · 0.1</span></footer>
         {health && health.storage !== "persistent" && (
           <p className="dev-warning">Development mode: data is temporary and this API has no authentication. Do not use sensitive or production data.</p>
