@@ -471,7 +471,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           })
         }
       );
-      setQoinNotice(`Indexed chat message ${receipt.message_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()}; available after the next hourly epoch.`);
+      setQoinNotice(`Indexed session message ${receipt.message_id.slice(0, 8)} using ${receipt.symbol} at ${new Date(receipt.qoin_event_ts_ms).toLocaleString()}; available after the next hourly epoch.`);
     });
   }
 
