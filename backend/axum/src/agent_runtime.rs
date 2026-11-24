@@ -128,12 +128,14 @@ impl AgentRuntime {
         &self,
         system_context: &str,
         objective: &str,
+        idempotency_key: &str,
     ) -> Result<String, AgentRuntimeError> {
         let request = self.client.post(self.endpoint.clone());
         let response = if self.anthropic {
             request
                 .header("x-api-key", &self.api_key)
                 .header("anthropic-version", "2023-06-01")
+                .header("idempotency-key", idempotency_key)
                 .header(header::CONTENT_TYPE, "application/json")
                 .json(&json!({
                     "model": self.model,
@@ -146,6 +148,7 @@ impl AgentRuntime {
         } else {
             request
                 .header(header::AUTHORIZATION, format!("Bearer {}", self.api_key))
+                .header("idempotency-key", idempotency_key)
                 .header(header::CONTENT_TYPE, "application/json")
                 .json(&json!({
                     "model": self.model,
