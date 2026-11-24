@@ -794,7 +794,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           <>
             <div className="desktop-home-tabs"><HomeScreen activeTab={activeView} unreadCount={chats.reduce((total, chat) => total + chat.unread_count, 0)} onTabChange={tab => { setActiveView(tab); setMobileConversationOpen(false); }} /></div>
             {activeView === "chats" ? <ChatsScreen><section className="panel chat-panel">
-              <div className="panel-heading"><div><span className="kicker">04 · PROJECT CONVERSATIONS</span><h3>Chats & memory</h3></div><span className="count">{chats.length} CHATS</span></div>
+              <div className="panel-heading"><div><span className="kicker">04 · PROJECT CONVERSATIONS</span><h3>Sessions</h3></div><span className="count">{chats.length} CHATS</span></div>
               <div className={mobileConversationOpen ? "chat-layout mobile-conversation-open" : "chat-layout"}>
                 <aside className="chat-sidebar">
                   <form className="stack-form" onSubmit={createChat}>
