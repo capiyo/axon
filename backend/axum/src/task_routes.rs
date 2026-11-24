@@ -206,7 +206,7 @@ async fn execute_task_claimed(
     })?;
 
     if !matches!(
-        task.status,
+        &task.status,
         TaskStatus::Offered
             | TaskStatus::Acknowledged
             | TaskStatus::InProgress
@@ -298,8 +298,7 @@ async fn execute_task_claimed(
     // Persist the in-progress transition before calling the provider. If the
     // provider times out, the task remains retryable and the claim is released.
     let now = Utc::now();
-    match task.status {
-        TaskStatus::Offered => {
+    if task.status == TaskStatus::Offered {
             task.transitions.push(TaskTransition {
                 from: Some(TaskStatus::Offered),
                 to: TaskStatus::Acknowledged,
@@ -308,8 +307,6 @@ async fn execute_task_claimed(
             });
             task.status = TaskStatus::Acknowledged;
             task.version += 1;
-        }
-        _ => {}
     }
     if task.status != TaskStatus::InProgress {
         let previous = task.status.clone();
