@@ -9,6 +9,7 @@ import os
 import sys
 
 from .models import AxonEnvelope
+from .persistence import persist_artifact
 from .providers.claude import load_claude_export
 from .providers.deepseek import DeepSeekClient, DeepSeekError
 from .transfer import transfer_to_deepseek
@@ -32,6 +33,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print the exact normalized AXP context during preview; keep output private.",
     )
     parser.add_argument("--max-context-chars", type=int, default=120_000)
+    parser.add_argument(
+        "--persist-to-axon",
+        action="store_true",
+        help="Save the approved provider response as an artifact using a Firebase ID token.",
+    )
+    parser.add_argument("--axon-api-url", default=os.getenv("AXON_API_URL"))
+    parser.add_argument("--axon-id-token", default=os.getenv("AXON_FIREBASE_ID_TOKEN"))
     return parser
 
 
