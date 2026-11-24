@@ -505,3 +505,13 @@ body {
 .explore-moderation-item { display: grid; gap: 5px; padding: 9px 0; border-top: 1px solid var(--axon-color-border); }
 .explore-moderation-item small { color: var(--axon-color-text-muted); font-size: 9px; }
 .explore-moderation-item p { margin: 0; color: var(--axon-color-text); font-size: 10px; line-height: 1.5; }
+
+
+/* Accessible circular consent checkbox on account creation */
+.terms-consent { display: flex; flex-direction: row; align-items: center; gap: 11px; width: fit-content; max-width: 100%; margin: 5px 0 7px; color: var(--axon-color-text); cursor: pointer; font-size: 12px; line-height: 1.55; font-weight: 500; }
+.terms-consent input[type="checkbox"] { appearance: none; -webkit-appearance: none; flex: 0 0 21px; width: 21px; height: 21px; margin: 0; padding: 0; border: 2px solid #70bd87; border-radius: 50%; background: transparent; display: grid; place-content: center; cursor: pointer; }
+.terms-consent input[type="checkbox"]::before { content: ""; width: 9px; height: 9px; border-radius: 50%; transform: scale(0); transition: transform 120ms ease-in-out; background: #8bd6a0; }
+.terms-consent input[type="checkbox"]:checked { border-color: #8bd6a0; background: #173d29; }
+.terms-consent input[type="checkbox"]:checked::before { transform: scale(1); }
+.terms-consent input[type="checkbox"]:focus-visible { outline: 3px solid #8bd6a055; outline-offset: 3px; }
+.terms-consent-copy strong { color: #9bd9aa; font-weight: 700; }
