@@ -66,8 +66,8 @@ The mobile profile experience is presented as a slide-up sheet over the active H
 
 ## Funspot parity rules
 
-1. Desktop keeps the profile/sidebar context on the left and the active Chats/Messaging work area alongside it.
-2. Desktop uses Hub as its primary shell, with Chats and Explore tabs inside Home. Android uses the compact AppHeader, the same Home tabs, and a bottom floating action button for quick chat creation.
+1. Desktop is a three-part Hub: persistent profile/sidebar on the left, the Chats list in the middle, and the selected conversation with its Messaging controls on the right. The first available chat is selected automatically. Explore is opened from the Hub menu and replaces the work area; it is not a permanent third column.
+2. Android uses the compact AppHeader, a floating Chats/Explore pill at the bottom, and a separate floating action button above it for quick chat creation.
 3. Messaging is opened from a chat card; it is not a separate primary navigation destination.
 4. Profile and notification surfaces are overlays/sheets, not replacement pages.
 5. Cards blend into the page surface, retain useful metadata and previews, and grow with their content.
@@ -84,4 +84,4 @@ The mobile profile experience is presented as a slide-up sheet over the active H
 
 ## Current status
 
-The first structural pass is committed on `refactor/axon-funspot-screen-architecture`. Entry points now delegate to screen modules, workspace shells are isolated under `views/`, and profile/notification surfaces have dedicated modal modules. Home now hosts Chats and Explore as tabs on both platforms. Desktop presents the Hub shell; Android keeps its AppHeader and uses a bottom floating action button to create a chat. The existing chat and explore data controllers still live in HubScreen and remain candidates for extraction. Visual QA remains outstanding. No merge or deployment is part of this refactor.
+The first structural pass is committed on `refactor/axon-funspot-screen-architecture`. Entry points now delegate to screen modules, workspace shells are isolated under `views/`, and profile/notification surfaces have dedicated modal modules. The desktop Hub now follows the three-column Profile → Chats → Messaging composition, with Explore accessed from the menu. Android keeps its AppHeader, floating Chats/Explore navigation and a separate floating quick-chat action. The existing chat and explore data controllers still live in HubScreen and remain candidates for extraction. Visual QA remains outstanding. No merge or deployment is part of this refactor.
