@@ -292,7 +292,7 @@ async fn execute_task_claimed(
                                 .iter()
                                 .map(|memory| memory.payload_json.as_str())
                                 .collect::<Vec<_>>()
-                                .join("\\n")
+                                .join("\n")
                         ));
                     }
                     let progressive_limit = request.progressive_limit.min(20);
@@ -324,7 +324,7 @@ async fn execute_task_claimed(
                                         .iter()
                                         .map(|memory| memory.payload_json.as_str())
                                         .collect::<Vec<_>>()
-                                        .join("\\n")
+                                        .join("\n")
                                 ));
                             }
                             Ok(_) => {}
@@ -531,24 +531,22 @@ async fn execute_task_claimed(
         }
     }
 
-    if task.created_by != user.user_id {
-        if let Some(notifications) = state.explore.as_ref() {
-            let _ = notifications
-                .notify_task_event(NotificationInput {
-                    recipient_id: task.created_by,
-                    workspace_id: Some(task.workspace_id),
-                    entity_id: task.id,
-                    actor_id: user.user_id,
-                    event_type: "task.response_submitted",
-                    entity_type: "task",
-                    title: "Agent response submitted",
-                    body: &format!(
-                        "{} submitted a response for {}.",
-                        agent.display_name, task.title
-                    ),
-                })
-                .await;
-        }
+    if let Some(notifications) = state.explore.as_ref() {
+        let _ = notifications
+            .notify_task_event(NotificationInput {
+                recipient_id: task.created_by,
+                workspace_id: Some(task.workspace_id),
+                entity_id: task.id,
+                actor_id: user.user_id,
+                event_type: "task.response_submitted",
+                entity_type: "task",
+                title: "Agent response submitted",
+                body: &format!(
+                    "{} submitted a response for {}.",
+                    agent.display_name, task.title
+                ),
+            })
+            .await;
     }
 
     Ok(Json(TaskSubmission { task, artifact }))
