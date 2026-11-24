@@ -676,7 +676,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               <View style={styles.panel}>
                 <View style={styles.profileIdentityMobile}>
                   {user.photoURL ? <Image source={{uri:user.photoURL}} style={styles.profileAvatarMobile}/> : <View style={styles.profileAvatarFallback}><Text style={styles.profileAvatarFallbackText}>{(user.displayName || user.email || "A").slice(0,1).toUpperCase()}</Text></View>}
-                  <View style={{flex:1}}><Text style={styles.rowTitle}>{user.displayName || user.email || "Axon user"}</Text><Text style={styles.rowMeta}>{selected?.name ?? "Personal workspace"}</Text></View>
+                  <View style={{flex:1}}><Text style={styles.rowTitle}>{user.displayName || user.email || "Axon user"}</Text><Text style={styles.rowMeta}>{selected?.name ?? "Personal Hub"}</Text></View>
                 </View>
                 <View style={styles.mobileStatsGrid}>
                   <View style={styles.mobileStat}><Text style={styles.mobileStatValue}>{agents.length}</Text><Text style={styles.mobileStatLabel}>Agents</Text></View>
@@ -750,7 +750,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               <Text style={styles.panelTitle}>Create your Hub</Text>
               <Text style={styles.muted}>Start a private Hub for your agents and conversations.</Text>
               <TextInput value={workspaceName} onChangeText={setWorkspaceName} placeholder="Hub name" style={styles.input}/>
-              <ActionButton label="Create workspace" onPress={createWorkspace} disabled={!workspaceName.trim() || busy}/>
+              <ActionButton label="Create Hub" onPress={createWorkspace} disabled={!workspaceName.trim() || busy}/>
               {workspaces.map(workspace => <Pressable key={workspace.id} onPress={() => setSelected(workspace)} style={styles.workspaceRow}><Text style={styles.rowTitle}>{workspace.name}</Text></Pressable>)}
             </View>
           ) : activeTab === "home" ? (
@@ -798,7 +798,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
             </>
           ) : (
             <>
-              <View style={styles.screenHeading}><Text style={styles.eyebrow}>PRIVATE WORKSPACE</Text><Text style={styles.screenTitle}>Chats</Text><Text style={styles.description}>Conversations, agent work and project context in one place.</Text></View>
+              <View style={styles.screenHeading}><Text style={styles.eyebrow}>PRIVATE HUB</Text><Text style={styles.screenTitle}>Chats</Text><Text style={styles.description}>Conversations, agent work and project context in one place.</Text></View>
               <View style={styles.newChatRow}><TextInput value={chatTitle} onChangeText={setChatTitle} placeholder="Start a new conversation…" style={[styles.input,styles.newChatInput]} maxLength={160}/><ActionButton label="＋" onPress={createChat} disabled={!chatTitle.trim() || busy}/></View>
               {chats.map(chat => {
                 const linkedTasks = tasks.filter(task => task.source_chat_id === chat.id);
