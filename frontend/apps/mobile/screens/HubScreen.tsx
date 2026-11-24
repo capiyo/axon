@@ -936,7 +936,7 @@ const styles = StyleSheet.create({
   chatCardMobileOpen: { color: "#9DE4B0", fontSize: 9, fontWeight: "800" },
   homeFab: { position: "absolute", right: 22, bottom: 88, width: 58, height: 58, borderRadius: 29, backgroundColor: "#2F8A52", alignItems: "center", justifyContent: "center", elevation: 16, shadowColor: "#000", shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
   homeFabText: { color: "#F2FFF5", fontSize: 32, fontWeight: "400", lineHeight: 36 },
-  quickChatComposer: { position: "absolute", zIndex: 30, left: 14, right: 14, bottom: 94, padding: 15, borderRadius: 18, backgroundColor: "#17271D", gap: 10, elevation: 18 },
+  quickChatComposer: { position: "absolute", zIndex: 30, left: 14, right: 14, bottom: 162, padding: 15, borderRadius: 18, backgroundColor: "#17271D", gap: 10, elevation: 18 },
 
   mobileNavItem: { flex: 1, borderRadius: 22, paddingVertical: 9, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 7 },
   mobileNavItemActive: { backgroundColor: "#244B33" },
