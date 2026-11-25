@@ -1,6 +1,6 @@
 # State of Repository
 
-**Last updated:** 2026-11-21
+**Last updated:** 2026-11-25
 
 **Product identity:** Axon (working name; public trademark/domain clearance remains outstanding).
 
@@ -50,6 +50,19 @@
 - [x] Authenticated workspace-scoped API routes and web/mobile chat and memory interfaces.
 - [x] Backend tests cover event replay, approval/edit invalidation, workspace isolation, archive behavior and append-only enforcement.
 - [x] See [CHATS_AND_PROJECT_MEMORY.md](CHATS_AND_PROJECT_MEMORY.md) for API and data contracts.
+
+### Dual-database memory foundation (in progress)
+
+- [x] Added a separate MongoDB memory-document repository; SQLite remains the relational and authorization authority.
+- [x] Added versioned immutable MongoDB document writes with a unique `memory_id + version` index and SHA-256 content verification.
+- [x] Added SQLite document-version metadata and transactional outbox migrations (`0010`, `0011`).
+- [x] Added a leased outbox worker with idempotent delivery, bounded retries, dead-letter state, and graceful shutdown.
+- [x] Added authenticated memory-document creation for workspace-shared, task-shared, and agent-private scopes.
+- [x] Added local MongoDB configuration and operational documentation.
+- [ ] MongoDB document read/hydration through QKV and Qoin retrieval is not complete.
+- [ ] Existing immutable epochs do not yet pin MongoDB document versions and hashes.
+- [ ] Project-shared memory is disabled until persisted project-membership authorization exists.
+- [ ] Reconciliation, dead-letter operator recovery, and full MongoDB integration/security tests remain outstanding.
 
 ### Frontend and design
 - [x] React + TypeScript + Vite web workspace.
@@ -107,3 +120,8 @@ The Rust suite includes offline locally signed Firebase tokens, wrong-key reject
 - `contracts/` is the language-neutral, versioned protocol boundary.
 - SQLite is the current durable adapter for Axon workspace/agent/artifact/task entities and audit events; production persistence/backup topology must be explicitly configured.
 - Axum remains the orchestration authority. Drogon and Zig remain evidence-driven extension points, not duplicated orchestration services.
+
+
+## Dual-database memory implementation note
+
+The current implementation is a foundation, not the completed end-to-end memory migration. See [Memory Architecture](MEMORY_ARCHITECTURE.md), [MongoDB Setup](MONGODB_SETUP.md), [QKV Retrieval](QKV_RETRIEVAL.md), [Qoin Memory Intelligence](QOIN_MEMORY_INTELLIGENCE.md), and [Memory Testing](MEMORY_TESTING.md). Rust compilation and integration tests must pass in CI before production use.
