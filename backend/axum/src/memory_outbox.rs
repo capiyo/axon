@@ -1025,6 +1025,31 @@ mod epoch_document_tests {
         ).await.unwrap().unwrap();
         assert!(hidden.is_empty());
 
+        let session_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO agent_memory_sessions (session_id, workspace_id, agent_id, task_id, memory_epoch_id, initial_memory_ids_json, retrieved_memory_ids_json, created_at, project_id) VALUES (?, ?, ?, NULL, ?, '[]', '[]', ?, NULL)",
+        )
+        .bind(session_id.to_string())
+        .bind(workspace_id.to_string())
+        .bind(agent_id.to_string())
+        .bind(epoch_id.to_string())
+        .bind(Utc::now().to_rfc3339())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+        let session_documents = outbox.list_session_authorized_documents(
+            &repository, workspace_id, session_id, agent_id, 20,
+        ).await.unwrap().unwrap();
+        assert_eq!(session_documents.0, epoch_id);
+        assert!(session_documents.1.is_none());
+        assert_eq!(session_documents.2.len(), 1);
+        assert_eq!(session_documents.2[0].memory_id, document.memory_id);
+
+        let denied_session = outbox.list_session_authorized_documents(
+            &repository, workspace_id, session_id, Uuid::new_v4(), 20,
+        ).await.unwrap();
+        assert!(denied_session.is_none());
+
         let missing = outbox.list_epoch_authorized_documents(
             &repository, workspace_id, Uuid::new_v4(), agent_id, None, 20,
         ).await.unwrap();
