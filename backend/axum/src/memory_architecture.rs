@@ -395,20 +395,21 @@ impl MemoryEpochCoordinator {
                 return Ok(false);
             }
         }
-        let memory_event_sequence: i64 = sqlx::query_scalar(
+        // Keep the legacy memory-event sequence domain intact. MongoDB
+        // document source sequences are pinned separately per epoch item.
+        let max_sequence: i64 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(sequence), 0) FROM memory_events WHERE workspace_id = ?",
         )
         .bind(workspace_id)
         .fetch_one(&mut *tx)
         .await?;
-        let document_event_sequence: i64 = sqlx::query_scalar(
+        let max_document_sequence: i64 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(source_event_sequence), 0) FROM memory_document_versions \
              WHERE workspace_id = ? AND lifecycle_status = 'approved' AND sync_status IN ('stored', 'indexed')",
         )
         .bind(workspace_id)
         .fetch_one(&mut *tx)
         .await?;
-        let max_sequence = memory_event_sequence.max(document_event_sequence);
         let indexed_vector_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved'",
         )
@@ -433,7 +434,7 @@ impl MemoryEpochCoordinator {
         let id = Uuid::new_v4();
         // This is a reproducibility marker, not a cryptographic integrity hash.
         let marker = format!(
-            "source-sequence:{max_sequence};indexed-vectors:{indexed_vector_count};indexed-documents:{indexed_document_count}"
+            "memory-event-sequence:{max_sequence};document-audit-sequence:{max_document_sequence};indexed-vectors:{indexed_vector_count};indexed-documents:{indexed_document_count}"
         );
         sqlx::query(
             "INSERT INTO memory_epochs (id, workspace_id, epoch_number, published_at, source_event_sequence, indexed_memory_count, snapshot_digest) VALUES (?, ?, ?, ?, ?, ?, ?)"
