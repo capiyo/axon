@@ -57,19 +57,45 @@ impl MemoryDocument {
 
     pub fn validate(&self) -> Result<(), MemoryDocumentError> {
         if self.version == 0
+            || i64::try_from(self.version).is_err()
+            || i64::try_from(self.source_event_sequence).is_err()
             || self.scope.trim().is_empty()
             || self.document_type.trim().is_empty()
+            || self.document_type.len() > 80
             || self.title.trim().is_empty()
+            || self.title.len() > 300
+            || self.content.trim().is_empty()
+            || self.content.len() > 256 * 1024
             || self.content_format.trim().is_empty()
+            || self.content_format.len() > 80
+            || self.source.trim().is_empty()
+            || self.source.len() > 128
             || self.source_kind.trim().is_empty()
+            || self.source_kind.len() > 80
+            || self.tags.len() > 64
+            || self.tags.iter().any(|tag| tag.trim().is_empty() || tag.len() > 64)
             || self.qkv_version.trim().is_empty()
+            || self.qkv_version.len() > 80
+            || self.updated_at < self.created_at
         {
             return Err(MemoryDocumentError::InvalidDocument);
         }
-        if !matches!(
-            self.scope.as_str(),
-            "agent_private" | "task_shared" | "project_shared" | "workspace_shared"
-        ) {
+        let valid_scope = match self.scope.as_str() {
+            "agent_private" => self.owner_id.is_some()
+                && self.task_id.is_none()
+                && self.project_id.is_none(),
+            "task_shared" => self.task_id.is_some()
+                && self.owner_id.is_none()
+                && self.project_id.is_none(),
+            "project_shared" => self.project_id.is_some()
+                && self.owner_id.is_none()
+                && self.task_id.is_none(),
+            "workspace_shared" => self.owner_id.is_none()
+                && self.task_id.is_none()
+                && self.project_id.is_none(),
+            _ => false,
+        };
+        if !valid_scope {
             return Err(MemoryDocumentError::InvalidDocument);
         }
         if !matches!(self.status.as_str(), "proposed" | "ready" | "archived") {
@@ -303,6 +329,7 @@ mod tests {
     fn private_scope_is_an_explicit_supported_scope() {
         let mut document = sample_document();
         document.scope = "agent_private".into();
+        document.owner_id = Some(Uuid::new_v4());
         assert!(document.validate().is_ok());
     }
 
