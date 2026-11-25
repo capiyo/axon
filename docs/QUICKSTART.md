@@ -97,7 +97,7 @@ The workspace UI can create and advance tasks. To simulate the manual handoff, a
 
 ## Current limitations
 
-- MongoDB document creation is queued durably in SQLite and delivered asynchronously. The document read/retrieval path, project-scope authorization, QKV indexing of MongoDB documents, and full memory-epoch document-version pinning are still in progress.
+- MongoDB document creation is queued durably in SQLite and delivered asynchronously. Direct retrieval by memory ID/version is available to a workspace-authorized registered agent after SQLite approval and MongoDB hash verification. Query-based QKV search over MongoDB documents, project-scope authorization, and memory-epoch document-version pinning are still in progress.
 - The current memory-document creation API supports workspace-shared, task-shared and agent-private scopes. Project-shared creation is deliberately rejected until a persisted project-membership authorization model exists.
 - Agent names/provider labels do not connect to provider APIs. The person using the UI still performs manual provider handoff.
 - SQLite must use a persistent volume in production. MongoDB backups and SQLite backups must both be configured.
