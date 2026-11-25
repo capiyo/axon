@@ -56,6 +56,19 @@ impl MemoryDocument {
         format!("{digest:x}")
     }
 
+    /// Hashes the exact ordered text fields from which the QKV key is built.
+    pub fn calculate_qkv_source_hash(&self) -> String {
+        let mut source = self.title.clone();
+        source.push(' ');
+        source.push_str(&self.content);
+        for tag in &self.tags {
+            source.push(' ');
+            source.push_str(tag);
+        }
+        let digest = Sha256::digest(source.as_bytes());
+        format!("{digest:x}")
+    }
+
     pub fn validate(&self) -> Result<(), MemoryDocumentError> {
         if self.version == 0
             || i64::try_from(self.version).is_err()
@@ -117,8 +130,12 @@ impl MemoryDocument {
                     .map(|component| f64::from(*component) * f64::from(*component))
                     .sum::<f64>()
                     .sqrt();
+                let source_hash = self.key_metadata
+                    .get("qkv_source_hash")
+                    .and_then(Value::as_str);
                 if version != self.qkv_version
                     || key.model_version != self.qkv_version
+                    || source_hash != Some(self.calculate_qkv_source_hash().as_str())
                     || !norm.is_finite()
                     || (norm - 1.0).abs() > 1e-4
                 {
