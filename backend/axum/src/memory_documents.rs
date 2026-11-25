@@ -133,9 +133,10 @@ impl MemoryDocument {
                 let source_hash = self.key_metadata
                     .get("qkv_source_hash")
                     .and_then(Value::as_str);
+                let expected_source_hash = self.calculate_qkv_source_hash();
                 if version != self.qkv_version
                     || key.model_version != self.qkv_version
-                    || source_hash != Some(self.calculate_qkv_source_hash().as_str())
+                    || source_hash != Some(expected_source_hash.as_str())
                     || !norm.is_finite()
                     || (norm - 1.0).abs() > 1e-4
                 {
@@ -391,7 +392,8 @@ mod tests {
         };
         document.key_metadata = serde_json::json!({
             "qkv_key": key,
-            "qkv_key_version": "qkv-v1"
+            "qkv_key_version": "qkv-v1",
+            "qkv_source_hash": document.calculate_qkv_source_hash()
         });
         assert!(document.validate().is_ok());
 
@@ -410,7 +412,8 @@ mod tests {
                 "values": [2.0, 0.0],
                 "model_version": "qkv-v1"
             },
-            "qkv_key_version": "qkv-v1"
+            "qkv_key_version": "qkv-v1",
+            "qkv_source_hash": document.calculate_qkv_source_hash()
         });
         assert!(matches!(
             document.validate(),
