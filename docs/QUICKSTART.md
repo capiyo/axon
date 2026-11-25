@@ -136,3 +136,15 @@ curl "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/agents/$AGENT_ID/mem
 ```
 
 For task-shared memory, supply `task_id` as a query parameter and the task must be assigned to the requesting agent. Agent-private memory is only returned when its stored owner agent matches the agent ID in the route. Project-shared memory is intentionally unavailable until project membership is persisted.
+
+
+Search authorized, approved MongoDB documents through the deterministic lexical QKV fallback and Qoin memory-ranking layer:
+
+```sh
+curl -X POST "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/agents/$AGENT_ID/memory-documents/search" \
+  -H "Authorization: Bearer $FIREBASE_ID_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"immutable memory snapshots","limit":10,"tags":["architecture"]}'
+```
+
+The response identifies its retrieval mode as `deterministic_lexical_qkv_v1`. This is a stable hashed lexical representation, not a neural embedding. Results include QKV attention and Qoin score breakdowns and are bounded to a 64 KiB content budget.
