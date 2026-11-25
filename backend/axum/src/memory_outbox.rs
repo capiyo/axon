@@ -446,7 +446,8 @@ impl MemoryOutbox {
         let version_sql = i64::try_from(version)
             .map_err(|_| sqlx::Error::Protocol("memory version exceeds SQLite range".into()))?;
         let row = sqlx::query(
-            "SELECT scope, owner_id, task_id, content_hash, lifecycle_status, sync_status \
+            "SELECT scope, owner_id, task_id, project_id, document_type, content_hash, \
+             source_event_sequence, qkv_version, qoin_vector_version, lifecycle_status, sync_status \
              FROM memory_document_versions WHERE workspace_id = ? AND memory_id = ? AND version = ?",
         )
         .bind(workspace_id.to_string())
@@ -460,7 +461,12 @@ impl MemoryOutbox {
         let scope: String = row.try_get("scope")?;
         let owner_id: Option<String> = row.try_get("owner_id")?;
         let stored_task_id: Option<String> = row.try_get("task_id")?;
+        let stored_project_id: Option<String> = row.try_get("project_id")?;
+        let stored_document_type: String = row.try_get("document_type")?;
         let expected_hash: String = row.try_get("content_hash")?;
+        let stored_source_sequence: i64 = row.try_get("source_event_sequence")?;
+        let stored_qkv_version: String = row.try_get("qkv_version")?;
+        let stored_qoin_version: Option<String> = row.try_get("qoin_vector_version")?;
         let lifecycle_status: String = row.try_get("lifecycle_status")?;
         let sync_status: String = row.try_get("sync_status")?;
         if lifecycle_status != "approved" || !matches!(sync_status.as_str(), "stored" | "indexed") {
@@ -493,6 +499,12 @@ impl MemoryOutbox {
             || document.workspace_id != workspace_id
             || document.content_hash != expected_hash
             || document.scope != scope
+            || document.document_type != stored_document_type
+            || document.source_event_sequence != u64::try_from(stored_source_sequence)
+                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?
+            || document.qkv_version != stored_qkv_version
+            || document.qoin_vector_version != stored_qoin_version
+            || document.project_id.map(|id| id.to_string()) != stored_project_id
             || document.owner_id.map(|id| id.to_string()) != owner_id
             || document.task_id.map(|id| id.to_string()) != stored_task_id
         {
