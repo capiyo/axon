@@ -517,6 +517,120 @@ impl MemoryOutbox {
         Ok(Some(document))
     }
 
+    /// Hydrates only the exact MongoDB document versions pinned by an immutable
+    /// memory epoch. Current lifecycle changes do not rewrite historical epoch
+    /// membership; SQLite epoch pins remain the authority for this snapshot.
+    pub async fn list_epoch_authorized_documents(
+        &self,
+        repository: &dyn MemoryDocumentRepository,
+        workspace_id: Uuid,
+        epoch_id: Uuid,
+        requester_agent_id: Uuid,
+        task_id: Option<Uuid>,
+        limit: usize,
+    ) -> Result<Vec<MemoryDocument>, MemoryOutboxError> {
+        let epoch_exists: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM memory_epochs WHERE id = ? AND workspace_id = ?",
+        )
+        .bind(epoch_id.to_string())
+        .bind(workspace_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        if epoch_exists.is_none() {
+            return Ok(Vec::new());
+        }
+
+        let limit = i64::try_from(limit.clamp(1, 100))
+            .map_err(|_| sqlx::Error::Protocol("epoch document limit exceeds SQLite range".into()))?;
+        let rows = sqlx::query(
+            "SELECT memory_id, document_version, content_hash, scope, project_id, task_id, owner_id, \
+                    source_event_sequence, qkv_version, qoin_vector_version \
+             FROM memory_document_epoch_items \
+             WHERE epoch_id = ? AND workspace_id = ? \
+             ORDER BY source_event_sequence DESC, memory_id ASC LIMIT ?",
+        )
+        .bind(epoch_id.to_string())
+        .bind(workspace_id.to_string())
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut documents = Vec::with_capacity(rows.len());
+        for row in rows {
+            let memory_id_text: String = row.try_get("memory_id")?;
+            let memory_id = Uuid::parse_str(&memory_id_text)
+                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            let version_raw: i64 = row.try_get("document_version")?;
+            let version = u64::try_from(version_raw)
+                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            let expected_hash: String = row.try_get("content_hash")?;
+            let scope: String = row.try_get("scope")?;
+            let project_id: Option<String> = row.try_get("project_id")?;
+            let stored_task_id: Option<String> = row.try_get("task_id")?;
+            let owner_id: Option<String> = row.try_get("owner_id")?;
+            let source_sequence_raw: i64 = row.try_get("source_event_sequence")?;
+            let source_sequence = u64::try_from(source_sequence_raw)
+                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            let qkv_version: String = row.try_get("qkv_version")?;
+            let qoin_vector_version: Option<String> = row.try_get("qoin_vector_version")?;
+
+            let visible = match scope.as_str() {
+                "workspace_shared" => true,
+                "agent_private" => owner_id.as_deref() == Some(requester_agent_id.to_string().as_str()),
+                "task_shared" => task_id.is_some()
+                    && stored_task_id.as_deref() == task_id.map(|id| id.to_string()).as_deref(),
+                // Project membership is not yet backed by persisted authorization.
+                "project_shared" => false,
+                _ => false,
+            };
+            if !visible {
+                continue;
+            }
+
+            // Confirm the authoritative version record still agrees with the
+            // immutable epoch before hydrating its MongoDB value.
+            let metadata = sqlx::query(
+                "SELECT content_hash, sync_status FROM memory_document_versions \
+                 WHERE workspace_id = ? AND memory_id = ? AND version = ?",
+            )
+            .bind(workspace_id.to_string())
+            .bind(memory_id.to_string())
+            .bind(version_raw)
+            .fetch_optional(&self.pool)
+            .await?;
+            let Some(metadata) = metadata else {
+                return Err(MemoryOutboxError::VersionConflict);
+            };
+            let current_hash: String = metadata.try_get("content_hash")?;
+            let sync_status: String = metadata.try_get("sync_status")?;
+            if current_hash != expected_hash || !matches!(sync_status.as_str(), "stored" | "indexed") {
+                return Err(MemoryOutboxError::VersionConflict);
+            }
+
+            let Some(mut document) = repository.get_version(memory_id, version).await? else {
+                return Err(MemoryOutboxError::VersionConflict);
+            };
+            document.validate()?;
+            if document.memory_id != memory_id
+                || document.version != version
+                || document.workspace_id != workspace_id
+                || document.content_hash != expected_hash
+                || document.scope != scope
+                || document.project_id.map(|id| id.to_string()) != project_id
+                || document.task_id.map(|id| id.to_string()) != stored_task_id
+                || document.owner_id.map(|id| id.to_string()) != owner_id
+                || document.source_event_sequence != source_sequence
+                || document.qkv_version != qkv_version
+                || document.qoin_vector_version != qoin_vector_version
+            {
+                return Err(MemoryOutboxError::VersionConflict);
+            }
+            document.status = "ready".into();
+            documents.push(document);
+        }
+        Ok(documents)
+    }
+
     pub async fn mark_indexed(
         &self,
         memory_id: Uuid,
