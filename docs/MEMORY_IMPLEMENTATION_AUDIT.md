@@ -1,91 +1,84 @@
 # Axon Memory Implementation Audit
 
 > Audit date: 2026-11-25  
-> Branch inspected: `production/phase-b-chats-memory`  
-> Repository inspected: `capiyo/axon`
+> Repository: `capiyo/axon`  
+> Branch: `production/phase-b-chats-memory`  
+> Status: implementation in progress; compiler/CI verification is still required.
 
-## 1. Verified current architecture
+## 1. Verified architecture
 
-- Rust workspace contains `backend/axum` as the `axon-api` package.
-- The backend uses Axum 0.7, Tokio, SQLx 0.8, and SQLite.
-- `Storage` is an asynchronous trait in `backend/axum/src/storage.rs`; `SqliteStorage` is its current durable implementation.
-- SQLite migrations are embedded from `backend/axum/migrations` and applied by `SqliteStorage::connect`.
-- `AppState` owns shared handles for the storage trait, chat-memory store, memory-epoch coordinator, optional Qoin vector client, and Firebase verifier.
-- Startup in `backend/axum/src/main.rs` configures Firebase, SQLite, the hourly memory-epoch worker, and an optional Qoin HTTP client.
+- Rust workspace with Axum backend at `backend/axum`.
+- SQLite remains the authoritative relational store through `Storage` and `SqliteStorage`.
+- MongoDB is isolated behind `MemoryDocumentRepository` and stores immutable versioned memory documents.
+- SQLite stores document lifecycle, scope, version, content hash, source sequence, synchronization state, audit data, and transactional outbox records.
+- A leased outbox worker persists MongoDB versions, verifies hashes, retries failures, and supports dead-letter state and restart recovery.
+- Existing chat memory, Firebase authentication, workspace membership, Qoin market-vector adapter, memory intelligence, QKV attention, immutable epochs, and progressive agent-memory sessions remain in place.
 
-## 2. Existing memory and QKV/Qoin functionality
+## 2. Existing QKV and Qoin implementation
 
-The repository already implements substantial parts of the requested intelligence architecture:
+- `memory_architecture.rs` implements multi-head scaled dot-product attention, Pareto handover selection, immutable epoch publication, agent memory sessions, and progressive retrieval.
+- `memory_vector_provider.rs` implements deterministic FNV-1a lexical feature hashing (64 dimensions). This is a deterministic lexical representation, not a neural embedding model.
+- `memory_intelligence.rs` implements deterministic Qoin memory ranking with semantic, context, dependency, outcome, failure, evidence, recency, and tag features, plus score explanations.
+- `qoin_vectors.rs` is a separate adapter for Qoin market/event-time vectors. Market vectors are not treated as interchangeable with memory embeddings.
+- MongoDB document search filters candidate metadata in SQLite, hydrates and verifies document versions, applies QKV attention, then runs Qoin memory ranking.
 
-- `memory_architecture.rs` defines `QoinVector`, `AttentionQuery`, `AttentionMemory`, `AttentionScore`, multi-head scaled dot-product `qkv_attention`, and Pareto-style handover selection.
-- `memory_architecture.rs` also coordinates immutable memory epochs, epoch items, agent memory sessions, handover, and progressive retrieval.
-- `memory_intelligence.rs` contains a separate deterministic memory-ranking model with workspace/scope/status filtering, semantic similarity, context, dependency, outcome, failure, evidence, recency, tags, and score explanations.
-- `qoin_vectors.rs` is an HTTP adapter to the separate Qoin service. It validates six-dimensional attended market vectors and supports historical event-time lookups. This market-vector contract must not be conflated with Axon's memory-ranking algorithm.
-- `memory_routes.rs` exposes existing memory indexing, Qoin-vector, epoch, handover, and progressive retrieval routes.
-- `chat_memory.rs` persists chats, messages, memory entries, and resume-brief cache data in SQLite.
+## 3. Database and consistency model
 
-These components must be extended rather than replaced or duplicated.
+### SQLite
 
-## 3. Existing storage responsibilities
+Authoritative for identity, workspace membership, document lifecycle, scope, versions, audit/source sequence, synchronization status, outbox events, memory epochs, session-to-epoch association, and immutable epoch pins.
 
-The existing `Storage` trait owns entity persistence, audit events, Firebase user provisioning, workspace membership, workspace listing, and workspace creation. It also provides chat-memory and memory-epoch coordinator handles. The current concrete adapter is `SqliteStorage`.
+### MongoDB
 
-The current `AppState` does not yet contain a MongoDB document repository.
+Stores immutable long-form document versions. A unique `memory_id + version` index prevents duplicate version records. Content is verified using SHA-256.
 
-## 4. Existing database schema
+### Outbox
 
-The migration history currently includes migrations `0001` through `0009`. The verified schema evolution includes:
+The SQLite transaction records metadata and a durable outbox event. The worker claims a leased event, writes the immutable MongoDB version, verifies it, and marks the SQLite version synchronized. Retries are idempotent.
 
-- Core entities and append-only audit events.
-- Users and workspace memberships.
-- Chats, chat messages, memory events, and resume-brief cache.
-- Memory epochs, vector index, and agent memory sessions.
-- Immutable epoch-item snapshots.
-- Progressive retrieval tracking.
-- Snapshot immutability triggers.
-- Chat-message source-kind support.
-- Memory-index revision timestamp.
+### Immutable epochs
 
-Existing vector-index rows already carry Qoin vector JSON, key metadata JSON, value payload JSON, tags, dependency IDs, outcome/evidence scores, source sequence, model version, and indexing timestamp.
+`memory_document_epoch_items` pins exact document version, content hash, scope, project/task/owner identifiers, source sequence, QKV version, Qoin vector version, scoring version, and snapshot time.
 
-## 5. Configuration and startup
+## 4. Work completed in this implementation pass
 
-- SQLite is configured by `AXON_DATABASE_URL`, defaulting to `sqlite://axon.db`.
-- Firebase authentication is required by current startup.
-- The external Qoin HTTP service is optional and configured by `QOIN_API_URL`.
-- MongoDB is not currently declared in the inspected Cargo manifests and is not initialized by startup.
+1. Added exact-version document hydration from the SQLite immutable epoch snapshot.
+2. Added session-bound hydration that resolves the epoch from `agent_memory_sessions`; the API caller cannot supply an arbitrary epoch.
+3. Added authenticated endpoint:
+   `GET /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-sessions/{session_id}/documents`.
+4. Enforced workspace membership, agent/session association, task assignment, pinned visibility scope, SQLite version metadata, MongoDB version identity, QKV version, and SHA-256 content integrity before returning document values.
+5. New document creation now persists a deterministic lexical QKV key and its model version in MongoDB `key_metadata`.
+6. Added a SHA-256 source hash over the exact ordered title/content/tag text used to build that QKV key.
+7. Document validation rejects malformed, partial, non-normalized, model-version-mismatched, or source-hash-mismatched persisted keys. Legacy documents without stored keys retain deterministic query-time fallback.
+8. Added test source for exact epoch hydration, session binding, private-scope denial, missing epochs, and persisted QKV-key validation.
+9. Updated architecture, QKV, MongoDB, testing, and repository-state documentation.
 
-## 6. Gaps to address
+## 5. Remaining gaps
 
-1. No MongoDB document repository exists.
-2. No versioned long-form memory-document model is present in the inspected storage/state layer.
-3. No SQLite transactional outbox for cross-database document persistence was found in the inspected implementation.
-4. Existing QKV/Qoin retrieval currently hydrates value payloads from SQLite epoch snapshots; it does not yet hydrate versioned documents from MongoDB.
-5. Existing epoch items pin vector and value payload snapshots, but the inspected schema does not establish MongoDB document-version/hash pinning.
-6. Existing authorization protects workspace membership and memory visibility in the current routes/coordinator. New document operations must reuse and strengthen these checks rather than bypass them.
-7. The external Qoin market-vector service is distinct from the deterministic Axon memory scoring model and must remain isolated.
+- Neural embedding-provider implementation and configuration. The current provider is explicitly lexical.
+- Project-shared memory remains fail-closed because persisted project-membership authorization does not yet exist.
+- A separately searchable precomputed vector index, reconciliation, and safe index-rebuild workflow.
+- Retrieval feedback persistence and evaluation against a labelled memory-retrieval dataset.
+- Dead-letter operator recovery and full MongoDB outage/restart integration tests.
+- Full readiness/observability coverage, backup/restore drills, production secrets management, and measured performance results.
+- Session-document hydration is now bound to the persisted session epoch; full end-to-end agent execution consumption still needs integration testing.
 
-## 7. Compatibility risks
+## 6. Verification status
 
-- Adding MongoDB as a mandatory startup dependency without an explicit deployment configuration would break current SQLite-only development and deployments.
-- Changing `Storage` directly to embed Mongo-specific methods would couple the relational adapter to document storage.
-- Replacing existing QKV or memory-intelligence code would regress established behavior and tests.
-- Reusing the market Qoin vector endpoint as a memory embedding provider would mix two different domains and vector contracts.
-- Existing immutable epochs must not be rewritten by later document or index updates.
+The GitHub connector in this session can read and commit repository files but does not provide a Rust build/test runtime. No `cargo fmt`, `cargo check`, `cargo test`, or `cargo clippy` pass is claimed.
 
-## 8. Safe implementation sequence
+Run from repository root in a Rust-enabled checkout:
 
-1. Introduce a separate `MemoryDocumentRepository` trait and MongoDB adapter.
-2. Add explicit MongoDB configuration and shared application-state wiring while preserving SQLite-only mode.
-3. Add a versioned memory-document model with deterministic content hashes.
-4. Add forward-only SQLite migrations for document metadata and transactional outbox state.
-5. Implement an idempotent outbox worker and crash recovery.
-6. Connect the existing QKV/Qoin indexing pipeline to ready document versions without replacing its scoring behavior.
-7. Extend immutable epoch pins with document version/hash and index versions.
-8. Expose authenticated document-memory operations through existing Axum conventions.
-9. Add integration/security tests and operational documentation.
+```sh
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+```
 
-## 9. Files inspected
+A MongoDB-enabled integration run must also exercise outbox retries/restart, hash conflicts, exact session epoch hydration, and workspace/task/private scope isolation.
+
+## 7. Files inspected
 
 - `Cargo.toml`
 - `backend/axum/Cargo.toml`
@@ -95,36 +88,16 @@ Existing vector-index rows already carry Qoin vector JSON, key metadata JSON, va
 - `backend/axum/src/lib.rs`
 - `backend/axum/src/memory_architecture.rs`
 - `backend/axum/src/memory_intelligence.rs`
+- `backend/axum/src/memory_documents.rs`
+- `backend/axum/src/memory_outbox.rs`
+- `backend/axum/src/memory_vector_provider.rs`
+- `backend/axum/src/memory_document_routes.rs`
 - `backend/axum/src/qoin_vectors.rs`
 - `backend/axum/src/chat_memory.rs`
 - `backend/axum/src/memory_routes.rs`
-
-## 10. Verification limitation
-
-This audit was performed against GitHub source files. The connected GitHub workflow permits repository reads and writes but does not provide a local checkout or Rust execution environment in this session. Consequently, compilation, migration execution, and integration tests must be run in CI or a local checkout before any implementation can be represented as verified.
-
-
-## 11. Implementation progress on this branch
-
-The following work has since been added on this branch:
-
-- MongoDB 2.8.2 document repository with immutable memory/version writes, indexes, and SHA-256 content verification.
-- SQLite migrations 0010–0012 for document metadata, durable outbox, idempotency, and immutable document epoch pins.
-- Audit-sequence assignment for new documents.
-- Leased outbox worker with retry/backoff, dead-letter handling, restart recovery, and graceful shutdown.
-- Authenticated create, approve, direct retrieval, and search endpoints for workspace-shared, task-shared, and agent-private documents.
-- Deterministic lexical QKV vector provider and integration with existing QKV attention and Qoin memory-intelligence ranking.
-- Epoch publication now includes approved, synchronized MongoDB document versions and pins content hash, source sequence, QKV version, and Qoin scoring version.
-- Unit/integration test source for document hashing, scope invariants, outbox idempotency, approval audit, private-scope filtering, lexical vectors, and immutable epoch pins.
-
-Still outstanding:
-
-- Rust formatting, compilation, clippy, and test execution in a Rust-enabled environment.
-- Real MongoDB integration tests and outage/restart simulation.
-- Neural embedding provider; the current provider is explicitly lexical.
-- Session retrieval constrained to a pinned epoch.
-- Project membership authorization.
-- Reconciliation, index rebuild, and dead-letter operator recovery.
-- Full observability/readiness and performance measurements.
-
-The source changes have not been verified by a Rust compiler in this session. Do not treat this progress list as a production sign-off.
+- `docs/STATE_OF_REPO.md`
+- `docs/MEMORY_ARCHITECTURE.md`
+- `docs/QKV_RETRIEVAL.md`
+- `docs/QOIN_MEMORY_INTELLIGENCE.md`
+- `docs/MONGODB_SETUP.md`
+- `docs/MEMORY_TESTING.md`
