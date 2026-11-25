@@ -14,13 +14,13 @@ The separate Qoin HTTP vector adapter is for market/event-time vectors. It is no
 
 1. An authenticated workspace member submits a memory document.
 2. Axon validates the requested scope against the current workspace, task, or agent records.
-3. SQLite atomically stores authoritative document metadata and a durable outbox payload.
+3. SQLite appends a `memory_document.created` audit event, uses its sequence as the immutable source-event sequence, and atomically stores authoritative metadata plus the durable outbox payload.
 4. The background worker claims the event using a lease.
 5. The worker inserts the immutable document version in MongoDB.
 6. The worker verifies the document hash and marks SQLite synchronization as stored.
 7. The worker clears the outbox payload after successful delivery.
 8. A workspace member explicitly approves the proposed version; SQLite records approval and an audit event atomically.
-9. A registered agent can retrieve an approved version by ID after SQLite scope checks and MongoDB hash verification.
+9. A registered agent can retrieve or search approved versions after SQLite scope checks and MongoDB hash verification.
 
 Retries use a unique memory/version/event key. Worker leases permit recovery after process restarts.
 
