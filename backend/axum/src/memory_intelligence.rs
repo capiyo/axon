@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
+pub const QOIN_MEMORY_SCORING_VERSION: &str = "axon-qoin-memory-v1";
+
 const RELEVANCE_THRESHOLD: f64 = 0.72;
 const CONDITIONAL_THRESHOLD: f64 = 0.42;
 
