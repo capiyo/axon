@@ -95,3 +95,33 @@ Simulator routes require authentication and are hidden unless AXON_ENABLE_SIMULA
 Mutations record the authenticated internal user as the audit actor. Entity writes and audit rows commit in the same transaction. Audit rows are append-only at the SQLite layer.
 
 Account/data deletion is design-only; no deletion route or job exists. See docs/ACCOUNT_AND_DATA_DELETION_DESIGN.md before implementing destructive account workflows.
+
+## Agent provider runtime
+
+Agents are registered with a provider identifier (for example `claude`, `openai`, or `deepseek`). The identifier is converted to an environment-variable slug and resolved only by the backend when an assigned task is explicitly executed.
+
+For Claude / Anthropic:
+
+    AXON_AGENT_CLAUDE_BASE_URL=https://api.anthropic.com/v1
+    AXON_AGENT_CLAUDE_API_KEY=<server-side-secret>
+    AXON_AGENT_CLAUDE_MODEL=<available-model-id>
+
+For OpenAI-compatible providers:
+
+    AXON_AGENT_OPENAI_BASE_URL=https://api.openai.com/v1
+    AXON_AGENT_OPENAI_API_KEY=<server-side-secret>
+    AXON_AGENT_OPENAI_MODEL=<available-model-id>
+
+    AXON_AGENT_DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+    AXON_AGENT_DEEPSEEK_API_KEY=<server-side-secret>
+    AXON_AGENT_DEEPSEEK_MODEL=<available-model-id>
+
+Use the exact provider slug saved on the agent record. The backend appends the provider's supported completion path, applies a bounded request timeout, and keeps credentials out of the database, API responses, and audit metadata. Configure these values as private backend environment variables; never put provider keys in Vite or Expo environment variables.
+
+The frontend flow is explicit: create a task in a session, assign it to an agent, then invoke `POST /api/v1/tasks/{task_id}/execute`. The API loads the recent source-session transcript, approved memory, resume brief, and selected artifacts, optionally adds Qoin historical context, invokes the configured provider, stores the response as an artifact, advances the task to `submitted`, and appends the assistant response to the originating session when `source_chat_id` is set. Task creation and ordinary message submission do not silently trigger billable provider calls.
+
+## Client API configuration
+
+- Web: set `VITE_AXON_API_URL` to the public Axon API origin when web and API are hosted separately. If omitted, the web client uses the same origin.
+- Android: set `EXPO_PUBLIC_AXON_API_URL` to an API URL reachable from the physical device (for example, the backend's HTTPS origin or a reachable LAN address during local development). Do not use `127.0.0.1` for a physical Android device; that address refers to the device itself.
+- Both clients use Firebase Auth directly and send the current Firebase ID token as `Authorization: Bearer ...`. The Firebase project ID configured in each client must match the backend's `FIREBASE_PROJECT_ID`.
