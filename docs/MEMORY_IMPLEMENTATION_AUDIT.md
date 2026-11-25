@@ -48,10 +48,10 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
    `GET /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-sessions/{session_id}/documents`.
 4. Enforced workspace membership, agent/session association, task assignment, pinned visibility scope, SQLite version metadata, MongoDB version identity, QKV version, and SHA-256 content integrity before returning document values.
 5. New document creation now persists a deterministic lexical QKV key and its model version in MongoDB `key_metadata`.
-6. Added a SHA-256 source hash over the exact ordered title/content/tag text used to build that QKV key.
-7. Document validation rejects malformed, partial, non-normalized, model-version-mismatched, or source-hash-mismatched persisted keys. Legacy documents without stored keys retain deterministic query-time fallback.
-8. Added test source for exact epoch hydration, session binding, private-scope denial, missing epochs, and persisted QKV-key validation.
-9. Updated architecture, QKV, MongoDB, testing, and repository-state documentation.
+7. Added a SHA-256 source hash over the exact ordered title/content/tag text used to build that QKV key.
+8. Document validation rejects malformed, partial, non-normalized, model-version-mismatched, or source-hash-mismatched persisted keys. Legacy documents without stored keys retain deterministic query-time fallback.
+9. Added test source for exact epoch hydration, session binding, private-scope denial, missing epochs, and persisted QKV-key validation.
+10. Updated architecture, QKV, MongoDB, testing, and repository-state documentation.
 
 ## 5. Remaining gaps
 
@@ -61,7 +61,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 - Retrieval feedback persistence and evaluation against a labelled memory-retrieval dataset.
 - Dead-letter operator recovery and full MongoDB outage/restart integration tests.
 - Full readiness/observability coverage, backup/restore drills, production secrets management, and measured performance results.
-- Session-document hydration is now bound to the persisted session epoch; full end-to-end agent execution consumption still needs integration testing.
+- Session-document hydration is now bound to the persisted session epoch, and a combined session-context API returns it alongside progressive retrieval. The repository still has no autonomous provider-backed agent execution runtime to wire this context into; client/agent consumer integration needs to use the new endpoint.
 
 ## 6. Verification status
 
