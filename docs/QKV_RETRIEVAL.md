@@ -24,4 +24,4 @@ Existing QKV values are stable references/payload snapshots stored in SQLite epo
 
 ## Remaining work
 
-Implement MongoDB value hydration, a versioned embedding-provider interface, deterministic fallback candidate generation, and tests that pin exact MongoDB document versions into epochs.
+MongoDB document search now uses a deterministic FNV-1a hashed lexical vector (64 dimensions, four attention heads) as a fallback QKV key. It is explicitly labelled `deterministic_lexical_qkv_v1`, not neural semantic search. Candidate metadata is filtered in SQLite before MongoDB hydration and hash verification. A versioned neural embedding-provider interface and exact MongoDB document-version epoch pins remain outstanding.
