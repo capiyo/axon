@@ -88,14 +88,38 @@ impl MemoryOutbox {
         .execute(&mut *transaction)
         .await?;
 
-        let stored_hash: String = sqlx::query_scalar(
-            "SELECT content_hash FROM memory_document_versions WHERE memory_id = ? AND version = ?",
+        let existing = sqlx::query(
+            "SELECT workspace_id, project_id, owner_id, task_id, scope, document_type, \
+             content_hash, source_event_sequence, qkv_version, qoin_vector_version, lifecycle_status \
+             FROM memory_document_versions WHERE memory_id = ? AND version = ?",
         )
         .bind(document.memory_id.to_string())
         .bind(version)
         .fetch_one(&mut *transaction)
         .await?;
-        if stored_hash != document.content_hash {
+        let stored_workspace: String = existing.try_get("workspace_id")?;
+        let stored_project: Option<String> = existing.try_get("project_id")?;
+        let stored_owner: Option<String> = existing.try_get("owner_id")?;
+        let stored_task: Option<String> = existing.try_get("task_id")?;
+        let stored_scope: String = existing.try_get("scope")?;
+        let stored_type: String = existing.try_get("document_type")?;
+        let stored_hash: String = existing.try_get("content_hash")?;
+        let stored_sequence: i64 = existing.try_get("source_event_sequence")?;
+        let stored_qkv_version: String = existing.try_get("qkv_version")?;
+        let stored_qoin_version: Option<String> = existing.try_get("qoin_vector_version")?;
+        let stored_lifecycle: String = existing.try_get("lifecycle_status")?;
+        if stored_workspace != document.workspace_id.to_string()
+            || stored_project != document.project_id.map(|id| id.to_string())
+            || stored_owner != document.owner_id.map(|id| id.to_string())
+            || stored_task != document.task_id.map(|id| id.to_string())
+            || stored_scope != document.scope
+            || stored_type != document.document_type
+            || stored_hash != document.content_hash
+            || stored_sequence != source_sequence
+            || stored_qkv_version != document.qkv_version
+            || stored_qoin_version != document.qoin_vector_version
+            || stored_lifecycle != lifecycle_status
+        {
             return Err(MemoryOutboxError::VersionConflict);
         }
 
