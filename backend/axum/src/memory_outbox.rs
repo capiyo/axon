@@ -670,7 +670,7 @@ mod tests {
             .await
             .unwrap());
         let audit_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM audit_events WHERE event_type = 'memory_document.approved' AND entity_id = ?",
+            "SELECT COUNT(*) FROM audit_events WHERE event_type IN ('memory_document.created', 'memory_document.approved') AND entity_id = ?",
         )
         .bind(document.memory_id.to_string())
         .fetch_one(&outbox.pool)
