@@ -334,6 +334,24 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
       .catch(cause => setError(cause instanceof Error ? cause.message : "Could not load chat."));
   }, [selected?.id, activeChat]);
 
+  // Keep session activity, task state, and notifications synchronized across devices.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void refreshNotifications().catch(() => undefined);
+      if (!selected) return;
+      void refreshWorkspace(selected).catch(() => undefined);
+      if (activeChat) {
+        void api<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`)
+          .then(setChatDetail)
+          .catch(() => undefined);
+      }
+      if (activeView === "explore") {
+        void refreshExplore().catch(() => undefined);
+      }
+    }, 20000);
+    return () => clearInterval(timer);
+  }, [selected?.id, activeChat, activeView]);
+
   async function createChat(event: FormEvent<HTMLFormElement>) {
     if (!selected) return;
     await runForm(event, async () => {
