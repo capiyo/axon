@@ -482,16 +482,6 @@ pub async fn retrieve_session_context(
     }
     drop(agents);
 
-    // The coordinator verifies the session/agent/workspace binding and records
-    // progressive retrieval against the already pinned immutable epoch.
-    let progressive = coordinator(&state)?
-        .retrieve_progressive(workspace_id, agent_id, session_id, input)
-        .await
-        .map_err(|_| error(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "Could not retrieve additional context from this agent's pinned memory epoch.",
-        ))?;
-
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| error(
         StatusCode::SERVICE_UNAVAILABLE,
         "Memory document metadata is unavailable.",
@@ -526,6 +516,17 @@ pub async fn retrieve_session_context(
             ));
         }
     }
+
+
+    // The coordinator verifies the session/agent/workspace binding and records
+    // progressive retrieval against the already pinned immutable epoch.
+    let progressive = coordinator(&state)?
+        .retrieve_progressive(workspace_id, agent_id, session_id, input)
+        .await
+        .map_err(|_| error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Could not retrieve additional context from this agent's pinned memory epoch.",
+        ))?;
 
     // Bound document context independently from the progressive memory count.
     // Do not truncate individual source documents: omit whole documents and
