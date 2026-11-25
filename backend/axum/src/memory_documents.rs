@@ -4,6 +4,7 @@
 //! synchronization state. This module stores immutable document versions only;
 //! it deliberately does not make authorization decisions.
 
+use crate::memory_architecture::QoinVector;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures_util::TryStreamExt;
@@ -103,6 +104,28 @@ impl MemoryDocument {
         }
         if self.content_hash != self.calculate_content_hash() {
             return Err(MemoryDocumentError::ContentHashMismatch);
+        }
+        let stored_key = self.key_metadata.get("qkv_key");
+        let stored_key_version = self.key_metadata.get("qkv_key_version").and_then(Value::as_str);
+        match (stored_key, stored_key_version) {
+            (None, None) => {} // Legacy document; retrieval may construct a deterministic fallback key.
+            (Some(value), Some(version)) => {
+                let key: QoinVector = serde_json::from_value(value.clone())
+                    .map_err(|_| MemoryDocumentError::InvalidDocument)?;
+                key.validate().map_err(|_| MemoryDocumentError::InvalidDocument)?;
+                let norm = key.values.iter()
+                    .map(|component| f64::from(*component) * f64::from(*component))
+                    .sum::<f64>()
+                    .sqrt();
+                if version != self.qkv_version
+                    || key.model_version != self.qkv_version
+                    || !norm.is_finite()
+                    || (norm - 1.0).abs() > 1e-4
+                {
+                    return Err(MemoryDocumentError::InvalidDocument);
+                }
+            }
+            _ => return Err(MemoryDocumentError::InvalidDocument),
         }
         Ok(())
     }
