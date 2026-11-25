@@ -44,7 +44,7 @@ The current create endpoint enables workspace-shared, task-shared, and agent-pri
 
 Before claiming end-to-end multi-agent memory completion, implement and test:
 - Neural embedding-provider integration and QKV index versioning for MongoDB documents.
-- QKV key generation/indexing for document versions.
+- Persistent QKV key generation/indexing for document versions; the current lexical vectors are computed deterministically at query time.
 - Qoin memory-ranking integration for MongoDB candidates.
 - Immutable epoch pins containing document version, content hash, QKV version, Qoin version, and source sequence.
 - Reconciliation and safe index rebuild.
