@@ -28,7 +28,7 @@ Retries use a unique memory/version/event key. Worker leases permit recovery aft
 
 Axon already has multi-head scaled dot-product QKV attention and Pareto-style initial/deferred handover in `memory_architecture.rs`. It also has deterministic score decomposition, scope/status filtering, and relevance explanations in `memory_intelligence.rs`.
 
-Those systems remain in place. Direct document-by-ID retrieval is implemented with SQLite scope checks and MongoDB hash verification. Query-based QKV candidate search and epoch document-version/hash pins have not yet been added.
+Those systems remain in place. Direct document-by-ID retrieval is implemented with SQLite scope checks and MongoDB hash verification. Query-based search is now available using deterministic lexical QKV attention followed by the existing Qoin memory-intelligence ranking. Neural embedding-provider integration and epoch document-version/hash pins remain outstanding.
 
 ## Scope model
 
@@ -43,7 +43,7 @@ The current create endpoint enables workspace-shared, task-shared, and agent-pri
 ## Production gates
 
 Before claiming end-to-end multi-agent memory completion, implement and test:
-- Query-based QKV candidate search over MongoDB documents.
+- Neural embedding-provider integration and QKV index versioning for MongoDB documents.
 - QKV key generation/indexing for document versions.
 - Qoin memory-ranking integration for MongoDB candidates.
 - Immutable epoch pins containing document version, content hash, QKV version, Qoin version, and source sequence.
