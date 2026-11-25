@@ -556,6 +556,8 @@ impl MemoryOutbox {
         .await?;
 
         let mut documents = Vec::with_capacity(rows.len());
+        let requester_agent_id_text = requester_agent_id.to_string();
+        let requester_task_id_text = task_id.map(|id| id.to_string());
         for row in rows {
             let memory_id_text: String = row.try_get("memory_id")?;
             let memory_id = Uuid::parse_str(&memory_id_text)
@@ -576,9 +578,9 @@ impl MemoryOutbox {
 
             let visible = match scope.as_str() {
                 "workspace_shared" => true,
-                "agent_private" => owner_id.as_deref() == Some(requester_agent_id.to_string().as_str()),
+                "agent_private" => owner_id.as_deref() == Some(requester_agent_id_text.as_str()),
                 "task_shared" => task_id.is_some()
-                    && stored_task_id.as_deref() == task_id.map(|id| id.to_string()).as_deref(),
+                    && stored_task_id.as_deref() == requester_task_id_text.as_deref(),
                 // Project membership is not yet backed by persisted authorization.
                 "project_shared" => false,
                 _ => false,
