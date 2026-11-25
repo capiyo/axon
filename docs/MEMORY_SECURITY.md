@@ -11,4 +11,4 @@
 - Document content is not logged by the outbox worker.
 - Document payloads are bounded by the API request limit and an explicit 256 KiB content limit.
 
-The MongoDB document read API and full agent identity verification are not yet implemented. Do not expose MongoDB content to clients until retrieval checks both SQLite authorization metadata and the pinned document hash/version.
+Direct retrieval by memory ID/version checks SQLite workspace, scope, approval, and synchronization metadata before fetching the MongoDB version and verifying its content hash. Project-shared retrieval remains disabled. Agent identity is currently the registered agent ID in an authenticated workspace request; cryptographic agent credentials are not yet implemented. Query-based retrieval and epoch pinning remain outstanding.
