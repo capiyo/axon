@@ -582,3 +582,76 @@ pub async fn search_agent_memory_documents(
 }
 
 
+
+
+#[derive(Debug, Deserialize)]
+pub struct MemoryEpochDocumentQuery {
+    pub task_id: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MemoryEpochDocumentResponse {
+    pub epoch_id: Uuid,
+    pub documents: Vec<MemoryDocument>,
+}
+
+/// Returns MongoDB document values from the exact immutable versions pinned
+/// by an epoch. Scope checks use the pinned SQLite metadata, never MongoDB.
+pub async fn get_agent_epoch_documents(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, agent_id, epoch_id)): Path<(Uuid, Uuid, Uuid)>,
+    axum::extract::Query(query): axum::extract::Query<MemoryEpochDocumentQuery>,
+) -> Result<Json<MemoryEpochDocumentResponse>, (StatusCode, Json<ApiError>)> {
+    let member = state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+    if !member {
+        return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
+    }
+    let agent_matches = state.agents.read().await.get(&agent_id)
+        .is_some_and(|agent| agent.workspace_id == workspace_id);
+    if !agent_matches {
+        return Err(api_error(StatusCode::NOT_FOUND, "Agent not found."));
+    }
+    if let Some(task_id) = query.task_id {
+        let task_matches = state.tasks.read().await.get(&task_id)
+            .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
+        if !task_matches {
+            return Err(api_error(StatusCode::NOT_FOUND, "Task not found for this agent."));
+        }
+    }
+
+    let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory epoch metadata is unavailable.")
+    })?;
+    let repository = state.memory_documents.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
+    })?;
+    let documents = outbox
+        .list_epoch_authorized_documents(
+            repository.as_ref(),
+            workspace_id,
+            epoch_id,
+            agent_id,
+            query.task_id,
+            100,
+        )
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "pinned memory epoch hydration failed");
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Pinned memory documents could not be retrieved.")
+        })?;
+    if documents.is_empty() {
+        let epoch_exists = state.memory_epochs.as_ref()
+            .ok_or_else(|| api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory epochs are unavailable."))?
+            .get_epoch(workspace_id, epoch_id)
+            .await
+            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory epoch could not be verified."))?;
+        if epoch_exists.is_none() {
+            return Err(api_error(StatusCode::NOT_FOUND, "Memory epoch not found."));
+        }
+    }
+    Ok(Json(MemoryEpochDocumentResponse { epoch_id, documents }))
+}
