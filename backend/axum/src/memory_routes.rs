@@ -4,6 +4,7 @@ use crate::{
         HandoverContext, HandoverRequest, IndexChatMessageInput, IndexMemoryInput, MemoryEpoch,
         ProgressiveRetrieval, ProgressiveRetrievalRequest,
     },
+    memory_documents::MemoryDocument,
     qoin_vectors::{QoinVectorError, QoinVectorSnapshot},
     AppState,
 };
@@ -451,6 +452,110 @@ pub async fn progressive_retrieval(
             )
         })?;
     Ok(Json(result))
+}
+
+#[derive(Debug, Serialize)]
+pub struct AgentSessionMemoryContext {
+    pub session_id: Uuid,
+    pub epoch_id: Uuid,
+    pub progressive: ProgressiveRetrieval,
+    pub documents: Vec<MemoryDocument>,
+    pub document_context_bytes_used: usize,
+    pub documents_truncated: bool,
+}
+
+/// Retrieves both progressive SQLite memories and the immutable MongoDB
+/// document versions pinned to the same persisted agent session.
+pub async fn retrieve_session_context(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, agent_id, session_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(input): Json<ProgressiveRetrievalRequest>,
+) -> ApiResult<Json<AgentSessionMemoryContext>> {
+    require_member(&state, user.user_id, workspace_id).await?;
+    let agents = state.agents.read().await;
+    if !agents
+        .get(&agent_id)
+        .is_some_and(|agent| agent.workspace_id == workspace_id)
+    {
+        return Err(error(StatusCode::NOT_FOUND, "Agent not found in this workspace."));
+    }
+    drop(agents);
+
+    // The coordinator verifies the session/agent/workspace binding and records
+    // progressive retrieval against the already pinned immutable epoch.
+    let progressive = coordinator(&state)?
+        .retrieve_progressive(workspace_id, agent_id, session_id, input)
+        .await
+        .map_err(|_| error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Could not retrieve additional context from this agent's pinned memory epoch.",
+        ))?;
+
+    let outbox = state.memory_outbox.as_ref().ok_or_else(|| error(
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Memory document metadata is unavailable.",
+    ))?;
+    let repository = state.memory_documents.as_ref().ok_or_else(|| error(
+        StatusCode::SERVICE_UNAVAILABLE,
+        "MongoDB memory documents are unavailable.",
+    ))?;
+    let (epoch_id, task_id, pinned_documents) = outbox
+        .list_session_authorized_documents(
+            repository.as_ref(),
+            workspace_id,
+            session_id,
+            agent_id,
+            100,
+        )
+        .await
+        .map_err(|_| error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Pinned session memory documents could not be verified.",
+        ))?
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Memory session not found for this agent."))?;
+
+    if let Some(task_id) = task_id {
+        let tasks = state.tasks.read().await;
+        if !tasks.get(&task_id).is_some_and(|task| {
+            task.workspace_id == workspace_id && task.assignee_agent_id == agent_id
+        }) {
+            return Err(error(
+                StatusCode::FORBIDDEN,
+                "The session task is no longer assigned to this agent.",
+            ));
+        }
+    }
+
+    // Bound document context independently from the progressive memory count.
+    // Do not truncate individual source documents: omit whole documents and
+    // report that the caller can request a narrower retrieval.
+    const DOCUMENT_CONTEXT_BUDGET_BYTES: usize = 256 * 1024;
+    let mut document_context_bytes_used = 0usize;
+    let mut documents = Vec::new();
+    let mut documents_truncated = false;
+    for document in pinned_documents {
+        let document_bytes = document.title.len()
+            .saturating_add(document.content.len())
+            .saturating_add(document.value_payload.to_string().len());
+        if document_context_bytes_used.saturating_add(document_bytes)
+            > DOCUMENT_CONTEXT_BUDGET_BYTES
+        {
+            documents_truncated = true;
+            continue;
+        }
+        document_context_bytes_used += document_bytes;
+        documents.push(document);
+    }
+
+    Ok(Json(AgentSessionMemoryContext {
+        session_id,
+        epoch_id,
+        progressive,
+        documents,
+        document_context_bytes_used,
+        documents_truncated,
+    }))
 }
 
 pub async fn index_chat_message(
