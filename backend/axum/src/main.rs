@@ -35,6 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let storage = SqliteStorage::connect(&database_url).await?;
     let memory_epochs = storage.memory_epoch_coordinator();
     tokio::spawn(memory_epochs.run_hourly());
+    let memory_outbox = storage.memory_outbox();
 
     let mongo_required = env::var("AXON_MEMORY_DOCUMENTS_REQUIRED")
         .map(|value| value.eq_ignore_ascii_case("true"))
@@ -76,9 +77,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok()
         .map(|url| QoinVectorClient::new(&url))
         .transpose()?;
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    if let Some(repository) = memory_documents.clone() {
+        tokio::spawn(memory_outbox.clone().run(
+            repository,
+            format!("axon-memory-outbox-{}", uuid::Uuid::new_v4()),
+            shutdown_rx,
+        ));
+    }
+
     let state = AppState::with_storage(storage.shared())
         .await?
         .with_memory_document_repository(memory_documents)
+        .with_memory_outbox(Some(memory_outbox))
         .with_qoin_vector_client(qoin_vectors)
         .with_firebase_verifier(verifier, simulator_enabled);
 
@@ -92,7 +103,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Axon API listening with Firebase authentication and durable SQLite storage"
     );
     axum::serve(listener, app(state))
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(async move {
+            shutdown_signal().await;
+            let _ = shutdown_tx.send(true);
+        })
         .await?;
     Ok(())
 }
