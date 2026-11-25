@@ -46,7 +46,7 @@ Before claiming end-to-end multi-agent memory completion, implement and test:
 - Neural embedding-provider integration and QKV index versioning for MongoDB documents.
 - Persistent QKV key generation/indexing for document versions; the current lexical vectors are computed deterministically at query time.
 - Qoin memory-ranking integration for MongoDB candidates.
-- Neural embedding-provider integration and persistent QKV key indexing.
+- Neural embedding-provider integration; lexical QKV keys are persisted for newly created MongoDB document versions.
 - Reconciliation and safe index rebuild.
 - Project membership authorization.
 - End-to-end restart and cross-scope security tests.
