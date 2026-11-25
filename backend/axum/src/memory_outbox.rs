@@ -68,13 +68,14 @@ impl MemoryOutbox {
 
         let mut transaction = self.pool.begin().await?;
         sqlx::query(
-            "INSERT INTO memory_document_versions              (memory_id, version, workspace_id, project_id, owner_id, task_id, scope,               document_type, content_hash, source_event_sequence, qkv_version,               qoin_vector_version, lifecycle_status, sync_status, created_at, updated_at)              VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)              ON CONFLICT(memory_id, version) DO NOTHING",
+            "INSERT INTO memory_document_versions              (memory_id, version, workspace_id, project_id, owner_id, task_id, scope,               document_type, content_hash, source_event_sequence, qkv_version,               qoin_vector_version, lifecycle_status, sync_status, created_at, updated_at)              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)              ON CONFLICT(memory_id, version) DO NOTHING",
         )
         .bind(document.memory_id.to_string())
         .bind(version)
         .bind(document.workspace_id.to_string())
         .bind(document.project_id.map(|id| id.to_string()))
         .bind(document.owner_id.map(|id| id.to_string()))
+        .bind(document.task_id.map(|id| id.to_string()))
         .bind(&document.scope)
         .bind(&document.document_type)
         .bind(&document.content_hash)
