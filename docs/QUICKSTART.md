@@ -10,10 +10,16 @@ Set `FIREBASE_PROJECT_ID` to the same Firebase project used by the clients and c
 # PowerShell
 $env:FIREBASE_PROJECT_ID="your-axon-firebase-project-id"
 $env:AXON_DATABASE_URL="sqlite://axon.db"
+# Optional in local SQLite-only mode; required when AXON_ENV=production
+$env:AXON_MONGODB_URI="mongodb://127.0.0.1:27017"
+$env:AXON_MONGODB_DATABASE="axon"
+$env:AXON_MONGODB_COLLECTION="memory_documents"
 cargo run -p axon-api
 ```
 
 The API listens on `http://127.0.0.1:8080`. Only `GET /health` is public; all workspace routes require a verified Firebase ID token.
+
+MongoDB document storage is optional for local development. Set `AXON_MONGODB_URI` to enable it. Set `AXON_ENV=production` or `AXON_MEMORY_DOCUMENTS_REQUIRED=true` to make MongoDB a required startup dependency. The MongoDB adapter stores immutable document versions; SQLite continues to own workspace identity, document metadata, lifecycle and outbox state. See [MongoDB setup](MONGODB_SETUP.md).
 
 ## 2. Start the web client
 
@@ -89,10 +95,10 @@ curl -X POST "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/tasks" \
 
 The workspace UI can create and advance tasks. To simulate the manual handoff, acknowledge the task, move it to `in_progress`, paste the receiving assistant's response into the task response field, and submit it. Axon stores that response as a linked artifact. Then move the task into review, accept it or request changes, and complete it when accepted.
 
-## Known prototype constraints
+## Current limitations
 
-- Data is lost when the API process stops.
-- Agent names/provider labels do not connect to provider APIs.
-- The person using the UI performs the copy/paste and confirms the response source.
-- Authentication, workspace membership, audit persistence, durable storage, and external actions are not implemented.
+- MongoDB document creation is queued durably in SQLite and delivered asynchronously. The document read/retrieval path, project-scope authorization, QKV indexing of MongoDB documents, and full memory-epoch document-version pinning are still in progress.
+- The current memory-document creation API supports workspace-shared, task-shared and agent-private scopes. Project-shared creation is deliberately rejected until a persisted project-membership authorization model exists.
+- Agent names/provider labels do not connect to provider APIs. The person using the UI still performs manual provider handoff.
+- SQLite must use a persistent volume in production. MongoDB backups and SQLite backups must both be configured.
 - Never place secrets or sensitive personal data in this prototype.
