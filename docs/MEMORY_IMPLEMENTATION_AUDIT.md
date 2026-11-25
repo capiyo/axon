@@ -51,7 +51,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 7. Added SHA-256 source hashing over the exact ordered title/content/tag text used to build each persisted QKV key.
 8. Document validation rejects malformed, partial, non-normalized, model-version-mismatched, or source-hash-mismatched persisted keys. Legacy documents without stored keys retain deterministic query-time fallback.
 9. Added tests for exact epoch hydration, session binding, private-scope denial, missing epochs, persisted QKV-key validation, and context-budget selection.
-10. Updated architecture, QKV, MongoDB, testing, security, and repository-state documentation.
+10. Updated architecture, QKV, MongoDB, testing, security, operations, and repository-state documentation. Added bounded graceful-shutdown waiting for the outbox worker.
 
 ## 5. Remaining gaps
 
