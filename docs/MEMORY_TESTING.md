@@ -28,7 +28,7 @@ Existing QKV and memory-intelligence tests remain part of the Rust suite.
 - Verify hash mismatch never becomes retrievable.
 - Verify dead-letter handling and operator recovery.
 - Verify workspace/task/agent scope isolation.
-- Verify immutable epochs pin exact document versions.
+- Verify MongoDB documents are hydrated through QKV and ranked by Qoin.
 - Verify MongoDB documents are hydrated through QKV and ranked by Qoin.
 - Run the full suite with a real isolated MongoDB instance.
 
