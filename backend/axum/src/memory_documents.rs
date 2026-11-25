@@ -365,4 +365,51 @@ mod tests {
             Err(MemoryDocumentError::InvalidDocument)
         ));
     }
+    #[test]
+    fn persisted_qkv_key_must_be_normalized_and_match_its_version() {
+        let mut document = sample_document();
+        let key = QoinVector {
+            values: vec![1.0, 0.0],
+            model_version: "qkv-v1".into(),
+        };
+        document.key_metadata = serde_json::json!({
+            "qkv_key": key,
+            "qkv_key_version": "qkv-v1"
+        });
+        assert!(document.validate().is_ok());
+
+        document.key_metadata["qkv_key_version"] = serde_json::json!("different-version");
+        assert!(matches!(
+            document.validate(),
+            Err(MemoryDocumentError::InvalidDocument)
+        ));
+    }
+
+    #[test]
+    fn partial_or_non_normalized_persisted_qkv_key_is_rejected() {
+        let mut document = sample_document();
+        document.key_metadata = serde_json::json!({
+            "qkv_key": {
+                "values": [2.0, 0.0],
+                "model_version": "qkv-v1"
+            },
+            "qkv_key_version": "qkv-v1"
+        });
+        assert!(matches!(
+            document.validate(),
+            Err(MemoryDocumentError::InvalidDocument)
+        ));
+
+        document.key_metadata = serde_json::json!({
+            "qkv_key": {
+                "values": [1.0, 0.0],
+                "model_version": "qkv-v1"
+            }
+        });
+        assert!(matches!(
+            document.validate(),
+            Err(MemoryDocumentError::InvalidDocument)
+        ));
+    }
+
 }
