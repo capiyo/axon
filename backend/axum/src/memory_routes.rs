@@ -454,6 +454,25 @@ pub async fn progressive_retrieval(
     Ok(Json(result))
 }
 
+fn bounded_memory_documents(
+    pinned_documents: Vec<MemoryDocument>,
+    budget_bytes: usize,
+) -> Result<(Vec<MemoryDocument>, usize, bool), serde_json::Error> {
+    let mut used = 0usize;
+    let mut documents = Vec::new();
+    let mut truncated = false;
+    for document in pinned_documents {
+        let size = serde_json::to_vec(&document)?.len();
+        if used.saturating_add(size) > budget_bytes {
+            truncated = true;
+            continue;
+        }
+        used += size;
+        documents.push(document);
+    }
+    Ok((documents, used, truncated))
+}
+
 #[derive(Debug, Serialize)]
 pub struct AgentSessionMemoryContext {
     pub session_id: Uuid,
@@ -532,25 +551,12 @@ pub async fn retrieve_session_context(
     // Do not truncate individual source documents: omit whole documents and
     // report that the caller can request a narrower retrieval.
     const DOCUMENT_CONTEXT_BUDGET_BYTES: usize = 256 * 1024;
-    let mut document_context_bytes_used = 0usize;
-    let mut documents = Vec::new();
-    let mut documents_truncated = false;
-    for document in pinned_documents {
-        let document_bytes = serde_json::to_vec(&document)
+    let (documents, document_context_bytes_used, documents_truncated) =
+        bounded_memory_documents(pinned_documents, DOCUMENT_CONTEXT_BUDGET_BYTES)
             .map_err(|_| error(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Pinned memory document could not be serialized safely.",
-            ))?
-            .len();
-        if document_context_bytes_used.saturating_add(document_bytes)
-            > DOCUMENT_CONTEXT_BUDGET_BYTES
-        {
-            documents_truncated = true;
-            continue;
-        }
-        document_context_bytes_used += document_bytes;
-        documents.push(document);
-    }
+                "Pinned memory documents could not be serialized safely.",
+            ))?;
 
     Ok(Json(AgentSessionMemoryContext {
         session_id,
@@ -588,4 +594,65 @@ pub async fn index_chat_message(
             )
         })?;
     Ok(StatusCode::CREATED)
+}
+
+#[cfg(test)]
+mod session_context_tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn document(content: &str) -> MemoryDocument {
+        let now = Utc::now();
+        MemoryDocument {
+            memory_id: Uuid::new_v4(),
+            workspace_id: Uuid::new_v4(),
+            project_id: None,
+            task_id: None,
+            owner_id: None,
+            scope: "workspace_shared".into(),
+            document_type: "fact".into(),
+            version: 1,
+            title: "Test memory".into(),
+            content: content.into(),
+            content_format: "text/plain".into(),
+            tags: Vec::new(),
+            source: "test".into(),
+            source_kind: "test".into(),
+            source_event_sequence: 1,
+            created_at: now,
+            updated_at: now,
+            content_hash: String::new(),
+            key_metadata: serde_json::Value::Null,
+            value_payload: serde_json::Value::Null,
+            qkv_version: "test-qkv-v1".into(),
+            qoin_vector_version: None,
+            status: "ready".into(),
+            retention_policy: None,
+        }
+    }
+
+    #[test]
+    fn context_budget_omits_whole_documents_and_reports_truncation() {
+        let first = document("short");
+        let second = document(&"x".repeat(1024));
+        let first_size = serde_json::to_vec(&first).unwrap().len();
+        let (selected, used, truncated) =
+            bounded_memory_documents(vec![first, second], first_size).unwrap();
+        assert_eq!(selected.len(), 1);
+        assert_eq!(used, first_size);
+        assert!(truncated);
+    }
+
+    #[test]
+    fn context_budget_preserves_all_documents_that_fit() {
+        let first = document("first");
+        let second = document("second");
+        let budget = serde_json::to_vec(&first).unwrap().len()
+            + serde_json::to_vec(&second).unwrap().len();
+        let (selected, used, truncated) =
+            bounded_memory_documents(vec![first, second], budget).unwrap();
+        assert_eq!(selected.len(), 2);
+        assert_eq!(used, budget);
+        assert!(!truncated);
+    }
 }
