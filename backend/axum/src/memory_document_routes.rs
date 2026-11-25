@@ -584,24 +584,19 @@ pub async fn search_agent_memory_documents(
 
 
 
-#[derive(Debug, Deserialize)]
-pub struct MemoryEpochDocumentQuery {
-    pub task_id: Option<Uuid>,
-}
-
 #[derive(Debug, Serialize)]
 pub struct MemoryEpochDocumentResponse {
+    pub session_id: Uuid,
     pub epoch_id: Uuid,
     pub documents: Vec<MemoryDocument>,
 }
 
-/// Returns MongoDB document values from the exact immutable versions pinned
-/// by an epoch. Scope checks use the pinned SQLite metadata, never MongoDB.
-pub async fn get_agent_epoch_documents(
+/// Returns MongoDB values from the immutable epoch already pinned to this
+/// agent session. The caller cannot choose a different epoch.
+pub async fn get_agent_session_documents(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,
-    Path((workspace_id, agent_id, epoch_id)): Path<(Uuid, Uuid, Uuid)>,
-    axum::extract::Query(query): axum::extract::Query<MemoryEpochDocumentQuery>,
+    Path((workspace_id, agent_id, session_id)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<Json<MemoryEpochDocumentResponse>, (StatusCode, Json<ApiError>)> {
     let member = state
         .is_workspace_member(user.user_id, workspace_id)
@@ -615,13 +610,6 @@ pub async fn get_agent_epoch_documents(
     if !agent_matches {
         return Err(api_error(StatusCode::NOT_FOUND, "Agent not found."));
     }
-    if let Some(task_id) = query.task_id {
-        let task_matches = state.tasks.read().await.get(&task_id)
-            .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
-        if !task_matches {
-            return Err(api_error(StatusCode::NOT_FOUND, "Task not found for this agent."));
-        }
-    }
 
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
         api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory epoch metadata is unavailable.")
@@ -629,20 +617,27 @@ pub async fn get_agent_epoch_documents(
     let repository = state.memory_documents.as_ref().ok_or_else(|| {
         api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
     })?;
-    let documents = outbox
-        .list_epoch_authorized_documents(
+    let (epoch_id, task_id, documents) = outbox
+        .list_session_authorized_documents(
             repository.as_ref(),
             workspace_id,
-            epoch_id,
+            session_id,
             agent_id,
-            query.task_id,
             100,
         )
         .await
         .map_err(|error| {
-            tracing::error!(error = %error, "pinned memory epoch hydration failed");
-            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Pinned memory documents could not be retrieved.")
+            tracing::error!(error = %error, "pinned session memory hydration failed");
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Pinned session memory documents could not be retrieved.")
         })?
-        .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "Memory epoch not found."))?;
-    Ok(Json(MemoryEpochDocumentResponse { epoch_id, documents }))
+        .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "Memory session not found for this agent."))?;
+
+    if let Some(task_id) = task_id {
+        let task_matches = state.tasks.read().await.get(&task_id)
+            .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
+        if !task_matches {
+            return Err(api_error(StatusCode::NOT_FOUND, "Session task is no longer assigned to this agent."));
+        }
+    }
+    Ok(Json(MemoryEpochDocumentResponse { session_id, epoch_id, documents }))
 }
