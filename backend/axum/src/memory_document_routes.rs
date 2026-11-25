@@ -642,16 +642,7 @@ pub async fn get_agent_epoch_documents(
         .map_err(|error| {
             tracing::error!(error = %error, "pinned memory epoch hydration failed");
             api_error(StatusCode::INTERNAL_SERVER_ERROR, "Pinned memory documents could not be retrieved.")
-        })?;
-    if documents.is_empty() {
-        let epoch_exists = state.memory_epochs.as_ref()
-            .ok_or_else(|| api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory epochs are unavailable."))?
-            .get_epoch(workspace_id, epoch_id)
-            .await
-            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory epoch could not be verified."))?;
-        if epoch_exists.is_none() {
-            return Err(api_error(StatusCode::NOT_FOUND, "Memory epoch not found."));
-        }
-    }
+        })?
+        .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "Memory epoch not found."))?;
     Ok(Json(MemoryEpochDocumentResponse { epoch_id, documents }))
 }
