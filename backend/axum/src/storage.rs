@@ -1,4 +1,5 @@
 use crate::{
+    memory_outbox::MemoryOutbox,
     audit::AuditEvent,
     chat_memory::ChatMemoryStore,
     memory_architecture::MemoryEpochCoordinator,
@@ -185,6 +186,10 @@ impl SqliteStorage {
 
     pub fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator {
         MemoryEpochCoordinator::new(self.pool.clone())
+    }
+
+    pub fn memory_outbox(&self) -> MemoryOutbox {
+        MemoryOutbox::new(self.pool.clone())
     }
 
     pub fn shared(self) -> Arc<dyn Storage> {
