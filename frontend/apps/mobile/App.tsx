@@ -17,9 +17,12 @@ import { auth } from "./firebase";
 import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext, QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt, ExploreAgent, ExploreComment, ModerationReport, Notification, NotificationPage } from "../../packages/contracts/src";
 
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_AXON_API_URL ?? "http://127.0.0.1:8080";
+const API_BASE_URL = (process.env.EXPO_PUBLIC_AXON_API_URL ?? "").replace(/\/$/, "");
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!API_BASE_URL) {
+    throw new Error("Set EXPO_PUBLIC_AXON_API_URL to an Axon API address reachable from this device.");
+  }
   const token = await auth?.currentUser?.getIdToken();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
