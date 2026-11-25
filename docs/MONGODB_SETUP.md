@@ -24,7 +24,7 @@ The MongoDB URI is never intentionally logged. Configure credentials through the
 
 ## Document version rules
 
-A document version is immutable. Replaying an identical version is idempotent. Reusing the same memory ID and version with different document data is rejected. Content integrity is checked using SHA-256 of UTF-8 content.
+A document version is immutable. Replaying an identical version is idempotent. Reusing the same memory ID and version with different document data is rejected. Content integrity is checked using SHA-256 of UTF-8 content. Each new document is also tied to the SQLite audit sequence that records its creation.
 
 SQLite stores the authoritative metadata and pending outbox payload. The outbox payload is cleared after successful MongoDB persistence. SQLite and MongoDB must both be backed up.
 
