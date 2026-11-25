@@ -371,12 +371,14 @@ impl MemoryOutbox {
             return Ok(None);
         }
 
+        let requester_agent_id_text = requester_agent_id.to_string();
+        let requester_task_id_text = task_id.map(|id| id.to_string());
         let visible = match scope.as_str() {
             "workspace_shared" => true,
-            "agent_private" => owner_id.as_deref() == Some(requester_agent_id.to_string().as_str()),
+            "agent_private" => owner_id.as_deref() == Some(requester_agent_id_text.as_str()),
             "task_shared" => {
-                stored_task_id.as_deref() == task_id.map(|id| id.to_string()).as_deref()
-                    && task_id.is_some()
+                task_id.is_some()
+                    && stored_task_id.as_deref() == requester_task_id_text.as_deref()
             }
             // Project membership is not persisted yet, so fail closed.
             "project_shared" => false,
