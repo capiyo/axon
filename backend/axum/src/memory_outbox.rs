@@ -649,10 +649,12 @@ mod tests {
         let workspace_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
         let actor_id = Uuid::new_v4();
-        let document = document(workspace_id, agent_id);
+        let mut document = document(workspace_id, agent_id);
 
-        outbox.enqueue(&document).await.unwrap();
-        outbox.enqueue(&document).await.unwrap();
+        outbox.enqueue(&mut document, actor_id).await.unwrap();
+        let first_source_sequence = document.source_event_sequence;
+        assert!(first_source_sequence > 0);
+        outbox.enqueue(&mut document, actor_id).await.unwrap();
 
         let event_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM memory_document_outbox WHERE memory_id = ? AND version = 1",
@@ -674,7 +676,16 @@ mod tests {
         .fetch_one(&outbox.pool)
         .await
         .unwrap();
-        assert_eq!(audit_count, 1);
+        assert_eq!(audit_count, 2);
+
+        let stored_sequence: i64 = sqlx::query_scalar(
+            "SELECT source_event_sequence FROM memory_document_versions WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(u64::try_from(stored_sequence).unwrap(), first_source_sequence);
 
         sqlx::query(
             "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
