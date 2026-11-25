@@ -129,6 +129,10 @@ pub fn app(state: AppState) -> Router {
             post(memory_routes::progressive_retrieval),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-sessions/:session_id/context",
+            post(memory_routes::retrieve_session_context),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/audit",
             get(routes::list_audit_events),
         )
