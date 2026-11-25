@@ -231,6 +231,13 @@ pub async fn approve_memory_document(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, memory_id, version)): Path<(Uuid, Uuid, u64)>,
 ) -> Result<Json<MemoryDocumentApprovalResponse>, (StatusCode, Json<ApiError>)> {
+    let member = state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+    if !member {
+        return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
+    }
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
         api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document storage is unavailable.")
     })?;
