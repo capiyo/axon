@@ -738,7 +738,7 @@ mod tests {
     use super::*;
     use crate::storage::SqliteStorage;
 
-    fn document(workspace_id: Uuid, owner_agent_id: Uuid) -> MemoryDocument {
+    pub(super) fn document(workspace_id: Uuid, owner_agent_id: Uuid) -> MemoryDocument {
         let now = Utc::now();
         let mut document = MemoryDocument {
             memory_id: Uuid::new_v4(),
