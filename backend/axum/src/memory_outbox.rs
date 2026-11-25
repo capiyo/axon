@@ -291,6 +291,118 @@ impl MemoryOutbox {
         Ok(())
     }
 
+    /// Approves a proposed document version in the authoritative SQLite
+    /// metadata and appends an audit event in the same transaction.
+    pub async fn approve(
+        &self,
+        workspace_id: Uuid,
+        memory_id: Uuid,
+        version: u64,
+        actor_user_id: Uuid,
+    ) -> Result<bool, MemoryOutboxError> {
+        let version = i64::try_from(version)
+            .map_err(|_| sqlx::Error::Protocol("memory version exceeds SQLite range".into()))?;
+        let now = Utc::now().to_rfc3339();
+        let mut transaction = self.pool.begin().await?;
+        let changed = sqlx::query(
+            "UPDATE memory_document_versions SET lifecycle_status = 'approved', updated_at = ? \
+             WHERE workspace_id = ? AND memory_id = ? AND version = ? AND lifecycle_status = 'proposed'",
+        )
+        .bind(&now)
+        .bind(workspace_id.to_string())
+        .bind(memory_id.to_string())
+        .bind(version)
+        .execute(&mut *transaction)
+        .await?;
+        if changed.rows_affected() != 1 {
+            transaction.rollback().await?;
+            return Ok(false);
+        }
+
+        sqlx::query(
+            "INSERT INTO audit_events \
+             (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) \
+             VALUES (?, ?, ?, 'memory_document.approved', 'memory_document', ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(workspace_id.to_string())
+        .bind(format!("human:{actor_user_id}"))
+        .bind(memory_id.to_string())
+        .bind(&now)
+        .bind(serde_json::json!({"memory_id": memory_id, "version": version}).to_string())
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        Ok(true)
+    }
+
+    /// Returns a MongoDB document only when SQLite confirms its workspace,
+    /// approval state, synchronization state, and agent/task visibility.
+    pub async fn get_authorized_document(
+        &self,
+        repository: &dyn MemoryDocumentRepository,
+        workspace_id: Uuid,
+        memory_id: Uuid,
+        version: u64,
+        requester_agent_id: Uuid,
+        task_id: Option<Uuid>,
+    ) -> Result<Option<MemoryDocument>, MemoryOutboxError> {
+        let version_sql = i64::try_from(version)
+            .map_err(|_| sqlx::Error::Protocol("memory version exceeds SQLite range".into()))?;
+        let row = sqlx::query(
+            "SELECT scope, owner_id, task_id, content_hash, lifecycle_status, sync_status \
+             FROM memory_document_versions WHERE workspace_id = ? AND memory_id = ? AND version = ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(memory_id.to_string())
+        .bind(version_sql)
+        .fetch_optional(&self.pool)
+        .await?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let scope: String = row.try_get("scope")?;
+        let owner_id: Option<String> = row.try_get("owner_id")?;
+        let stored_task_id: Option<String> = row.try_get("task_id")?;
+        let expected_hash: String = row.try_get("content_hash")?;
+        let lifecycle_status: String = row.try_get("lifecycle_status")?;
+        let sync_status: String = row.try_get("sync_status")?;
+        if lifecycle_status != "approved" || !matches!(sync_status.as_str(), "stored" | "indexed") {
+            return Ok(None);
+        }
+
+        let visible = match scope.as_str() {
+            "workspace_shared" => true,
+            "agent_private" => owner_id.as_deref() == Some(requester_agent_id.to_string().as_str()),
+            "task_shared" => {
+                stored_task_id.as_deref() == task_id.map(|id| id.to_string()).as_deref()
+                    && task_id.is_some()
+            }
+            // Project membership is not persisted yet, so fail closed.
+            "project_shared" => false,
+            _ => false,
+        };
+        if !visible {
+            return Ok(None);
+        }
+
+        let Some(document) = repository.get_version(memory_id, version).await? else {
+            return Err(MemoryOutboxError::VersionConflict);
+        };
+        document.validate()?;
+        if document.memory_id != memory_id
+            || document.version != version
+            || document.workspace_id != workspace_id
+            || document.content_hash != expected_hash
+            || document.scope != scope
+            || document.owner_id.map(|id| id.to_string()) != owner_id
+            || document.task_id.map(|id| id.to_string()) != stored_task_id
+        {
+            return Err(MemoryOutboxError::VersionConflict);
+        }
+        Ok(Some(document))
+    }
+
     pub async fn mark_indexed(
         &self,
         memory_id: Uuid,
