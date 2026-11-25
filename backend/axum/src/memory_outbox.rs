@@ -726,5 +726,19 @@ mod tests {
         assert_eq!(u64::try_from(pinned_sequence).unwrap(), first_source_sequence);
         assert_eq!(pinned_qkv, "axon-lexical-qkv-v1");
         assert_eq!(pinned_qoin, crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION);
+        let update_result = sqlx::query(
+            "UPDATE memory_document_epoch_items SET content_hash = 'tampered' WHERE memory_id = ?",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await;
+        assert!(update_result.is_err());
+        let delete_result = sqlx::query(
+            "DELETE FROM memory_document_epoch_items WHERE memory_id = ?",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await;
+        assert!(delete_result.is_err());
     }
 }
