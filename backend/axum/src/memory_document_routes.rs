@@ -11,7 +11,7 @@ use axum::{
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -182,6 +182,5 @@ pub async fn create_memory_document(
 
     // A successful enqueue is a durable SQLite commit. MongoDB delivery is
     // asynchronous and must not be represented as complete in this response.
-    let _ = Duration::ZERO;
     Ok((StatusCode::ACCEPTED, Json(response)))
 }
