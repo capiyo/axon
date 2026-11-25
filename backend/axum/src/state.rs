@@ -4,6 +4,7 @@ use crate::{
     firebase_auth::FirebaseVerifier,
     memory_architecture::MemoryEpochCoordinator,
     memory_documents::MemoryDocumentRepository,
+    memory_outbox::MemoryOutbox,
     model::{Agent, Artifact, Task, Workspace},
     qoin_vectors::QoinVectorClient,
     robotics::TelemetryEvent,
@@ -38,6 +39,7 @@ pub struct AppState {
     pub memory_epochs: Option<MemoryEpochCoordinator>,
     /// Long-form document storage. Authorization and lifecycle remain in SQLite.
     pub memory_documents: Option<Arc<dyn MemoryDocumentRepository>>,
+    pub memory_outbox: Option<MemoryOutbox>,
     pub qoin_vectors: Option<QoinVectorClient>,
     pub firebase_verifier: Option<FirebaseVerifier>,
     pub simulator_enabled: bool,
@@ -104,6 +106,11 @@ impl AppState {
         repository: Option<Arc<dyn MemoryDocumentRepository>>,
     ) -> Self {
         self.memory_documents = repository;
+        self
+    }
+
+    pub fn with_memory_outbox(mut self, outbox: Option<MemoryOutbox>) -> Self {
+        self.memory_outbox = outbox;
         self
     }
 
