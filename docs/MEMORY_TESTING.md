@@ -13,7 +13,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Current unit coverage
 
-`memory_documents.rs` includes tests for stable SHA-256 content hashing, stale-hash rejection, supported private scope, and invalid-scope rejection.
+`memory_documents.rs` includes tests for stable SHA-256 content hashing, stale-hash rejection, supported private scope, and invalid-scope rejection. `memory_outbox.rs` tests idempotent enqueue, transactional approval audit, and private-agent scope filtering. `memory_document_routes.rs` tests deterministic lexical QKV vector generation and normalization.
 
 Existing QKV and memory-intelligence tests remain part of the Rust suite.
 
