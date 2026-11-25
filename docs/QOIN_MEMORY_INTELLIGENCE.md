@@ -30,4 +30,5 @@ It applies explicit normalized components, ranks deterministically, filters by w
 - Add evidence/source reliability and contradiction/duplication features only when their semantics and normalization are defined.
 - Expose score breakdowns consistently across document retrieval.
 - Evaluate ranking against a labelled memory-retrieval dataset.
+- The document search endpoint now applies the existing `retrieve_memories` score decomposition after QKV candidate attention and returns both score explanations.
 - Record retrieval feedback without mutating immutable historical epochs.
