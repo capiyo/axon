@@ -60,7 +60,7 @@ fn default_source_kind() -> String {
     "manual_memory".into()
 }
 fn default_qkv_version() -> String {
-    "qkv-metadata-v1".into()
+    "axon-lexical-qkv-v1".into()
 }
 
 #[derive(Debug, Serialize)]
