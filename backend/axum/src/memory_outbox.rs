@@ -705,5 +705,26 @@ mod tests {
             .unwrap();
         assert_eq!(visible, vec![(document.memory_id, 1)]);
         assert!(hidden.is_empty());
+
+        let coordinator = storage.memory_epoch_coordinator();
+        assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
+        let pinned = sqlx::query(
+            "SELECT document_version, content_hash, source_event_sequence, qkv_version, qoin_scoring_version \
+             FROM memory_document_epoch_items WHERE memory_id = ? AND document_version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        let pinned_version: i64 = pinned.try_get("document_version").unwrap();
+        let pinned_hash: String = pinned.try_get("content_hash").unwrap();
+        let pinned_sequence: i64 = pinned.try_get("source_event_sequence").unwrap();
+        let pinned_qkv: String = pinned.try_get("qkv_version").unwrap();
+        let pinned_qoin: String = pinned.try_get("qoin_scoring_version").unwrap();
+        assert_eq!(pinned_version, 1);
+        assert_eq!(pinned_hash, document.content_hash);
+        assert_eq!(u64::try_from(pinned_sequence).unwrap(), first_source_sequence);
+        assert_eq!(pinned_qkv, "qkv-metadata-v1");
+        assert_eq!(pinned_qoin, crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION);
     }
 }
