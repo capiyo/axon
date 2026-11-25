@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import {
   View
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { axonTheme } from "../../packages/theme/src";
 import { auth } from "./firebase";
 
@@ -982,4 +982,4 @@ function AuthGate() {
 
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
 
-export default function App() { return <AuthGate />; }
+export default function App() { return <SafeAreaProvider><AuthGate /></SafeAreaProvider>; }
