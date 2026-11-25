@@ -455,6 +455,10 @@ pub async fn search_agent_memory_documents(
         let key = vector_provider
             .key_for_text(&key_text)
             .map_err(|_| api_error(StatusCode::BAD_REQUEST, "A memory document has no searchable terms."))?;
+        if document.qkv_version != key.model_version {
+            // Never compare vectors from different model spaces.
+            continue;
+        }
         let key_values = key.values.clone();
         let dependencies = metadata_dependencies(&document);
         let outcome = normalized_metadata_score(&document, "outcome");
