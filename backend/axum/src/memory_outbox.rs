@@ -336,6 +336,46 @@ impl MemoryOutbox {
         Ok(true)
     }
 
+    /// Lists only approved, synchronized document versions visible to an
+    /// agent/task pair. Project-scoped documents remain excluded until project
+    /// membership authorization is available.
+    pub async fn list_authorized_document_refs(
+        &self,
+        workspace_id: Uuid,
+        requester_agent_id: Uuid,
+        task_id: Option<Uuid>,
+        limit: usize,
+    ) -> Result<Vec<(Uuid, u64)>, MemoryOutboxError> {
+        let task_id_text = task_id.map(|id| id.to_string());
+        let limit = i64::try_from(limit.clamp(1, 200))
+            .map_err(|_| sqlx::Error::Protocol("retrieval limit exceeds SQLite range".into()))?;
+        let rows = sqlx::query(
+            "SELECT memory_id, version FROM memory_document_versions \
+             WHERE workspace_id = ? AND lifecycle_status = 'approved' AND sync_status IN ('stored', 'indexed') \
+             AND (scope = 'workspace_shared' OR (scope = 'agent_private' AND owner_id = ?) \
+             OR (scope = 'task_shared' AND task_id = ?)) \
+             ORDER BY updated_at DESC, memory_id ASC, version DESC LIMIT ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(requester_agent_id.to_string())
+        .bind(task_id_text)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let memory_id: String = row.try_get("memory_id")?;
+                let version: i64 = row.try_get("version")?;
+                let memory_id = Uuid::parse_str(&memory_id)
+                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+                let version = u64::try_from(version)
+                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+                Ok((memory_id, version))
+            })
+            .collect()
+    }
+
     /// Returns a MongoDB document only when SQLite confirms its workspace,
     /// approval state, synchronization state, and agent/task visibility.
     pub async fn get_authorized_document(
