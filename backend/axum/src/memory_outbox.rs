@@ -150,6 +150,23 @@ impl MemoryOutbox {
             transaction.commit().await?;
             return Ok(None);
         };
+        let document: MemoryDocument = match serde_json::from_str(&payload) {
+            Ok(document) => document,
+            Err(_) => {
+                sqlx::query(
+                    "UPDATE memory_document_outbox SET status = 'dead_letter', payload_json = NULL, \
+                     last_error = 'invalid outbox payload', updated_at = ? WHERE event_id = ?",
+                )
+                .bind(&now_text)
+                .bind(&event_id_text)
+                .execute(&mut *transaction)
+                .await?;
+                transaction.commit().await?;
+                return Ok(None);
+            }
+        };
+        let event_id = Uuid::parse_str(&event_id_text)
+            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
         let changed = sqlx::query(
             "UPDATE memory_document_outbox SET status = 'processing', attempts = attempts + 1,              lease_owner = ?, lease_until = ?, updated_at = ?              WHERE event_id = ? AND available_at <= ? AND              (status = 'pending' OR (status = 'processing' AND lease_until <= ?))",
         )
@@ -165,12 +182,7 @@ impl MemoryOutbox {
         if changed.rows_affected() != 1 {
             return Ok(None);
         }
-        let document: MemoryDocument = serde_json::from_str(&payload)?;
-        Ok(Some(MemoryOutboxEvent {
-            event_id: Uuid::parse_str(&event_id_text)
-                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?,
-            document,
-        }))
+        Ok(Some(MemoryOutboxEvent { event_id, document }))
     }
 
     async fn complete(
