@@ -59,7 +59,8 @@
 - [x] Added a leased outbox worker with idempotent delivery, bounded retries, dead-letter state, and graceful shutdown.
 - [x] Added authenticated memory-document creation for workspace-shared, task-shared, and agent-private scopes.
 - [x] Added local MongoDB configuration and operational documentation.
-- [ ] MongoDB document read/hydration through QKV and Qoin retrieval is not complete.
+- [x] Added approved, scope-checked agent document retrieval and query search using deterministic lexical QKV attention followed by the existing Qoin memory-intelligence scorer.
+- [ ] Neural embedding-provider integration and immutable epoch document-version/hash pinning remain outstanding.
 - [ ] Existing immutable epochs do not yet pin MongoDB document versions and hashes.
 - [ ] Project-shared memory is disabled until persisted project-membership authorization exists.
 - [ ] Reconciliation, dead-letter operator recovery, and full MongoDB integration/security tests remain outstanding.
