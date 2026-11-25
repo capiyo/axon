@@ -19,6 +19,8 @@ The separate Qoin HTTP vector adapter is for market/event-time vectors. It is no
 5. The worker inserts the immutable document version in MongoDB.
 6. The worker verifies the document hash and marks SQLite synchronization as stored.
 7. The worker clears the outbox payload after successful delivery.
+8. A workspace member explicitly approves the proposed version; SQLite records approval and an audit event atomically.
+9. A registered agent can retrieve an approved version by ID after SQLite scope checks and MongoDB hash verification.
 
 Retries use a unique memory/version/event key. Worker leases permit recovery after process restarts.
 
@@ -26,7 +28,7 @@ Retries use a unique memory/version/event key. Worker leases permit recovery aft
 
 Axon already has multi-head scaled dot-product QKV attention and Pareto-style initial/deferred handover in `memory_architecture.rs`. It also has deterministic score decomposition, scope/status filtering, and relevance explanations in `memory_intelligence.rs`.
 
-Those systems remain in place. MongoDB documents are not yet hydrated into those retrieval paths, and document-version/hash pins have not yet been added to immutable epoch items.
+Those systems remain in place. Direct document-by-ID retrieval is implemented with SQLite scope checks and MongoDB hash verification. Query-based QKV candidate search and epoch document-version/hash pins have not yet been added.
 
 ## Scope model
 
@@ -41,7 +43,7 @@ The current create endpoint enables workspace-shared, task-shared, and agent-pri
 ## Production gates
 
 Before claiming end-to-end multi-agent memory completion, implement and test:
-- Authorized MongoDB document retrieval.
+- Query-based QKV candidate search over MongoDB documents.
 - QKV key generation/indexing for document versions.
 - Qoin memory-ranking integration for MongoDB candidates.
 - Immutable epoch pins containing document version, content hash, QKV version, Qoin version, and source sequence.
