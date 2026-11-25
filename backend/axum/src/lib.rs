@@ -7,6 +7,7 @@ mod chat_memory_routes;
 pub mod firebase_auth;
 pub mod identity;
 pub mod memory_architecture;
+pub mod memory_documents;
 pub mod memory_intelligence;
 mod memory_routes;
 mod model;
@@ -132,10 +133,6 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/v1/tasks/:task_id/submit",
             post(task_routes::submit_task),
-        )
-        .route(
-            "/api/v1/tasks/:task_id/transitions",
-            post(task_routes::transition_task),
         )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
