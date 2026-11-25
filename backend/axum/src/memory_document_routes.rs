@@ -1,6 +1,11 @@
 use crate::{
     auth_middleware::AuthenticatedUser,
+    memory_architecture::{qkv_attention, AttentionMemory, AttentionQuery, QoinVector},
     memory_documents::MemoryDocument,
+    memory_intelligence::{
+        retrieve_memories, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
+        MemoryVisibility, ScoreBreakdown,
+    },
     AppState,
 };
 use axum::{
@@ -11,7 +16,7 @@ use axum::{
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::Arc;
+use std::{collections::{BTreeSet, HashMap}, sync::Arc};
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -272,4 +277,322 @@ pub async fn get_agent_memory_document(
     document
         .map(Json)
         .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "Memory document not found."))
+}
+
+
+#[derive(Debug, Deserialize)]
+pub struct MemoryDocumentSearchRequest {
+    pub query: String,
+    #[serde(default)]
+    pub task_id: Option<Uuid>,
+    #[serde(default)]
+    pub tags: BTreeSet<String>,
+    #[serde(default)]
+    pub dependency_ids: BTreeSet<Uuid>,
+    #[serde(default = "default_search_limit")]
+    pub limit: usize,
+    #[serde(default = "default_half")]
+    pub context: f32,
+    #[serde(default = "default_half")]
+    pub outcome: f32,
+    #[serde(default = "default_half")]
+    pub failure: f32,
+    #[serde(default = "default_half")]
+    pub evidence: f32,
+}
+
+fn default_search_limit() -> usize {
+    10
+}
+fn default_half() -> f32 {
+    0.5
+}
+
+#[derive(Debug, Serialize)]
+pub struct RankedMemoryDocument {
+    pub memory_id: Uuid,
+    pub version: u64,
+    pub title: String,
+    pub content: String,
+    pub content_hash: String,
+    pub source: String,
+    pub source_kind: String,
+    pub source_event_sequence: u64,
+    pub qkv_attention_score: f64,
+    pub qoin_score: ScoreBreakdown,
+    pub qoin_reasons: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MemoryDocumentSearchResponse {
+    pub retrieval_mode: &'static str,
+    pub candidates_examined: usize,
+    pub results: Vec<RankedMemoryDocument>,
+}
+
+fn normalized_metadata_score(document: &MemoryDocument, key: &str) -> f32 {
+    document
+        .key_metadata
+        .get(key)
+        .and_then(Value::as_f64)
+        .filter(|value| value.is_finite())
+        .map(|value| value.clamp(0.0, 1.0) as f32)
+        .unwrap_or(0.5)
+}
+
+fn metadata_dependencies(document: &MemoryDocument) -> BTreeSet<Uuid> {
+    document
+        .key_metadata
+        .get("dependency_ids")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter_map(|value| Uuid::parse_str(value).ok())
+        .collect()
+}
+
+fn metadata_outcome_labels(document: &MemoryDocument) -> BTreeSet<String> {
+    document
+        .key_metadata
+        .get("outcome_labels")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Stable FNV-1a feature hashing. This is a lexical fallback, not a neural
+/// embedding; it is versioned so a future embedding provider cannot mix spaces.
+fn lexical_qkv_vector(text: &str) -> Vec<f32> {
+    const DIMENSION: usize = 64;
+    let mut vector = vec![0.0_f32; DIMENSION];
+    for token in text
+        .split(|character: char| !character.is_alphanumeric())
+        .filter(|token| !token.is_empty())
+    {
+        let mut hash = 0xcbf29ce484222325_u64;
+        for byte in token.to_lowercase().bytes() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        let index = (hash as usize) % DIMENSION;
+        let sign = if (hash >> 8) & 1 == 0 { 1.0 } else { -1.0 };
+        vector[index] += sign;
+    }
+    let norm = vector
+        .iter()
+        .map(|value| f64::from(*value) * f64::from(*value))
+        .sum::<f64>()
+        .sqrt();
+    if norm > 0.0 {
+        for value in &mut vector {
+            *value = (f64::from(*value) / norm) as f32;
+        }
+    }
+    vector
+}
+
+pub async fn search_agent_memory_documents(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, agent_id)): Path<(Uuid, Uuid)>,
+    Json(input): Json<MemoryDocumentSearchRequest>,
+) -> Result<Json<MemoryDocumentSearchResponse>, (StatusCode, Json<ApiError>)> {
+    let member = state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+    if !member {
+        return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
+    }
+    let agent_matches = state.agents.read().await.get(&agent_id)
+        .is_some_and(|agent| agent.workspace_id == workspace_id);
+    if !agent_matches {
+        return Err(api_error(StatusCode::NOT_FOUND, "Agent not found."));
+    }
+    if input.query.trim().is_empty() || input.query.len() > 4096 {
+        return Err(api_error(StatusCode::BAD_REQUEST, "A non-empty query of at most 4096 bytes is required."));
+    }
+    for score in [input.context, input.outcome, input.failure, input.evidence] {
+        if !score.is_finite() || !(0.0..=1.0).contains(&score) {
+            return Err(api_error(StatusCode::BAD_REQUEST, "Qoin query features must be normalized to [0, 1]."));
+        }
+    }
+    if let Some(task_id) = input.task_id {
+        let task_matches = state.tasks.read().await.get(&task_id)
+            .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
+        if !task_matches {
+            return Err(api_error(StatusCode::NOT_FOUND, "Task not found for this agent."));
+        }
+    }
+
+    let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document metadata is unavailable.")
+    })?;
+    let repository = state.memory_documents.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
+    })?;
+    let refs = outbox
+        .list_authorized_document_refs(workspace_id, agent_id, input.task_id, 200)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "memory document candidate lookup failed");
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document search failed.")
+        })?;
+
+    let query_values = lexical_qkv_vector(&input.query);
+    if query_values.iter().all(|value| *value == 0.0) {
+        return Err(api_error(StatusCode::BAD_REQUEST, "The query contains no searchable terms."));
+    }
+    let model_version = "axon-lexical-qkv-v1".to_owned();
+    let query_vector = QoinVector {
+        values: query_values,
+        model_version: model_version.clone(),
+    };
+
+    let mut documents = HashMap::new();
+    let mut attention_candidates = Vec::new();
+    let mut indexed_memories = Vec::new();
+    for (memory_id, version) in refs {
+        let document = outbox
+            .get_authorized_document(
+                repository.as_ref(),
+                workspace_id,
+                memory_id,
+                version,
+                agent_id,
+                input.task_id,
+            )
+            .await
+            .map_err(|error| {
+                tracing::error!(error = %error, "memory document authorization or integrity check failed");
+                api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document search failed.")
+            })?;
+        let Some(document) = document else {
+            continue;
+        };
+
+        let mut key_text = document.title.clone();
+        key_text.push(' ');
+        key_text.push_str(&document.content);
+        for tag in &document.tags {
+            key_text.push(' ');
+            key_text.push_str(tag);
+        }
+        let key = QoinVector {
+            values: lexical_qkv_vector(&key_text),
+            model_version: model_version.clone(),
+        };
+        let dependencies = metadata_dependencies(&document);
+        let outcome = normalized_metadata_score(&document, "outcome");
+        let evidence = normalized_metadata_score(&document, "evidence");
+        let source_sequence = i64::try_from(document.source_event_sequence).unwrap_or(i64::MAX);
+        attention_candidates.push(AttentionMemory {
+            memory_id,
+            source_kind: document.source_kind.clone(),
+            key,
+            value: memory_id.to_string(),
+            outcome_score: outcome,
+            evidence_score: evidence,
+            source_event_sequence: source_sequence,
+            tags: document.tags.iter().cloned().collect(),
+            dependency_ids: dependencies.clone(),
+        });
+
+        let visibility = match document.scope.as_str() {
+            "agent_private" => MemoryVisibility::AgentPrivate,
+            "task_shared" => MemoryVisibility::TaskShared,
+            "project_shared" => MemoryVisibility::ProjectShared,
+            _ => MemoryVisibility::WorkspaceShared,
+        };
+        indexed_memories.push(IndexedMemory {
+            id: memory_id,
+            workspace_id,
+            chat_id: Uuid::nil(),
+            task_id: document.task_id,
+            project_id: document.project_id,
+            owner_agent_id: document.owner_id,
+            visibility,
+            status: MemoryStatus::Approved,
+            vector: MemoryVector {
+                semantic: Vec::new(),
+                context: normalized_metadata_score(&document, "context"),
+                outcome,
+                failure: normalized_metadata_score(&document, "failure"),
+                evidence,
+            },
+            tags: document.tags.iter().cloned().collect(),
+            dependency_ids: dependencies,
+            outcome_labels: metadata_outcome_labels(&document),
+            source_event_ids: Vec::new(),
+            created_at_unix: document.created_at.timestamp(),
+            superseded_by: None,
+        });
+        documents.insert(memory_id, document);
+    }
+
+    let attention = qkv_attention(
+        &AttentionQuery {
+            query: query_vector,
+            heads: 4,
+            tags: input.tags.clone(),
+            dependency_ids: input.dependency_ids.clone(),
+        },
+        &attention_candidates,
+    )
+    .map_err(|_| api_error(StatusCode::BAD_REQUEST, "QKV query could not be evaluated."))?;
+    let attention_scores: HashMap<Uuid, f64> = attention
+        .into_iter()
+        .map(|score| (score.memory_id, score.total))
+        .collect();
+
+    let qoin = retrieve_memories(
+        &MemoryQuery {
+            workspace_id,
+            requester_agent_id: Some(agent_id),
+            task_id: input.task_id,
+            project_id: None,
+            semantic: Vec::new(),
+            context: input.context,
+            outcome: input.outcome,
+            failure: input.failure,
+            evidence: input.evidence,
+            now_unix: Utc::now().timestamp(),
+            tags: input.tags,
+            dependency_ids: input.dependency_ids,
+            outcome_labels: BTreeSet::new(),
+            limit: input.limit.clamp(1, 20),
+        },
+        &indexed_memories,
+    )
+    .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Qoin memory ranking could not be evaluated."))?;
+
+    let mut results = Vec::with_capacity(qoin.ranked.len());
+    for ranked in qoin.ranked {
+        let Some(document) = documents.remove(&ranked.memory_id) else {
+            continue;
+        };
+        results.push(RankedMemoryDocument {
+            memory_id: document.memory_id,
+            version: document.version,
+            title: document.title,
+            content: document.content,
+            content_hash: document.content_hash,
+            source: document.source,
+            source_kind: document.source_kind,
+            source_event_sequence: document.source_event_sequence,
+            qkv_attention_score: attention_scores.get(&ranked.memory_id).copied().unwrap_or(0.0),
+            qoin_score: ranked.score,
+            qoin_reasons: ranked.reasons,
+        });
+    }
+
+    Ok(Json(MemoryDocumentSearchResponse {
+        retrieval_mode: "deterministic_lexical_qkv_v1",
+        candidates_examined: indexed_memories.len(),
+        results,
+    }))
 }
