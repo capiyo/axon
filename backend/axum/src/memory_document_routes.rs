@@ -327,6 +327,7 @@ pub struct RankedMemoryDocument {
 pub struct MemoryDocumentSearchResponse {
     pub retrieval_mode: &'static str,
     pub candidates_examined: usize,
+    pub context_bytes_used: usize,
     pub results: Vec<RankedMemoryDocument>,
 }
 
@@ -575,11 +576,17 @@ pub async fn search_agent_memory_documents(
     )
     .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Qoin memory ranking could not be evaluated."))?;
 
+    const MAX_CONTEXT_BYTES: usize = 64 * 1024;
+    let mut context_bytes_used = 0_usize;
     let mut results = Vec::with_capacity(qoin.ranked.len());
     for ranked in qoin.ranked {
         let Some(document) = documents.remove(&ranked.memory_id) else {
             continue;
         };
+        if document.content.len() > MAX_CONTEXT_BYTES.saturating_sub(context_bytes_used) {
+            continue;
+        }
+        context_bytes_used += document.content.len();
         results.push(RankedMemoryDocument {
             memory_id: document.memory_id,
             version: document.version,
@@ -598,6 +605,7 @@ pub async fn search_agent_memory_documents(
     Ok(Json(MemoryDocumentSearchResponse {
         retrieval_mode: "deterministic_lexical_qkv_v1",
         candidates_examined: indexed_memories.len(),
+        context_bytes_used,
         results,
     }))
 }
