@@ -1,7 +1,8 @@
 use crate::{
     auth_middleware::AuthenticatedUser,
-    memory_architecture::{qkv_attention, AttentionMemory, AttentionQuery, QoinVector},
+    memory_architecture::{qkv_attention, AttentionMemory, AttentionQuery},
     memory_documents::MemoryDocument,
+    memory_vector_provider::{LexicalMemoryVectorProvider, MemoryVectorProvider},
     memory_intelligence::{
         retrieve_memories, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
         MemoryVisibility, ScoreBreakdown,
@@ -367,37 +368,6 @@ fn metadata_outcome_labels(document: &MemoryDocument) -> BTreeSet<String> {
         .collect()
 }
 
-/// Stable FNV-1a feature hashing. This is a lexical fallback, not a neural
-/// embedding; it is versioned so a future embedding provider cannot mix spaces.
-fn lexical_qkv_vector(text: &str) -> Vec<f32> {
-    const DIMENSION: usize = 64;
-    let mut vector = vec![0.0_f32; DIMENSION];
-    for token in text
-        .split(|character: char| !character.is_alphanumeric())
-        .filter(|token| !token.is_empty())
-    {
-        let mut hash = 0xcbf29ce484222325_u64;
-        for byte in token.to_lowercase().bytes() {
-            hash ^= u64::from(byte);
-            hash = hash.wrapping_mul(0x100000001b3);
-        }
-        let index = (hash as usize) % DIMENSION;
-        let sign = if (hash >> 8) & 1 == 0 { 1.0 } else { -1.0 };
-        vector[index] += sign;
-    }
-    let norm = vector
-        .iter()
-        .map(|value| f64::from(*value) * f64::from(*value))
-        .sum::<f64>()
-        .sqrt();
-    if norm > 0.0 {
-        for value in &mut vector {
-            *value = (f64::from(*value) / norm) as f32;
-        }
-    }
-    vector
-}
-
 pub async fn search_agent_memory_documents(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,
@@ -450,15 +420,12 @@ pub async fn search_agent_memory_documents(
             api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document search failed.")
         })?;
 
-    let query_values = lexical_qkv_vector(&input.query);
-    if query_values.iter().all(|value| *value == 0.0) {
-        return Err(api_error(StatusCode::BAD_REQUEST, "The query contains no searchable terms."));
-    }
-    let model_version = "axon-lexical-qkv-v1".to_owned();
-    let query_vector = QoinVector {
-        values: query_values.clone(),
-        model_version: model_version.clone(),
-    };
+    let vector_provider = LexicalMemoryVectorProvider;
+    let query_vector = vector_provider
+        .key_for_text(&input.query)
+        .map_err(|_| api_error(StatusCode::BAD_REQUEST, "The query contains no searchable terms."))?;
+    let query_values = query_vector.values.clone();
+    let model_version = vector_provider.model_version().to_owned();
 
     let mut documents = HashMap::new();
     let mut attention_candidates = Vec::new();
@@ -489,11 +456,10 @@ pub async fn search_agent_memory_documents(
             key_text.push(' ');
             key_text.push_str(tag);
         }
-        let key_values = lexical_qkv_vector(&key_text);
-        let key = QoinVector {
-            values: key_values.clone(),
-            model_version: model_version.clone(),
-        };
+        let key = vector_provider
+            .key_for_text(&key_text)
+            .map_err(|_| api_error(StatusCode::BAD_REQUEST, "A memory document has no searchable terms."))?;
+        let key_values = key.values.clone();
         let dependencies = metadata_dependencies(&document);
         let outcome = normalized_metadata_score(&document, "outcome");
         let evidence = normalized_metadata_score(&document, "evidence");
@@ -614,35 +580,3 @@ pub async fn search_agent_memory_documents(
 }
 
 
-#[cfg(test)]
-mod lexical_retrieval_tests {
-    use super::*;
-
-    #[test]
-    fn lexical_qkv_vectors_are_stable_and_normalized() {
-        let first = lexical_qkv_vector("Axon memory QKV retrieval");
-        let second = lexical_qkv_vector("Axon memory QKV retrieval");
-        assert_eq!(first, second);
-        assert_eq!(first.len(), 64);
-        let norm = first
-            .iter()
-            .map(|value| f64::from(*value) * f64::from(*value))
-            .sum::<f64>()
-            .sqrt();
-        assert!((norm - 1.0).abs() < 1e-5);
-    }
-
-    #[test]
-    fn lexical_qkv_vector_rejects_no_terms_as_zero_vector() {
-        let vector = lexical_qkv_vector("... !!! ---");
-        assert_eq!(vector.len(), 64);
-        assert!(vector.iter().all(|value| *value == 0.0));
-    }
-
-    #[test]
-    fn lexical_qkv_vector_distinguishes_unrelated_terms() {
-        let memory = lexical_qkv_vector("workspace memory document retrieval");
-        let market = lexical_qkv_vector("volatility liquidity orderbook futures");
-        assert_ne!(memory, market);
-    }
-}
