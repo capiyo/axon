@@ -10,6 +10,7 @@ pub mod identity;
 pub mod memory_architecture;
 pub mod memory_documents;
 pub mod memory_outbox;
+pub mod memory_vector_provider;
 pub mod memory_intelligence;
 mod memory_routes;
 mod model;
