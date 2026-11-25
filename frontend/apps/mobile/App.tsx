@@ -144,6 +144,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
 
   useEffect(() => {
     refreshHome().catch(cause => setError(cause instanceof Error ? cause.message : "API unavailable"));
+    refreshNotifications().catch(cause => setError(cause instanceof Error ? cause.message : "Could not load notifications"));
   }, []);
 
   async function refreshNotifications() {
@@ -151,6 +152,21 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     setNotifications(page.items);
     setNotificationUnread(page.unread_count);
   }
+
+  // Keep session activity and notification state synchronized across devices.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      void refreshNotifications().catch(() => undefined);
+      if (!selected) return;
+      void refreshWorkspace(selected).catch(() => undefined);
+      if (activeChat) {
+        void request<ChatDetail>(`/api/v1/workspaces/${selected.id}/chats/${activeChat}`)
+          .then(setChatDetail)
+          .catch(() => undefined);
+      }
+    }, 20000);
+    return () => clearInterval(timer);
+  }, [selected?.id, activeChat]);
 
   function openNotification(item: Notification) {
     void perform(async () => {
