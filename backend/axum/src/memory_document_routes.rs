@@ -67,6 +67,7 @@ pub struct CreateMemoryDocumentResponse {
     pub memory_id: Uuid,
     pub version: u64,
     pub content_hash: String,
+    pub source_event_sequence: u64,
     pub lifecycle_status: &'static str,
     pub sync_status: &'static str,
 }
@@ -173,17 +174,18 @@ pub async fn create_memory_document(
     };
     document.content_hash = document.calculate_content_hash();
     document.validate().map_err(|_| api_error(StatusCode::BAD_REQUEST, "Memory document is invalid."))?;
-    let response = CreateMemoryDocumentResponse {
-        memory_id: document.memory_id,
-        version: document.version,
-        content_hash: document.content_hash.clone(),
-        lifecycle_status: "proposed",
-        sync_status: "pending",
-    };
     outbox.enqueue(&mut document, user.user_id).await.map_err(|error| {
         tracing::error!(error = %error, "memory document could not be queued");
         api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document could not be persisted.")
     })?;
+    let response = CreateMemoryDocumentResponse {
+        memory_id: document.memory_id,
+        version: document.version,
+        content_hash: document.content_hash.clone(),
+        source_event_sequence: document.source_event_sequence,
+        lifecycle_status: "proposed",
+        sync_status: "pending",
+    };
 
     // A successful enqueue is a durable SQLite commit. MongoDB delivery is
     // asynchronous and must not be represented as complete in this response.
