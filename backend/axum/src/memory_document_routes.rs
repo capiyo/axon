@@ -454,7 +454,7 @@ pub async fn search_agent_memory_documents(
     }
     let model_version = "axon-lexical-qkv-v1".to_owned();
     let query_vector = QoinVector {
-        values: query_values,
+        values: query_values.clone(),
         model_version: model_version.clone(),
     };
 
@@ -487,8 +487,9 @@ pub async fn search_agent_memory_documents(
             key_text.push(' ');
             key_text.push_str(tag);
         }
+        let key_values = lexical_qkv_vector(&key_text);
         let key = QoinVector {
-            values: lexical_qkv_vector(&key_text),
+            values: key_values.clone(),
             model_version: model_version.clone(),
         };
         let dependencies = metadata_dependencies(&document);
@@ -524,7 +525,7 @@ pub async fn search_agent_memory_documents(
             visibility,
             status: MemoryStatus::Approved,
             vector: MemoryVector {
-                semantic: Vec::new(),
+                semantic: key_values,
                 context: normalized_metadata_score(&document, "context"),
                 outcome,
                 failure: normalized_metadata_score(&document, "failure"),
@@ -561,7 +562,7 @@ pub async fn search_agent_memory_documents(
             requester_agent_id: Some(agent_id),
             task_id: input.task_id,
             project_id: None,
-            semantic: Vec::new(),
+            semantic: query_values,
             context: input.context,
             outcome: input.outcome,
             failure: input.failure,
