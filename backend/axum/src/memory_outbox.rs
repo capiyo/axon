@@ -7,7 +7,6 @@ use crate::memory_documents::{
     MemoryDocument, MemoryDocumentError, MemoryDocumentRepository,
 };
 use chrono::{Duration as ChronoDuration, Utc};
-use futures_util::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
 use std::{sync::Arc, time::Duration};
