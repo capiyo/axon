@@ -14,7 +14,7 @@ Axon's memory-ranking logic is distinct from Qoin's financial-market strategy se
 - Recency.
 - Tag overlap.
 
-It applies explicit normalized components, ranks deterministically, filters by workspace/status/scope, and returns explanations.
+It applies explicit normalized components under the version identifier `axon-qoin-memory-v1`, ranks deterministically, filters by workspace/status/scope, and returns explanations.
 
 ## Existing attention ranking
 
