@@ -180,7 +180,7 @@ pub async fn create_memory_document(
         lifecycle_status: "proposed",
         sync_status: "pending",
     };
-    outbox.enqueue(&document).await.map_err(|error| {
+    outbox.enqueue(&mut document, user.user_id).await.map_err(|error| {
         tracing::error!(error = %error, "memory document could not be queued");
         api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document could not be persisted.")
     })?;
