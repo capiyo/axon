@@ -11,7 +11,7 @@
 - Document content is not logged by the outbox worker.
 - Document payloads are bounded by the API request limit and an explicit 256 KiB content limit.
 
-Direct retrieval by memory ID/version checks SQLite workspace, scope, approval, and synchronization metadata before fetching the MongoDB version and verifying its content hash. Project-shared retrieval remains disabled. Agent identity is currently the registered agent ID in an authenticated workspace request; cryptographic agent credentials are not yet implemented. Query-based retrieval applies SQLite scope/approval/synchronization filters before MongoDB hydration and verifies the stored hash. Immutable epochs now pin exact MongoDB document versions and hashes. Session retrieval constrained to a pinned epoch remains outstanding.
+Direct retrieval by memory ID/version checks SQLite workspace, scope, approval, and synchronization metadata before fetching the MongoDB version and verifying its content hash. Project-shared retrieval remains disabled. Agent identity is currently the registered agent ID in an authenticated workspace request; cryptographic agent credentials are not yet implemented. Query-based retrieval applies SQLite scope/approval/synchronization filters before MongoDB hydration and verifies the stored hash. Immutable epochs now pin exact MongoDB document versions and hashes. Session retrieval resolves the immutable epoch from the authenticated agent session and returns only exact pinned document versions. The combined session-context endpoint joins these documents with progressive SQLite memory retrieval. Project-shared access remains fail-closed.
 
 
 ## Approval authorization
