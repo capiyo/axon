@@ -180,16 +180,19 @@ impl MemoryDocumentRepository for MongoMemoryDocumentRepository {
             return Err(MemoryDocumentError::VersionConflict);
         }
 
-        match self.collection.insert_one(document, None).await {
+        match self.collection.insert_one(document.clone(), None).await {
             Ok(_) => Ok(()),
-            Err(error) if error.to_string().contains("E11000") => {
-                let existing = self.collection.find_one(filter, None).await?;
-                match existing {
-                    Some(existing) if existing.content_hash == document.content_hash => Ok(()),
-                    _ => Err(MemoryDocumentError::VersionConflict),
+            Err(error) => {
+                // A concurrent retry may have inserted the unique version first.
+                // Treat it as success only when the persisted content hash agrees.
+                if let Some(existing) = self.collection.find_one(filter, None).await? {
+                    if existing.content_hash == document.content_hash {
+                        return Ok(());
+                    }
+                    return Err(MemoryDocumentError::VersionConflict);
                 }
-            }
-            Err(error) => Err(MemoryDocumentError::Mongo(error)),
+                Err(MemoryDocumentError::Mongo(error))
+            },
         }
     }
 
