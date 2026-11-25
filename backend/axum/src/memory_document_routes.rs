@@ -2,7 +2,7 @@ use crate::{
     auth_middleware::AuthenticatedUser,
     memory_architecture::{qkv_attention, AttentionMemory, AttentionQuery},
     memory_documents::MemoryDocument,
-    memory_vector_provider::{LexicalMemoryVectorProvider, MemoryVectorProvider},
+    memory_vector_provider::{LexicalMemoryVectorProvider, MemoryVectorProvider, LEXICAL_MEMORY_VECTOR_VERSION},
     memory_intelligence::{
         retrieve_memories, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
         MemoryVisibility, ScoreBreakdown, QOIN_MEMORY_SCORING_VERSION,
@@ -44,8 +44,6 @@ pub struct CreateMemoryDocumentRequest {
     pub key_metadata: Value,
     #[serde(default)]
     pub value_payload: Value,
-    #[serde(default = "default_qkv_version")]
-    pub qkv_version: String,
     #[serde(default)]
     pub retention_policy: Option<String>,
 }
@@ -58,9 +56,6 @@ fn default_source() -> String {
 }
 fn default_source_kind() -> String {
     "manual_memory".into()
-}
-fn default_qkv_version() -> String {
-    "axon-lexical-qkv-v1".into()
 }
 
 #[derive(Debug, Serialize)]
@@ -168,7 +163,7 @@ pub async fn create_memory_document(
         content_hash: String::new(),
         key_metadata: input.key_metadata,
         value_payload: input.value_payload,
-        qkv_version: input.qkv_version,
+        qkv_version: LEXICAL_MEMORY_VECTOR_VERSION.into(),
         qoin_vector_version: None,
         status: "proposed".into(),
         retention_policy: input.retention_policy,
@@ -574,7 +569,7 @@ pub async fn search_agent_memory_documents(
 
     Ok(Json(MemoryDocumentSearchResponse {
         retrieval_mode: "deterministic_lexical_qkv_v1",
-        qkv_model_version: "axon-lexical-qkv-v1",
+        qkv_model_version: LEXICAL_MEMORY_VECTOR_VERSION,
         qoin_scoring_version: QOIN_MEMORY_SCORING_VERSION,
         candidates_examined: indexed_memories.len(),
         context_bytes_used,
