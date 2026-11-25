@@ -102,3 +102,37 @@ The workspace UI can create and advance tasks. To simulate the manual handoff, a
 - Agent names/provider labels do not connect to provider APIs. The person using the UI still performs manual provider handoff.
 - SQLite must use a persistent volume in production. MongoDB backups and SQLite backups must both be configured.
 - Never place secrets or sensitive personal data in this prototype.
+
+
+## 6. Versioned memory documents
+
+Create a proposed workspace-shared memory document. It is committed to SQLite first and delivered to MongoDB asynchronously:
+
+```sh
+curl -X POST "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/memory/documents" \
+  -H "Authorization: Bearer $FIREBASE_ID_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scope":"workspace_shared",
+    "document_type":"technical_decision",
+    "title":"Memory persistence decision",
+    "content":"SQLite owns metadata and lifecycle; MongoDB stores immutable document versions.",
+    "tags":["architecture","memory"]
+  }'
+```
+
+The response includes `memory_id`, `version`, and `content_hash`. The lifecycle starts as `proposed`. Approve that exact version:
+
+```sh
+curl -X POST "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/memory/documents/$MEMORY_ID/1/approve" \
+  -H "Authorization: Bearer $FIREBASE_ID_TOKEN"
+```
+
+A registered agent in the workspace can then retrieve the exact version by ID:
+
+```sh
+curl "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/agents/$AGENT_ID/memory-documents/$MEMORY_ID/1" \
+  -H "Authorization: Bearer $FIREBASE_ID_TOKEN"
+```
+
+For task-shared memory, supply `task_id` as a query parameter and the task must be assigned to the requesting agent. Agent-private memory is only returned when its stored owner agent matches the agent ID in the route. Project-shared memory is intentionally unavailable until project membership is persisted.
