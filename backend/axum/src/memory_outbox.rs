@@ -633,7 +633,7 @@ mod tests {
             content_hash: String::new(),
             key_metadata: serde_json::json!({}),
             value_payload: serde_json::json!({}),
-            qkv_version: "qkv-metadata-v1".into(),
+            qkv_version: "axon-lexical-qkv-v1".into(),
             qoin_vector_version: None,
             status: "proposed".into(),
             retention_policy: None,
@@ -724,7 +724,7 @@ mod tests {
         assert_eq!(pinned_version, 1);
         assert_eq!(pinned_hash, document.content_hash);
         assert_eq!(u64::try_from(pinned_sequence).unwrap(), first_source_sequence);
-        assert_eq!(pinned_qkv, "qkv-metadata-v1");
+        assert_eq!(pinned_qkv, "axon-lexical-qkv-v1");
         assert_eq!(pinned_qoin, crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION);
     }
 }
