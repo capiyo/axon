@@ -633,6 +633,52 @@ impl MemoryOutbox {
         Ok(Some(documents))
     }
 
+    /// Resolves the immutable epoch from the agent's persisted session before
+    /// hydrating MongoDB values. Callers cannot substitute an arbitrary epoch.
+    pub async fn list_session_authorized_documents(
+        &self,
+        repository: &dyn MemoryDocumentRepository,
+        workspace_id: Uuid,
+        session_id: Uuid,
+        requester_agent_id: Uuid,
+        limit: usize,
+    ) -> Result<Option<(Uuid, Option<Uuid>, Vec<MemoryDocument>)>, MemoryOutboxError> {
+        let session = sqlx::query(
+            "SELECT memory_epoch_id, task_id FROM agent_memory_sessions \
+             WHERE session_id = ? AND workspace_id = ? AND agent_id = ?",
+        )
+        .bind(session_id.to_string())
+        .bind(workspace_id.to_string())
+        .bind(requester_agent_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        let Some(session) = session else {
+            return Ok(None);
+        };
+        let epoch_id_text: String = session.try_get("memory_epoch_id")?;
+        let epoch_id = Uuid::parse_str(&epoch_id_text)
+            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+        let task_id_text: Option<String> = session.try_get("task_id")?;
+        let task_id = task_id_text
+            .map(|value| Uuid::parse_str(&value))
+            .transpose()
+            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+        let Some(documents) = self
+            .list_epoch_authorized_documents(
+                repository,
+                workspace_id,
+                epoch_id,
+                requester_agent_id,
+                task_id,
+                limit,
+            )
+            .await?
+        else {
+            return Err(MemoryOutboxError::VersionConflict);
+        };
+        Ok(Some((epoch_id, task_id, documents)))
+    }
+
     pub async fn mark_indexed(
         &self,
         memory_id: Uuid,
