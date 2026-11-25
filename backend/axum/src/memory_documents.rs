@@ -175,7 +175,7 @@ impl MemoryDocumentRepository for MongoMemoryDocumentRepository {
         };
 
         if let Some(existing) = self.collection.find_one(filter.clone(), None).await? {
-            if existing.content_hash == document.content_hash {
+            if existing == document {
                 return Ok(());
             }
             return Err(MemoryDocumentError::VersionConflict);
@@ -187,7 +187,7 @@ impl MemoryDocumentRepository for MongoMemoryDocumentRepository {
                 // A concurrent retry may have inserted the unique version first.
                 // Treat it as success only when the persisted content hash agrees.
                 if let Some(existing) = self.collection.find_one(filter, None).await? {
-                    if existing.content_hash == document.content_hash {
+                    if existing == document {
                         return Ok(());
                     }
                     return Err(MemoryDocumentError::VersionConflict);
