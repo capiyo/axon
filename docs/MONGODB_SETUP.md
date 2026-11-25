@@ -43,4 +43,4 @@ Then run `cargo run -p axon-api`.
 
 ## Current implementation boundary
 
-MongoDB connection lifecycle, immutable document writes, hash verification, and the SQLite outbox worker are implemented in this branch. Direct retrieval by memory ID/version is implemented after explicit SQLite approval and scope verification. Query-based search, reconciliation tooling, index rebuild, and QKV/epoch hydration from MongoDB are not yet complete.
+MongoDB connection lifecycle, immutable document writes, hash verification, and the SQLite outbox worker are implemented in this branch. Direct retrieval by memory ID/version is implemented after explicit SQLite approval and scope verification. Query-based search is available through deterministic lexical QKV attention followed by Qoin memory ranking. Neural embedding-provider integration, reconciliation tooling, index rebuild, and immutable epoch hydration from MongoDB are not yet complete.
