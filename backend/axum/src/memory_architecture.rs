@@ -3,6 +3,7 @@
 //! Qoin owns semantic vector production and vector-space conventions. Axon owns
 //! authorization, QKV attention, event provenance, epoch publication, Pareto
 //! context selection, and task-local progressive retrieval.
+use crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use thiserror::Error;
@@ -363,10 +364,14 @@ impl MemoryEpochCoordinator {
     /// Publish due workspaces. Called repeatedly by the supervised hourly
     /// worker; the one-hour guard is enforced transactionally per workspace.
     pub async fn publish_due_epochs(&self) -> Result<usize, sqlx::Error> {
-        let workspaces: Vec<String> =
-            sqlx::query_scalar("SELECT DISTINCT workspace_id FROM chats ORDER BY workspace_id")
-                .fetch_all(&self.pool)
-                .await?;
+        let workspaces: Vec<String> = sqlx::query_scalar(
+            "SELECT workspace_id FROM chats \
+             UNION SELECT workspace_id FROM memory_document_versions \
+             WHERE lifecycle_status = 'approved' AND sync_status IN ('stored', 'indexed') \
+             ORDER BY workspace_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
         let mut published = 0;
         for workspace in workspaces {
             if self.publish_workspace_if_due(&workspace).await? {
@@ -390,15 +395,34 @@ impl MemoryEpochCoordinator {
                 return Ok(false);
             }
         }
-        let max_sequence: i64 = sqlx::query_scalar(
+        let memory_event_sequence: i64 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(sequence), 0) FROM memory_events WHERE workspace_id = ?",
         )
         .bind(workspace_id)
         .fetch_one(&mut *tx)
         .await?;
-        let indexed_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved'"
-        ).bind(workspace_id).fetch_one(&mut *tx).await?;
+        let document_event_sequence: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(source_event_sequence), 0) FROM memory_document_versions \
+             WHERE workspace_id = ? AND lifecycle_status = 'approved' AND sync_status IN ('stored', 'indexed')",
+        )
+        .bind(workspace_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let max_sequence = memory_event_sequence.max(document_event_sequence);
+        let indexed_vector_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved'",
+        )
+        .bind(workspace_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let indexed_document_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM memory_document_versions WHERE workspace_id = ? \
+             AND lifecycle_status = 'approved' AND sync_status IN ('stored', 'indexed')",
+        )
+        .bind(workspace_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let indexed_count = indexed_vector_count + indexed_document_count;
         let next_epoch: i64 = sqlx::query_scalar(
             "SELECT COALESCE(MAX(epoch_number), 0) + 1 FROM memory_epochs WHERE workspace_id = ?",
         )
@@ -408,7 +432,9 @@ impl MemoryEpochCoordinator {
         let now = Utc::now();
         let id = Uuid::new_v4();
         // This is a reproducibility marker, not a cryptographic integrity hash.
-        let marker = format!("source-sequence:{max_sequence};indexed-memories:{indexed_count}");
+        let marker = format!(
+            "source-sequence:{max_sequence};indexed-vectors:{indexed_vector_count};indexed-documents:{indexed_document_count}"
+        );
         sqlx::query(
             "INSERT INTO memory_epochs (id, workspace_id, epoch_number, published_at, source_event_sequence, indexed_memory_count, snapshot_digest) VALUES (?, ?, ?, ?, ?, ?, ?)"
         ).bind(id.to_string()).bind(workspace_id).bind(next_epoch)
@@ -418,6 +444,22 @@ impl MemoryEpochCoordinator {
             "INSERT INTO memory_epoch_items (epoch_id, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, source_kind, indexed_at) SELECT ?, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, source_kind, indexed_at FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved'"
         ).bind(id.to_string()).bind(workspace_id)
             .execute(&mut *tx).await?;
+        sqlx::query(
+            "INSERT INTO memory_document_epoch_items \
+             (epoch_id, workspace_id, memory_id, document_version, content_hash, scope, project_id, \
+              task_id, owner_id, source_event_sequence, qkv_version, qoin_vector_version, \
+              qoin_scoring_version, snapshot_at) \
+             SELECT ?, workspace_id, memory_id, version, content_hash, scope, project_id, task_id, \
+                    owner_id, source_event_sequence, qkv_version, qoin_vector_version, ?, ? \
+             FROM memory_document_versions WHERE workspace_id = ? AND lifecycle_status = 'approved' \
+                    AND sync_status IN ('stored', 'indexed')",
+        )
+        .bind(id.to_string())
+        .bind(QOIN_MEMORY_SCORING_VERSION)
+        .bind(now.to_rfc3339())
+        .bind(workspace_id)
+        .execute(&mut *tx)
+        .await?;
         tx.commit().await?;
         Ok(true)
     }
