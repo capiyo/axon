@@ -93,6 +93,10 @@ pub fn app(state: AppState) -> Router {
             post(memory_document_routes::search_agent_memory_documents),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-epochs/:epoch_id/documents",
+            get(memory_document_routes::get_agent_epoch_documents),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/memory/index",
             post(memory_routes::index_memory),
         )
