@@ -102,3 +102,29 @@ Existing vector-index rows already carry Qoin vector JSON, key metadata JSON, va
 ## 10. Verification limitation
 
 This audit was performed against GitHub source files. The connected GitHub workflow permits repository reads and writes but does not provide a local checkout or Rust execution environment in this session. Consequently, compilation, migration execution, and integration tests must be run in CI or a local checkout before any implementation can be represented as verified.
+
+
+## 11. Implementation progress on this branch
+
+The following work has since been added on this branch:
+
+- MongoDB 2.8.2 document repository with immutable memory/version writes, indexes, and SHA-256 content verification.
+- SQLite migrations 0010–0012 for document metadata, durable outbox, idempotency, and immutable document epoch pins.
+- Audit-sequence assignment for new documents.
+- Leased outbox worker with retry/backoff, dead-letter handling, restart recovery, and graceful shutdown.
+- Authenticated create, approve, direct retrieval, and search endpoints for workspace-shared, task-shared, and agent-private documents.
+- Deterministic lexical QKV vector provider and integration with existing QKV attention and Qoin memory-intelligence ranking.
+- Epoch publication now includes approved, synchronized MongoDB document versions and pins content hash, source sequence, QKV version, and Qoin scoring version.
+- Unit/integration test source for document hashing, scope invariants, outbox idempotency, approval audit, private-scope filtering, lexical vectors, and immutable epoch pins.
+
+Still outstanding:
+
+- Rust formatting, compilation, clippy, and test execution in a Rust-enabled environment.
+- Real MongoDB integration tests and outage/restart simulation.
+- Neural embedding provider; the current provider is explicitly lexical.
+- Session retrieval constrained to a pinned epoch.
+- Project membership authorization.
+- Reconciliation, index rebuild, and dead-letter operator recovery.
+- Full observability/readiness and performance measurements.
+
+The source changes have not been verified by a Rust compiler in this session. Do not treat this progress list as a production sign-off.
