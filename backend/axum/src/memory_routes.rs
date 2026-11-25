@@ -536,9 +536,12 @@ pub async fn retrieve_session_context(
     let mut documents = Vec::new();
     let mut documents_truncated = false;
     for document in pinned_documents {
-        let document_bytes = document.title.len()
-            .saturating_add(document.content.len())
-            .saturating_add(document.value_payload.to_string().len());
+        let document_bytes = serde_json::to_vec(&document)
+            .map_err(|_| error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Pinned memory document could not be serialized safely.",
+            ))?
+            .len();
         if document_context_bytes_used.saturating_add(document_bytes)
             > DOCUMENT_CONTEXT_BUDGET_BYTES
         {
