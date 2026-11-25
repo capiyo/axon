@@ -5,7 +5,7 @@ use crate::{
     memory_vector_provider::{LexicalMemoryVectorProvider, MemoryVectorProvider},
     memory_intelligence::{
         retrieve_memories, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
-        MemoryVisibility, ScoreBreakdown,
+        MemoryVisibility, ScoreBreakdown, QOIN_MEMORY_SCORING_VERSION,
     },
     AppState,
 };
@@ -329,6 +329,8 @@ pub struct RankedMemoryDocument {
 #[derive(Debug, Serialize)]
 pub struct MemoryDocumentSearchResponse {
     pub retrieval_mode: &'static str,
+    pub qkv_model_version: &'static str,
+    pub qoin_scoring_version: &'static str,
     pub candidates_examined: usize,
     pub context_bytes_used: usize,
     pub results: Vec<RankedMemoryDocument>,
@@ -572,6 +574,8 @@ pub async fn search_agent_memory_documents(
 
     Ok(Json(MemoryDocumentSearchResponse {
         retrieval_mode: "deterministic_lexical_qkv_v1",
+        qkv_model_version: "axon-lexical-qkv-v1",
+        qoin_scoring_version: QOIN_MEMORY_SCORING_VERSION,
         candidates_examined: indexed_memories.len(),
         context_bytes_used,
         results,
