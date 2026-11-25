@@ -167,12 +167,9 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           .then(setChatDetail)
           .catch(() => undefined);
       }
-      if (activeTab === "explore") {
-        void refreshExplore().catch(() => undefined);
-      }
     }, 20000);
     return () => clearInterval(timer);
-  }, [selected?.id, activeChat, activeTab]);
+  }, [selected?.id, activeChat]);
 
   function openNotification(item: Notification) {
     void perform(async () => {
