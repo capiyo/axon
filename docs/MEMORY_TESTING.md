@@ -28,6 +28,7 @@ Existing QKV and memory-intelligence tests remain part of the Rust suite.
 - Verify hash mismatch never becomes retrievable.
 - Verify dead-letter handling and operator recovery.
 - Verify workspace/task/agent scope isolation.
+- Verify a non-member cannot approve a proposed memory document.
 - Verify the combined session-context endpoint returns progressive SQLite memories and the exact MongoDB versions pinned to that same session.
 - Verify a session belonging to another agent cannot be used, and task reassignment fails closed.
 - Verify the document context byte budget omits whole documents and reports truncation. Unit tests in `memory_routes.rs` cover both fitting and truncating document sets.
