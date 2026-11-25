@@ -78,13 +78,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|url| QoinVectorClient::new(&url))
         .transpose()?;
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-    if let Some(repository) = memory_documents.clone() {
-        tokio::spawn(memory_outbox.clone().run(
+    let outbox_worker = if let Some(repository) = memory_documents.clone() {
+        Some(tokio::spawn(memory_outbox.clone().run(
             repository,
             format!("axon-memory-outbox-{}", uuid::Uuid::new_v4()),
             shutdown_rx,
-        ));
-    }
+        )))
+    } else {
+        None
+    };
 
     let state = AppState::with_storage(storage.shared())
         .await?
@@ -108,6 +110,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let _ = shutdown_tx.send(true);
         })
         .await?;
+
+    // Allow an in-flight outbox write to finish and the worker to observe the
+    // shutdown signal. Any unclaimed event remains durable in SQLite.
+    if let Some(worker) = outbox_worker {
+        match tokio::time::timeout(std::time::Duration::from_secs(5), worker).await {
+            Ok(Ok(())) => tracing::info!("memory outbox worker stopped cleanly"),
+            Ok(Err(error)) => tracing::error!(error = %error, "memory outbox worker task failed"),
+            Err(_) => tracing::warn!("memory outbox worker did not stop within five seconds; pending events remain recoverable"),
+        }
+    }
     Ok(())
 }
 
