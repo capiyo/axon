@@ -610,3 +610,37 @@ pub async fn search_agent_memory_documents(
         results,
     }))
 }
+
+
+#[cfg(test)]
+mod lexical_retrieval_tests {
+    use super::*;
+
+    #[test]
+    fn lexical_qkv_vectors_are_stable_and_normalized() {
+        let first = lexical_qkv_vector("Axon memory QKV retrieval");
+        let second = lexical_qkv_vector("Axon memory QKV retrieval");
+        assert_eq!(first, second);
+        assert_eq!(first.len(), 64);
+        let norm = first
+            .iter()
+            .map(|value| f64::from(*value) * f64::from(*value))
+            .sum::<f64>()
+            .sqrt();
+        assert!((norm - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn lexical_qkv_vector_rejects_no_terms_as_zero_vector() {
+        let vector = lexical_qkv_vector("... !!! ---");
+        assert_eq!(vector.len(), 64);
+        assert!(vector.iter().all(|value| *value == 0.0));
+    }
+
+    #[test]
+    fn lexical_qkv_vector_distinguishes_unrelated_terms() {
+        let memory = lexical_qkv_vector("workspace memory document retrieval");
+        let market = lexical_qkv_vector("volatility liquidity orderbook futures");
+        assert_ne!(memory, market);
+    }
+}
