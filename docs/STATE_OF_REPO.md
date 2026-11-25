@@ -61,7 +61,7 @@
 - [x] Added local MongoDB configuration and operational documentation.
 - [x] Added approved, scope-checked agent document retrieval and query search using deterministic lexical QKV attention followed by the existing Qoin memory-intelligence scorer.
 - [x] Immutable memory-document epoch metadata now pins exact document version, content hash, source sequence, QKV version, and Qoin scoring version.
-- [ ] Neural embedding-provider integration remains outstanding; newly created MongoDB memory documents now persist their versioned deterministic lexical QKV keys.
+- [ ] Neural embedding-provider integration remains outstanding; newly created MongoDB memory documents now persist versioned deterministic lexical QKV keys and source-text integrity hashes.
 - [x] An authenticated session-bound endpoint resolves the session's immutable epoch and hydrates exact MongoDB document versions with scope, source sequence, QKV version, and SHA-256 verification.
 - [ ] Project-shared memory is disabled until persisted project-membership authorization exists.
 - [ ] Reconciliation, dead-letter operator recovery, and full MongoDB integration/security tests remain outstanding.
