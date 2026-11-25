@@ -627,7 +627,7 @@ mod tests {
             tags: vec!["private".into()],
             source: "test".into(),
             source_kind: "memory_entry".into(),
-            source_event_sequence: 1,
+            source_event_sequence: 0,
             created_at: now,
             updated_at: now,
             content_hash: String::new(),
