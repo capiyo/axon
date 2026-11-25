@@ -402,6 +402,10 @@ impl MemoryOutbox {
         {
             return Err(MemoryOutboxError::VersionConflict);
         }
+        // Reflect the authoritative SQLite approval state in the returned view;
+        // MongoDB's stored status is intentionally not an authorization source.
+        let mut document = document;
+        document.status = "ready".into();
         Ok(Some(document))
     }
 
