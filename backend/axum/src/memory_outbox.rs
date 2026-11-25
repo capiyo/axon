@@ -870,3 +870,118 @@ mod tests {
         assert!(delete_result.is_err());
     }
 }
+
+
+#[cfg(test)]
+mod epoch_document_tests {
+    use super::*;
+    use std::{collections::HashMap, sync::Mutex};
+
+    #[derive(Default)]
+    struct FakeDocumentRepository {
+        documents: Mutex<HashMap<(Uuid, u64), MemoryDocument>>,
+    }
+
+    #[async_trait::async_trait]
+    impl MemoryDocumentRepository for FakeDocumentRepository {
+        async fn put_version(&self, document: MemoryDocument) -> Result<(), MemoryDocumentError> {
+            document.validate()?;
+            self.documents
+                .lock()
+                .map_err(|_| MemoryDocumentError::InvalidDocument)?
+                .insert((document.memory_id, document.version), document);
+            Ok(())
+        }
+
+        async fn get_version(
+            &self,
+            memory_id: Uuid,
+            version: u64,
+        ) -> Result<Option<MemoryDocument>, MemoryDocumentError> {
+            Ok(self.documents
+                .lock()
+                .map_err(|_| MemoryDocumentError::InvalidDocument)?
+                .get(&(memory_id, version))
+                .cloned())
+        }
+
+        async fn list_versions(
+            &self,
+            memory_id: Uuid,
+        ) -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
+            let mut versions = self.documents
+                .lock()
+                .map_err(|_| MemoryDocumentError::InvalidDocument)?
+                .values()
+                .filter(|document| document.memory_id == memory_id)
+                .cloned()
+                .collect::<Vec<_>>();
+            versions.sort_by_key(|document| document.version);
+            Ok(versions)
+        }
+
+        async fn verify_version(
+            &self,
+            memory_id: Uuid,
+            version: u64,
+            expected_hash: &str,
+        ) -> Result<bool, MemoryDocumentError> {
+            Ok(self.get_version(memory_id, version).await?
+                .is_some_and(|document| document.content_hash == expected_hash))
+        }
+
+        async fn ping(&self) -> Result<(), MemoryDocumentError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn epoch_hydration_returns_only_the_pinned_authorized_document_version() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let outbox = storage.memory_outbox();
+        let workspace_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+        let mut document = super::tests::document(workspace_id, agent_id);
+        outbox.enqueue(&mut document, Uuid::new_v4()).await.unwrap();
+
+        let repository = FakeDocumentRepository::default();
+        repository.put_version(document.clone()).await.unwrap();
+        assert!(outbox.approve(workspace_id, document.memory_id, 1, Uuid::new_v4()).await.unwrap());
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+
+        assert_eq!(storage.memory_epoch_coordinator().publish_due_epochs().await.unwrap(), 1);
+        let epoch_id_text: String = sqlx::query_scalar(
+            "SELECT id FROM memory_epochs WHERE workspace_id = ? ORDER BY epoch_number DESC LIMIT 1",
+        )
+        .bind(workspace_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        let epoch_id = Uuid::parse_str(&epoch_id_text).unwrap();
+
+        let visible = outbox.list_epoch_authorized_documents(
+            &repository, workspace_id, epoch_id, agent_id, None, 20,
+        ).await.unwrap().unwrap();
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0].memory_id, document.memory_id);
+        assert_eq!(visible[0].version, 1);
+        assert_eq!(visible[0].content_hash, document.content_hash);
+        assert_eq!(visible[0].status, "ready");
+
+        let hidden = outbox.list_epoch_authorized_documents(
+            &repository, workspace_id, epoch_id, Uuid::new_v4(), None, 20,
+        ).await.unwrap().unwrap();
+        assert!(hidden.is_empty());
+
+        let missing = outbox.list_epoch_authorized_documents(
+            &repository, workspace_id, Uuid::new_v4(), agent_id, None, 20,
+        ).await.unwrap();
+        assert!(missing.is_none());
+    }
+}
