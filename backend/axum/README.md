@@ -19,7 +19,7 @@ Configure a Firebase project dedicated to Axon. Do not reuse Funspot's Firebase 
 
     cargo run -p axon-api
 
-The server refuses to start without FIREBASE_PROJECT_ID. The default database file is axon.db; production must use a persistent mounted volume or a separately reviewed database adapter with backups and restore testing.
+The server refuses to start without FIREBASE_PROJECT_ID. The default database file is axon.db; production must use a persistent mounted volume or a separately reviewed database adapter with backups and restore testing. When the hosting platform supplies `PORT` (as Render does), Axon uses it unless `AXON_PORT` is explicitly set and defaults to `0.0.0.0` unless `AXON_HOST` is explicitly set. Without `PORT`, local defaults remain `127.0.0.1:8080`.
 
 ## Authentication
 
