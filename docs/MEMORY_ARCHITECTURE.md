@@ -46,7 +46,8 @@ Before claiming end-to-end multi-agent memory completion, implement and test:
 - Neural embedding-provider integration and QKV index versioning for MongoDB documents.
 - A separately searchable vector index, reconciliation, and safe index rebuild.
 - Project membership authorization.
-- End-to-end agent execution consumption and real MongoDB restart/security tests.
+- Agent/client consumers must call the combined session-context endpoint; no provider-backed agent execution runtime exists yet.
+- Real MongoDB restart/security tests.
 - Reconciliation and safe index rebuild.
 - Project membership authorization.
 - End-to-end restart and cross-scope security tests.
