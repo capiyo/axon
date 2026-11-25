@@ -184,3 +184,92 @@ pub async fn create_memory_document(
     // asynchronous and must not be represented as complete in this response.
     Ok((StatusCode::ACCEPTED, Json(response)))
 }
+
+
+#[derive(Debug, Deserialize)]
+pub struct MemoryDocumentTaskQuery {
+    pub task_id: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MemoryDocumentApprovalResponse {
+    pub memory_id: Uuid,
+    pub version: u64,
+    pub lifecycle_status: &'static str,
+}
+
+pub async fn approve_memory_document(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, memory_id, version)): Path<(Uuid, Uuid, u64)>,
+) -> Result<Json<MemoryDocumentApprovalResponse>, (StatusCode, Json<ApiError>)> {
+    let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document storage is unavailable.")
+    })?;
+    let approved = outbox
+        .approve(workspace_id, memory_id, version, user.user_id)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "memory document approval failed");
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document approval failed.")
+        })?;
+    if !approved {
+        return Err(api_error(StatusCode::NOT_FOUND, "Proposed memory document was not found."));
+    }
+    Ok(Json(MemoryDocumentApprovalResponse {
+        memory_id,
+        version,
+        lifecycle_status: "approved",
+    }))
+}
+
+pub async fn get_agent_memory_document(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, agent_id, memory_id, version)): Path<(Uuid, Uuid, Uuid, u64)>,
+    axum::extract::Query(query): axum::extract::Query<MemoryDocumentTaskQuery>,
+) -> Result<Json<MemoryDocument>, (StatusCode, Json<ApiError>)> {
+    let member = state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+    if !member {
+        return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
+    }
+    let agent_matches = state.agents.read().await.get(&agent_id)
+        .is_some_and(|agent| agent.workspace_id == workspace_id);
+    if !agent_matches {
+        return Err(api_error(StatusCode::NOT_FOUND, "Agent not found."));
+    }
+    if let Some(task_id) = query.task_id {
+        let task_matches = state.tasks.read().await.get(&task_id)
+            .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
+        if !task_matches {
+            return Err(api_error(StatusCode::NOT_FOUND, "Task not found for this agent."));
+        }
+    }
+
+    let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document metadata is unavailable.")
+    })?;
+    let repository = state.memory_documents.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
+    })?;
+    let document = outbox
+        .get_authorized_document(
+            repository.as_ref(),
+            workspace_id,
+            memory_id,
+            version,
+            agent_id,
+            query.task_id,
+        )
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "memory document retrieval failed");
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document could not be retrieved.")
+        })?;
+    document
+        .map(Json)
+        .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "Memory document not found."))
+}
