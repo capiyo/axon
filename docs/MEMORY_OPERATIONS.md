@@ -25,6 +25,7 @@ Do not delete SQLite outbox rows manually to resolve delivery failures.
 - A worker restart makes expired processing events eligible again.
 - Retries use bounded exponential backoff.
 - Eight failed attempts move an event to `dead_letter`.
+- Each document creation records an append-only SQLite audit event; its sequence is copied into document metadata and the MongoDB payload.
 - The current implementation does not yet provide a supported operator retry/reconciliation command for dead-letter events.
 
 ## Backups
