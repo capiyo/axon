@@ -4,6 +4,7 @@ pub mod auth_middleware;
 mod auth_middleware_tests;
 pub mod chat_memory;
 mod chat_memory_routes;
+mod memory_document_routes;
 pub mod firebase_auth;
 pub mod identity;
 pub mod memory_architecture;
@@ -73,6 +74,10 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/v1/workspaces/:workspace_id/chats/:chat_id/memory/:entry_id/:action",
             post(chat_memory_routes::mutate_memory_entry),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memory/documents",
+            post(memory_document_routes::create_memory_document),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/memory/index",
