@@ -20,9 +20,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "FIREBASE_PROJECT_ID must be configured; refusing to start without Firebase authentication"
     })?;
     let verifier = FirebaseVerifier::new(project_id)?;
-    let host = env::var("AXON_HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
+    let platform_port = env::var("PORT").ok();
+    let host = env::var("AXON_HOST").unwrap_or_else(|_| {
+        if platform_port.is_some() {
+            "0.0.0.0".to_owned()
+        } else {
+            "127.0.0.1".to_owned()
+        }
+    });
     let port = env::var("AXON_PORT")
-        .unwrap_or_else(|_| "8080".to_owned())
+        .ok()
+        .or(platform_port)
+        .unwrap_or_else(|| "8080".to_owned())
         .parse::<u16>()?;
     let address: SocketAddr = format!("{host}:{port}").parse()?;
 
