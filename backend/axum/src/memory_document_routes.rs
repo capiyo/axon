@@ -190,6 +190,10 @@ pub async fn create_memory_document(
         retention_policy: input.retention_policy,
     };
     document.content_hash = document.calculate_content_hash();
+    let qkv_source_hash = document.calculate_qkv_source_hash();
+    if let Value::Object(metadata) = &mut document.key_metadata {
+        metadata.insert("qkv_source_hash".into(), Value::String(qkv_source_hash));
+    }
     document.validate().map_err(|_| api_error(StatusCode::BAD_REQUEST, "Memory document is invalid."))?;
     outbox.enqueue(&mut document, user.user_id).await.map_err(|error| {
         tracing::error!(error = %error, "memory document could not be queued");
