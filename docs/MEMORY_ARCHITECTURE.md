@@ -28,7 +28,7 @@ Retries use a unique memory/version/event key. Worker leases permit recovery aft
 
 Axon already has multi-head scaled dot-product QKV attention and Pareto-style initial/deferred handover in `memory_architecture.rs`. It also has deterministic score decomposition, scope/status filtering, and relevance explanations in `memory_intelligence.rs`.
 
-Those systems remain in place. Direct document-by-ID retrieval is implemented with SQLite scope checks and MongoDB hash verification. Query-based search is available using deterministic lexical QKV attention followed by the existing Qoin memory-intelligence scorer. Neural embedding-provider integration and persisted document-key indexing remain outstanding. Immutable epochs snapshot exact document version, content hash, scope, source sequence, QKV version, and Qoin scoring version. The authenticated session-document endpoint resolves the epoch from `agent_memory_sessions` (the caller cannot select another epoch), then hydrates only those pinned MongoDB versions after rechecking workspace, agent/task scope, SQLite metadata, and SHA-256 content integrity.
+Those systems remain in place. Direct document-by-ID retrieval is implemented with SQLite scope checks and MongoDB hash verification. Query-based search is available using deterministic lexical QKV attention followed by the existing Qoin memory-intelligence scorer. The current document key provider is deterministic lexical hashing, not a neural embedding. New document versions persist the lexical QKV key and source hash. Immutable epochs snapshot exact document version, content hash, scope, source sequence, QKV version, and Qoin scoring version. The authenticated session-document endpoint resolves the epoch from `agent_memory_sessions` (the caller cannot select another epoch), then hydrates only those pinned MongoDB versions after rechecking workspace, agent/task scope, SQLite metadata, and SHA-256 content integrity. The combined `POST .../memory-sessions/{session_id}/context` operation now returns progressive SQLite memories and pinned MongoDB documents together, with a 256 KiB document-context budget and an explicit truncation indicator.
 
 ## Scope model
 
@@ -44,9 +44,9 @@ The current create endpoint enables workspace-shared, task-shared, and agent-pri
 
 Before claiming end-to-end multi-agent memory completion, implement and test:
 - Neural embedding-provider integration and QKV index versioning for MongoDB documents.
-- Persistent QKV key generation/indexing for document versions; the current lexical vectors are computed deterministically at query time.
-- Qoin memory-ranking integration for MongoDB candidates.
-- Neural embedding-provider integration; lexical QKV keys are persisted for newly created MongoDB document versions.
+- A separately searchable vector index, reconciliation, and safe index rebuild.
+- Project membership authorization.
+- End-to-end agent execution consumption and real MongoDB restart/security tests.
 - Reconciliation and safe index rebuild.
 - Project membership authorization.
 - End-to-end restart and cross-scope security tests.
