@@ -43,15 +43,15 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 ## 4. Work completed in this implementation pass
 
 1. Added exact-version document hydration from the SQLite immutable epoch snapshot.
-2. Added session-bound hydration that resolves the epoch from `agent_memory_sessions`; the API caller cannot supply an arbitrary epoch.
-3. Added authenticated endpoint:
-   `GET /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-sessions/{session_id}/documents`.
-4. Enforced workspace membership for document approval and retrieval, plus agent/session association, task assignment, pinned visibility scope, SQLite version metadata, MongoDB version identity, QKV version, and SHA-256 content integrity before returning document values.
-5. New document creation now persists a deterministic lexical QKV key and its model version in MongoDB `key_metadata`.
-7. Added a SHA-256 source hash over the exact ordered title/content/tag text used to build that QKV key.
+2. Added session-bound hydration that resolves the epoch from `agent_memory_sessions`; callers cannot select an arbitrary epoch.
+3. Added authenticated session-document retrieval and a combined session-context endpoint that returns progressive SQLite retrieval and MongoDB documents pinned to the same session epoch.
+4. Enforced workspace membership for document approval and retrieval, plus agent/session association, task assignment, pinned visibility scope, authoritative SQLite metadata, MongoDB version identity, QKV version, and SHA-256 integrity before returning document values.
+5. Bounded serialized MongoDB document context to 256 KiB; documents are omitted whole rather than truncated, and the response reports `documents_truncated`.
+6. New document creation persists deterministic lexical QKV keys and model versions in MongoDB `key_metadata`.
+7. Added SHA-256 source hashing over the exact ordered title/content/tag text used to build each persisted QKV key.
 8. Document validation rejects malformed, partial, non-normalized, model-version-mismatched, or source-hash-mismatched persisted keys. Legacy documents without stored keys retain deterministic query-time fallback.
-9. Added test source for exact epoch hydration, session binding, private-scope denial, missing epochs, and persisted QKV-key validation.
-10. Updated architecture, QKV, MongoDB, testing, and repository-state documentation.
+9. Added tests for exact epoch hydration, session binding, private-scope denial, missing epochs, persisted QKV-key validation, and context-budget selection.
+10. Updated architecture, QKV, MongoDB, testing, security, and repository-state documentation.
 
 ## 5. Remaining gaps
 
