@@ -3,6 +3,7 @@ use crate::{
     chat_memory::ChatMemoryStore,
     firebase_auth::FirebaseVerifier,
     memory_architecture::MemoryEpochCoordinator,
+    memory_documents::MemoryDocumentRepository,
     model::{Agent, Artifact, Task, Workspace},
     qoin_vectors::QoinVectorClient,
     robotics::TelemetryEvent,
@@ -35,6 +36,8 @@ pub struct AppState {
     storage: Option<Arc<dyn Storage>>,
     pub chat_memory: Option<ChatMemoryStore>,
     pub memory_epochs: Option<MemoryEpochCoordinator>,
+    /// Long-form document storage. Authorization and lifecycle remain in SQLite.
+    pub memory_documents: Option<Arc<dyn MemoryDocumentRepository>>,
     pub qoin_vectors: Option<QoinVectorClient>,
     pub firebase_verifier: Option<FirebaseVerifier>,
     pub simulator_enabled: bool,
@@ -94,6 +97,14 @@ impl AppState {
         state.audit.write().await.restore(audit_events);
 
         Ok(state)
+    }
+
+    pub fn with_memory_document_repository(
+        mut self,
+        repository: Option<Arc<dyn MemoryDocumentRepository>>,
+    ) -> Self {
+        self.memory_documents = repository;
+        self
     }
 
     pub async fn persist_entity(
