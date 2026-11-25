@@ -60,7 +60,8 @@
 - [x] Added authenticated memory-document creation for workspace-shared, task-shared, and agent-private scopes.
 - [x] Added local MongoDB configuration and operational documentation.
 - [x] Added approved, scope-checked agent document retrieval and query search using deterministic lexical QKV attention followed by the existing Qoin memory-intelligence scorer.
-- [ ] Neural embedding-provider integration and immutable epoch document-version/hash pinning remain outstanding.
+- [x] Immutable memory-document epoch metadata now pins exact document version, content hash, source sequence, QKV version, and Qoin scoring version.
+- [ ] Neural embedding-provider integration and retrieval constrained to a specific agent-session epoch remain outstanding.
 - [ ] Existing immutable epochs do not yet pin MongoDB document versions and hashes.
 - [ ] Project-shared memory is disabled until persisted project-membership authorization exists.
 - [ ] Reconciliation, dead-letter operator recovery, and full MongoDB integration/security tests remain outstanding.
