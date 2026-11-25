@@ -9,8 +9,8 @@ use chrono::{DateTime, Utc};
 use futures_util::TryStreamExt;
 use mongodb::{
     bson::doc,
-    options::{IndexOptions, IndexModel},
-    Client, Collection, Database,
+    options::IndexOptions,
+    Client, Collection, Database, IndexModel,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
