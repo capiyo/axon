@@ -528,7 +528,7 @@ impl MemoryOutbox {
         requester_agent_id: Uuid,
         task_id: Option<Uuid>,
         limit: usize,
-    ) -> Result<Vec<MemoryDocument>, MemoryOutboxError> {
+    ) -> Result<Option<Vec<MemoryDocument>>, MemoryOutboxError> {
         let epoch_exists: Option<i64> = sqlx::query_scalar(
             "SELECT 1 FROM memory_epochs WHERE id = ? AND workspace_id = ?",
         )
@@ -537,7 +537,7 @@ impl MemoryOutbox {
         .fetch_optional(&self.pool)
         .await?;
         if epoch_exists.is_none() {
-            return Ok(Vec::new());
+            return Ok(None);
         }
 
         let limit = i64::try_from(limit.clamp(1, 100))
@@ -630,7 +630,7 @@ impl MemoryOutbox {
             document.status = "ready".into();
             documents.push(document);
         }
-        Ok(documents)
+        Ok(Some(documents))
     }
 
     pub async fn mark_indexed(
