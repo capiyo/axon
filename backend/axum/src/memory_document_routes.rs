@@ -413,8 +413,12 @@ pub async fn search_agent_memory_documents(
     if !agent_matches {
         return Err(api_error(StatusCode::NOT_FOUND, "Agent not found."));
     }
-    if input.query.trim().is_empty() || input.query.len() > 4096 {
-        return Err(api_error(StatusCode::BAD_REQUEST, "A non-empty query of at most 4096 bytes is required."));
+    if input.query.trim().is_empty()
+        || input.query.len() > 4096
+        || input.tags.len() > 64
+        || input.dependency_ids.len() > 64
+    {
+        return Err(api_error(StatusCode::BAD_REQUEST, "Query, tags, or dependencies exceed retrieval limits."));
     }
     for score in [input.context, input.outcome, input.failure, input.evidence] {
         if !score.is_finite() || !(0.0..=1.0).contains(&score) {
@@ -489,7 +493,8 @@ pub async fn search_agent_memory_documents(
         let dependencies = metadata_dependencies(&document);
         let outcome = normalized_metadata_score(&document, "outcome");
         let evidence = normalized_metadata_score(&document, "evidence");
-        let source_sequence = i64::try_from(document.source_event_sequence).unwrap_or(i64::MAX);
+        let source_sequence = i64::try_from(document.source_event_sequence)
+            .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Invalid memory source sequence."))?;
         attention_candidates.push(AttentionMemory {
             memory_id,
             source_kind: document.source_kind.clone(),
