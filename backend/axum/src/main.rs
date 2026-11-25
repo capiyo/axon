@@ -1,8 +1,12 @@
 use axon_api::{
-    app, firebase_auth::FirebaseVerifier, qoin_vectors::QoinVectorClient, storage::SqliteStorage,
+    app,
+    firebase_auth::FirebaseVerifier,
+    memory_documents::{MemoryDocumentRepository, MongoMemoryDocumentRepository},
+    qoin_vectors::QoinVectorClient,
+    storage::SqliteStorage,
     AppState,
 };
-use std::{env, net::SocketAddr};
+use std::{env, net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -31,6 +35,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let storage = SqliteStorage::connect(&database_url).await?;
     let memory_epochs = storage.memory_epoch_coordinator();
     tokio::spawn(memory_epochs.run_hourly());
+
+    let mongo_required = env::var("AXON_MEMORY_DOCUMENTS_REQUIRED")
+        .map(|value| value.eq_ignore_ascii_case("true"))
+        .unwrap_or_else(|_| {
+            env::var("AXON_ENV")
+                .map(|value| value.eq_ignore_ascii_case("production"))
+                .unwrap_or(false)
+        });
+    let memory_documents: Option<Arc<dyn MemoryDocumentRepository>> =
+        match env::var("AXON_MONGODB_URI") {
+            Ok(uri) => {
+                let database = env::var("AXON_MONGODB_DATABASE")
+                    .unwrap_or_else(|_| "axon".to_owned());
+                let collection = env::var("AXON_MONGODB_COLLECTION")
+                    .unwrap_or_else(|_| "memory_documents".to_owned());
+                let repository =
+                    MongoMemoryDocumentRepository::connect(&uri, &database, &collection).await?;
+                tracing::info!("MongoDB memory document repository connected");
+                Some(Arc::new(repository))
+            }
+            Err(_) if mongo_required => {
+                return Err(
+                    "AXON_MONGODB_URI is required when AXON_ENV=production or AXON_MEMORY_DOCUMENTS_REQUIRED=true"
+                        .into(),
+                );
+            }
+            Err(_) => {
+                tracing::warn!(
+                    "MongoDB memory documents are disabled; SQLite-only mode remains active"
+                );
+                None
+            }
+        };
+
     let simulator_enabled = env::var("AXON_ENABLE_SIMULATOR")
         .map(|value| value.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
@@ -40,6 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .transpose()?;
     let state = AppState::with_storage(storage.shared())
         .await?
+        .with_memory_document_repository(memory_documents)
         .with_qoin_vector_client(qoin_vectors)
         .with_firebase_verifier(verifier, simulator_enabled);
 
@@ -47,6 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(
         %address,
         storage = "sqlite",
+        mongo_memory_documents = state.memory_documents.is_some(),
         simulator_enabled,
         qoin_vectors = env::var("QOIN_API_URL").is_ok(),
         "Axon API listening with Firebase authentication and durable SQLite storage"
