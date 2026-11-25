@@ -547,3 +547,96 @@ impl MemoryOutbox {
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::SqliteStorage;
+
+    fn document(workspace_id: Uuid, owner_agent_id: Uuid) -> MemoryDocument {
+        let now = Utc::now();
+        let mut document = MemoryDocument {
+            memory_id: Uuid::new_v4(),
+            workspace_id,
+            project_id: None,
+            task_id: None,
+            owner_id: Some(owner_agent_id),
+            scope: "agent_private".into(),
+            document_type: "technical_decision".into(),
+            version: 1,
+            title: "Private agent memory".into(),
+            content: "Keep this decision in the owning agent scope.".into(),
+            content_format: "text/markdown".into(),
+            tags: vec!["private".into()],
+            source: "test".into(),
+            source_kind: "memory_entry".into(),
+            source_event_sequence: 1,
+            created_at: now,
+            updated_at: now,
+            content_hash: String::new(),
+            key_metadata: serde_json::json!({}),
+            value_payload: serde_json::json!({}),
+            qkv_version: "qkv-metadata-v1".into(),
+            qoin_vector_version: None,
+            status: "proposed".into(),
+            retention_policy: None,
+        };
+        document.content_hash = document.calculate_content_hash();
+        document
+    }
+
+    #[tokio::test]
+    async fn outbox_enqueue_is_idempotent_and_approval_is_audited() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let outbox = storage.memory_outbox();
+        let workspace_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+        let actor_id = Uuid::new_v4();
+        let document = document(workspace_id, agent_id);
+
+        outbox.enqueue(&document).await.unwrap();
+        outbox.enqueue(&document).await.unwrap();
+
+        let event_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM memory_document_outbox WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(event_count, 1);
+
+        assert!(outbox
+            .approve(workspace_id, document.memory_id, 1, actor_id)
+            .await
+            .unwrap());
+        let audit_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM audit_events WHERE event_type = 'memory_document.approved' AND entity_id = ?",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(audit_count, 1);
+
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+
+        let visible = outbox
+            .list_authorized_document_refs(workspace_id, agent_id, None, 20)
+            .await
+            .unwrap();
+        let hidden = outbox
+            .list_authorized_document_refs(workspace_id, Uuid::new_v4(), None, 20)
+            .await
+            .unwrap();
+        assert_eq!(visible, vec![(document.memory_id, 1)]);
+        assert!(hidden.is_empty());
+    }
+}
