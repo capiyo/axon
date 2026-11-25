@@ -1,6 +1,6 @@
 use crate::{
     auth_middleware::AuthenticatedUser,
-    memory_architecture::{qkv_attention, AttentionMemory, AttentionQuery},
+    memory_architecture::{qkv_attention, AttentionMemory, AttentionQuery, QoinVector},
     memory_documents::MemoryDocument,
     memory_vector_provider::{LexicalMemoryVectorProvider, MemoryVectorProvider, LEXICAL_MEMORY_VECTOR_VERSION},
     memory_intelligence::{
@@ -16,7 +16,7 @@ use axum::{
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::{collections::{BTreeSet, HashMap}, sync::Arc};
 use uuid::Uuid;
 
@@ -141,6 +141,27 @@ pub async fn create_memory_document(
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
         api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document persistence is unavailable.")
     })?;
+    let mut key_text = input.title.clone();
+    key_text.push(' ');
+    key_text.push_str(&input.content);
+    for tag in &input.tags {
+        key_text.push(' ');
+        key_text.push_str(tag);
+    }
+    let vector_provider = LexicalMemoryVectorProvider;
+    let qkv_key = vector_provider
+        .key_for_text(&key_text)
+        .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Memory document contains no searchable terms."))?;
+    let mut key_metadata = match input.key_metadata {
+        Value::Object(metadata) => metadata,
+        Value::Null => Map::new(),
+        _ => return Err(api_error(StatusCode::BAD_REQUEST, "key_metadata must be a JSON object.")),
+    };
+    let serialized_key = serde_json::to_value(&qkv_key)
+        .map_err(|_| api_error(StatusCode::BAD_REQUEST, "QKV key could not be serialized."))?;
+    key_metadata.insert("qkv_key".into(), serialized_key);
+    key_metadata.insert("qkv_key_version".into(), Value::String(LEXICAL_MEMORY_VECTOR_VERSION.into()));
+
     let now = Utc::now();
     let mut document = MemoryDocument {
         memory_id: Uuid::new_v4(),
@@ -161,7 +182,7 @@ pub async fn create_memory_document(
         created_at: now,
         updated_at: now,
         content_hash: String::new(),
-        key_metadata: input.key_metadata,
+        key_metadata: Value::Object(key_metadata),
         value_payload: input.value_payload,
         qkv_version: LEXICAL_MEMORY_VECTOR_VERSION.into(),
         qoin_vector_version: None,
@@ -452,9 +473,25 @@ pub async fn search_agent_memory_documents(
             key_text.push(' ');
             key_text.push_str(tag);
         }
-        let key = vector_provider
-            .key_for_text(&key_text)
-            .map_err(|_| api_error(StatusCode::BAD_REQUEST, "A memory document has no searchable terms."))?;
+        let key = if let Some(stored_key) = document.key_metadata.get("qkv_key") {
+            let stored_key: QoinVector = serde_json::from_value(stored_key.clone())
+                .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Stored QKV key is invalid."))?;
+            stored_key.validate()
+                .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Stored QKV key failed validation."))?;
+            if document.qkv_version != stored_key.model_version
+                || document.key_metadata.get("qkv_key_version").and_then(Value::as_str)
+                    != Some(stored_key.model_version.as_str())
+            {
+                return Err(api_error(StatusCode::INTERNAL_SERVER_ERROR, "Stored QKV key version does not match its document."));
+            }
+            stored_key
+        } else {
+            // Backward compatibility for documents created before persistent
+            // QKV keys were stored in MongoDB.
+            vector_provider
+                .key_for_text(&key_text)
+                .map_err(|_| api_error(StatusCode::BAD_REQUEST, "A memory document has no searchable terms."))?
+        };
         if document.qkv_version != key.model_version {
             // Never compare vectors from different model spaces.
             continue;
