@@ -425,7 +425,6 @@ pub async fn search_agent_memory_documents(
         .key_for_text(&input.query)
         .map_err(|_| api_error(StatusCode::BAD_REQUEST, "The query contains no searchable terms."))?;
     let query_values = query_vector.values.clone();
-    let model_version = vector_provider.model_version().to_owned();
 
     let mut documents = HashMap::new();
     let mut attention_candidates = Vec::new();
