@@ -28,7 +28,7 @@ Retries use a unique memory/version/event key. Worker leases permit recovery aft
 
 Axon already has multi-head scaled dot-product QKV attention and Pareto-style initial/deferred handover in `memory_architecture.rs`. It also has deterministic score decomposition, scope/status filtering, and relevance explanations in `memory_intelligence.rs`.
 
-Those systems remain in place. Direct document-by-ID retrieval is implemented with SQLite scope checks and MongoDB hash verification. Query-based search is now available using deterministic lexical QKV attention followed by the existing Qoin memory-intelligence ranking. Neural embedding-provider integration remains outstanding. Immutable epochs now snapshot exact document version, content hash, scope, source sequence, QKV version, and Qoin scoring version; session retrieval is not yet constrained to those pins.
+Those systems remain in place. Direct document-by-ID retrieval is implemented with SQLite scope checks and MongoDB hash verification. Query-based search is available using deterministic lexical QKV attention followed by the existing Qoin memory-intelligence scorer. Neural embedding-provider integration and persisted document-key indexing remain outstanding. Immutable epochs snapshot exact document version, content hash, scope, source sequence, QKV version, and Qoin scoring version. The authenticated epoch-document endpoint hydrates only those pinned MongoDB versions after rechecking workspace, agent/task scope, SQLite metadata, and SHA-256 content integrity.
 
 ## Scope model
 
