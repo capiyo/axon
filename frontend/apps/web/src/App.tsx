@@ -345,12 +345,9 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
           .then(setChatDetail)
           .catch(() => undefined);
       }
-      if (activeView === "explore") {
-        void refreshExplore().catch(() => undefined);
-      }
     }, 20000);
     return () => clearInterval(timer);
-  }, [selected?.id, activeChat, activeView]);
+  }, [selected?.id, activeChat]);
 
   async function createChat(event: FormEvent<HTMLFormElement>) {
     if (!selected) return;
