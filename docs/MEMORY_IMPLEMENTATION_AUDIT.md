@@ -46,7 +46,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 2. Added session-bound hydration that resolves the epoch from `agent_memory_sessions`; the API caller cannot supply an arbitrary epoch.
 3. Added authenticated endpoint:
    `GET /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-sessions/{session_id}/documents`.
-4. Enforced workspace membership, agent/session association, task assignment, pinned visibility scope, SQLite version metadata, MongoDB version identity, QKV version, and SHA-256 content integrity before returning document values.
+4. Enforced workspace membership for document approval and retrieval, plus agent/session association, task assignment, pinned visibility scope, SQLite version metadata, MongoDB version identity, QKV version, and SHA-256 content integrity before returning document values.
 5. New document creation now persists a deterministic lexical QKV key and its model version in MongoDB `key_metadata`.
 7. Added a SHA-256 source hash over the exact ordered title/content/tag text used to build that QKV key.
 8. Document validation rejects malformed, partial, non-normalized, model-version-mismatched, or source-hash-mismatched persisted keys. Legacy documents without stored keys retain deterministic query-time fallback.
