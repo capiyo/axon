@@ -23,6 +23,7 @@ pub struct MemoryDocument {
     pub memory_id: Uuid,
     pub workspace_id: Uuid,
     pub project_id: Option<Uuid>,
+    pub task_id: Option<Uuid>,
     pub owner_id: Option<Uuid>,
     /// One of agent_private, task_shared, project_shared, workspace_shared.
     pub scope: String,
@@ -255,6 +256,7 @@ mod tests {
             memory_id: Uuid::new_v4(),
             workspace_id: Uuid::new_v4(),
             project_id: None,
+            task_id: None,
             owner_id: None,
             scope: "workspace_shared".into(),
             document_type: "technical_decision".into(),
