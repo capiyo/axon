@@ -683,19 +683,24 @@ pub async fn retrieve_session_context(
             "Pinned session feedback could not be loaded.",
         ))?;
 
+    let mut feedback_weight = 0.0f32;
     if !pinned_documents.is_empty() {
         let epoch_qoin_scoring_version = epoch_qoin_scoring_version.ok_or_else(|| error(
             StatusCode::CONFLICT,
             "The pinned document epoch has no Qoin scoring policy metadata.",
         ))?;
         let expected_qoin_scoring_version = state.qoin_memory_scoring.effective_version();
+        let current_policy = epoch_qoin_scoring_version == expected_qoin_scoring_version;
         let legacy_default_policy = state.qoin_memory_scoring == QoinScoringConfig::default()
-            && epoch_qoin_scoring_version == crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION;
-        if epoch_qoin_scoring_version != expected_qoin_scoring_version && !legacy_default_policy {
+            && epoch_qoin_scoring_version == crate::memory_intelligence::LEGACY_QOIN_MEMORY_SCORING_VERSION;
+        if !current_policy && !legacy_default_policy {
             return Err(error(
                 StatusCode::CONFLICT,
                 "The session epoch was created with a different Qoin scoring policy. Resume with a matching policy or create a new session.",
             ));
+        }
+        if current_policy {
+            feedback_weight = state.qoin_memory_scoring.feedback_weight as f32;
         }
     }
 
@@ -792,8 +797,8 @@ pub async fn retrieve_session_context(
         if let Some((positive_signal, negative_signal)) =
             feedback_signals.get(&(document.memory_id, document.version))
         {
-            outcome = (outcome + *positive_signal) / 2.0;
-            failure = (failure + *negative_signal) / 2.0;
+            outcome = outcome * (1.0 - feedback_weight) + *positive_signal * feedback_weight;
+            failure = failure * (1.0 - feedback_weight) + *negative_signal * feedback_weight;
         }
         let dependencies = session_memory_dependencies(&document);
         let visibility = session_memory_visibility(&document.scope)
