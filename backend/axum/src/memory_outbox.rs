@@ -1123,3 +1123,102 @@ mod epoch_document_tests {
         assert!(missing.is_none());
     }
 }
+
+#[cfg(test)]
+mod outbox_recovery_tests {
+    use super::*;
+    use crate::storage::SqliteStorage;
+
+    #[tokio::test]
+    async fn dead_letter_recovery_requeues_event_and_audits_atomically() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let outbox = storage.memory_outbox();
+        let workspace_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+        let actor_id = Uuid::new_v4();
+        let mut document = super::tests::document(workspace_id, agent_id);
+        outbox.enqueue(&mut document, actor_id).await.unwrap();
+
+        sqlx::query(
+            "UPDATE memory_document_outbox SET status = 'dead_letter', attempts = 8 WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'failed' WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+
+        assert!(outbox.retry_dead_letter(
+            workspace_id, document.memory_id, 1, actor_id,
+        ).await.unwrap());
+
+        let status: String = sqlx::query_scalar(
+            "SELECT status FROM memory_document_outbox WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        let attempts: i64 = sqlx::query_scalar(
+            "SELECT attempts FROM memory_document_outbox WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        let sync_status: String = sqlx::query_scalar(
+            "SELECT sync_status FROM memory_document_versions WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        let audit_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM audit_events WHERE event_type = 'memory_document.outbox_requeued' AND entity_id = ?",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+
+        assert_eq!(status, "pending");
+        assert_eq!(attempts, 0);
+        assert_eq!(sync_status, "pending");
+        assert_eq!(audit_count, 1);
+    }
+
+    #[tokio::test]
+    async fn malformed_dead_letter_payload_cannot_be_requeued() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let outbox = storage.memory_outbox();
+        let workspace_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+        let mut document = super::tests::document(workspace_id, agent_id);
+        outbox.enqueue(&mut document, Uuid::new_v4()).await.unwrap();
+
+        sqlx::query(
+            "UPDATE memory_document_outbox SET status = 'dead_letter', payload_json = NULL WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'failed' WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+
+        assert!(!outbox.retry_dead_letter(
+            workspace_id, document.memory_id, 1, Uuid::new_v4(),
+        ).await.unwrap());
+    }
+}
