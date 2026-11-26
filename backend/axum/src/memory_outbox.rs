@@ -1447,7 +1447,7 @@ impl MemoryOutbox {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::SqliteStorage;
+    use crate::storage::{SqliteStorage, Storage};
 
     pub(super) fn document(workspace_id: Uuid, owner_agent_id: Uuid) -> MemoryDocument {
         let now = Utc::now();
