@@ -959,6 +959,15 @@ impl MemoryOutbox {
         let epoch_id = Uuid::parse_str(&epoch_id_text)
             .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
         let qoin_scoring_version: Option<String> = session.try_get("qoin_scoring_version")?;
+        let distinct_policy_versions: i64 = sqlx::query_scalar(
+            "SELECT COUNT(DISTINCT qoin_scoring_version) FROM memory_document_epoch_items WHERE epoch_id = ?",
+        )
+        .bind(epoch_id.to_string())
+        .fetch_one(&self.pool)
+        .await?;
+        if distinct_policy_versions > 1 {
+            return Err(MemoryOutboxError::VersionConflict);
+        }
         let task_id_text: Option<String> = session.try_get("task_id")?;
         let task_id = task_id_text
             .map(|value| Uuid::parse_str(&value))
