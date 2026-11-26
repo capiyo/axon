@@ -581,6 +581,58 @@ impl MemoryOutbox {
             .map_err(|_| sqlx::Error::Protocol("memory version exceeds SQLite range".into()))?;
         let now = Utc::now().to_rfc3339();
         let mut transaction = self.pool.begin().await?;
+        let payload_row = sqlx::query(
+            "SELECT payload_json FROM memory_document_outbox \
+             WHERE memory_id = ? AND version = ? AND status = 'dead_letter'",
+        )
+        .bind(memory_id.to_string())
+        .bind(version)
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let Some(payload_row) = payload_row else {
+            transaction.rollback().await?;
+            return Ok(false);
+        };
+        let payload_json: Option<String> = payload_row.try_get("payload_json")?;
+        let Some(payload_json) = payload_json else {
+            transaction.rollback().await?;
+            return Ok(false);
+        };
+        let document = match serde_json::from_str::<MemoryDocument>(&payload_json) {
+            Ok(document) => document,
+            Err(_) => {
+                transaction.rollback().await?;
+                return Ok(false);
+            }
+        };
+        let metadata_row = sqlx::query(
+            "SELECT workspace_id, content_hash, sync_status FROM memory_document_versions \
+             WHERE workspace_id = ? AND memory_id = ? AND version = ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(memory_id.to_string())
+        .bind(version)
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let Some(metadata_row) = metadata_row else {
+            transaction.rollback().await?;
+            return Ok(false);
+        };
+        let stored_workspace: String = metadata_row.try_get("workspace_id")?;
+        let stored_hash: String = metadata_row.try_get("content_hash")?;
+        let sync_status: String = metadata_row.try_get("sync_status")?;
+        if document.validate().is_err()
+            || document.memory_id != memory_id
+            || document.workspace_id != workspace_id
+            || document.version != version as u64
+            || stored_workspace != workspace_id.to_string()
+            || stored_hash != document.content_hash
+            || sync_status != "failed"
+        {
+            transaction.rollback().await?;
+            return Ok(false);
+        }
+
         let updated = sqlx::query(
             "UPDATE memory_document_outbox SET status = 'pending', attempts = 0, available_at = ?, \
              lease_owner = NULL, lease_until = NULL, last_error = NULL, updated_at = ? \
@@ -1412,7 +1464,7 @@ mod outbox_recovery_tests {
         outbox.enqueue(&mut document, Uuid::new_v4()).await.unwrap();
 
         sqlx::query(
-            "UPDATE memory_document_outbox SET status = 'dead_letter', payload_json = NULL WHERE memory_id = ? AND version = 1",
+            "UPDATE memory_document_outbox SET status = 'dead_letter', payload_json = 'not-json' WHERE memory_id = ? AND version = 1",
         )
         .bind(document.memory_id.to_string())
         .execute(&outbox.pool)
