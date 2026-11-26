@@ -14,7 +14,7 @@ Axon's memory-ranking logic is distinct from Qoin's financial-market strategy se
 - Recency.
 - Tag overlap.
 
-It applies explicit normalized components, ranks deterministically, filters by workspace/status/scope, and returns explanations. The versioned `QoinScoringConfig` exposes the scoring version, component weights, relevance thresholds, recency half-life, and explanation thresholds. Its exact configuration is included in each memory-document search response.
+It applies explicit normalized components, ranks deterministically, filters by workspace/status/scope, and returns explanations. The versioned `QoinScoringConfig` exposes the scoring version, component weights, relevance thresholds, recency half-life, and explanation thresholds. Each response includes the exact configuration and a SHA-256 effective policy fingerprint. Immutable memory epochs pin that fingerprint, so changing a coefficient without changing the human-readable label still invalidates session-policy compatibility.
 
 ## Existing attention ranking
 
