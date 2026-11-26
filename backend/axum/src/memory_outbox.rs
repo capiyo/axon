@@ -490,18 +490,35 @@ impl MemoryOutbox {
 
             let source_sequence = u64::try_from(source_sequence)
                 .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
-            if document.workspace_id != workspace_id
-                || document.scope != scope
-                || document.content_hash != content_hash
-                || document.source_event_sequence != source_sequence
-                || document.qkv_version != qkv_version
-                || document.qoin_vector_version != qoin_version
-            {
+            let mut add_issue = |kind: &str| {
                 issues.push(MemoryReconciliationIssue {
                     memory_id,
                     version,
-                    kind: "sqlite_mongo_metadata_mismatch".into(),
+                    kind: kind.to_owned(),
                 });
+            };
+            if document.workspace_id != workspace_id {
+                add_issue("workspace_id_mismatch");
+            }
+            if document.scope != scope {
+                add_issue("scope_mismatch");
+            }
+            if document.content_hash != content_hash {
+                add_issue("content_hash_mismatch");
+            }
+            if document.source_event_sequence != source_sequence {
+                add_issue("source_event_sequence_mismatch");
+            }
+            if document.qkv_version != qkv_version {
+                add_issue("qkv_model_version_mismatch");
+            }
+            if document.qoin_vector_version != qoin_version {
+                add_issue("qoin_vector_version_mismatch");
+            }
+            match document.key_metadata.get("qkv_key_version").and_then(serde_json::Value::as_str) {
+                Some(key_version) if key_version == document.qkv_version => {}
+                Some(_) => add_issue("qkv_key_version_mismatch"),
+                None => add_issue("persisted_qkv_key_missing"),
             }
         }
 
