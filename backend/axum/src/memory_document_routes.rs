@@ -809,7 +809,7 @@ pub async fn get_agent_session_documents(
     let repository = state.memory_documents.as_ref().ok_or_else(|| {
         api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
     })?;
-    let (epoch_id, task_id, documents) = outbox
+    let (epoch_id, task_id, _epoch_qoin_scoring_version, documents) = outbox
         .list_session_authorized_documents(
             repository.as_ref(),
             workspace_id,
