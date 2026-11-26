@@ -557,6 +557,8 @@ pub struct AgentSessionMemoryContext {
     pub qkv_model_version: String,
     pub qoin_scoring_version: String,
     pub qoin_scoring_config: QoinScoringConfig,
+    pub document_candidates_examined: usize,
+    pub document_candidates_ranked: usize,
     pub documents: Vec<RankedSessionMemoryDocument>,
     pub document_context_bytes_used: usize,
     pub documents_truncated: bool,
@@ -766,6 +768,8 @@ pub async fn retrieve_session_context(
     .map_err(|_| error(StatusCode::BAD_REQUEST, "Qoin session memory ranking could not be evaluated."))?;
     let qoin_scoring_version = qoin.scoring_config.version.clone();
     let qoin_scoring_config = qoin.scoring_config.clone();
+    let document_candidates_examined = qoin.candidates_examined;
+    let document_candidates_ranked = qoin.ranked.len();
     let mut ranked_documents = Vec::with_capacity(qoin.ranked.len());
     for ranked in qoin.ranked {
         if let Some(document) = documents_by_id.remove(&ranked.memory_id) {
@@ -793,6 +797,8 @@ pub async fn retrieve_session_context(
         qkv_model_version: query_vector.model_version,
         qoin_scoring_version,
         qoin_scoring_config,
+        document_candidates_examined,
+        document_candidates_ranked,
         documents,
         document_context_bytes_used,
         documents_truncated,
