@@ -48,3 +48,23 @@ The API signals both the memory outbox worker and the periodic epoch publisher d
 ## Version history
 
 `GET /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-documents/{memory_id}/versions/history?limit=20&before_version=...` returns a bounded page of approved, synchronized version metadata. For task-shared memories, supply `task_id`; the API rechecks task workspace and agent assignment. It verifies each exact MongoDB version against SQLite before returning title/hash/provenance metadata, and does not return document content.
+
+
+## Project membership
+
+- `POST /api/v1/workspaces/{workspace_id}/members` adds an existing Axon user to a workspace. Only a workspace owner may perform this operation.
+- `DELETE /api/v1/workspaces/{workspace_id}/members/{target_user_id}` revokes a workspace member. Workspace owners cannot be removed by this operation.
+- `POST /api/v1/workspaces/{workspace_id}/projects` creates a project; only a workspace owner may create one.
+- `GET /api/v1/workspaces/{workspace_id}/projects` lists projects visible to the caller.
+- `POST /api/v1/workspaces/{workspace_id}/projects/{project_id}/members` grants a project role. Project owners/admins may grant member/viewer; only project owners may grant admin/owner.
+- `DELETE /api/v1/workspaces/{workspace_id}/projects/{project_id}/members/{target_user_id}` revokes non-owner project membership.
+
+The target user must already have an Axon account and be an active member of the workspace. Workspace revocation also revokes that user's project access.
+
+## Memory lifecycle
+
+- `POST /api/v1/workspaces/{workspace_id}/memory/documents/{memory_id}/{version}/archive` creates an archived version.
+- `POST /api/v1/workspaces/{workspace_id}/memory/documents/{memory_id}/{version}/restore` creates a new approved version from the latest archived version.
+- `DELETE /api/v1/workspaces/{workspace_id}/memory/documents/{memory_id}/{version}` creates a logical deletion tombstone.
+
+These operations create new immutable versions through the SQLite outbox. They do not rewrite existing MongoDB versions or immutable epoch items. Tombstones suppress the memory from normal search and newly published epochs; existing sessions can still resolve their pinned historical version if the caller remains authorized. Logical deletion does not physically purge content from MongoDB. Do not treat it as a retention or legal-deletion workflow.
