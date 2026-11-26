@@ -767,10 +767,13 @@ impl MemoryOutbox {
         &self,
         workspace_id: Uuid,
         requester_agent_id: Uuid,
+        requester_user_id: Uuid,
         task_id: Option<Uuid>,
+        project_id: Option<Uuid>,
         limit: usize,
     ) -> Result<Vec<(Uuid, u64)>, MemoryOutboxError> {
         let task_id_text = task_id.map(|id| id.to_string());
+        let project_id_text = project_id.map(|id| id.to_string());
         let limit = i64::try_from(limit.clamp(1, 200))
             .map_err(|_| sqlx::Error::Protocol("retrieval limit exceeds SQLite range".into()))?;
         let rows = sqlx::query(
@@ -778,7 +781,11 @@ impl MemoryOutbox {
              WHERE v.workspace_id = ? AND v.lifecycle_status = 'approved' \
              AND v.sync_status IN ('stored', 'indexed') \
              AND (v.scope = 'workspace_shared' OR (v.scope = 'agent_private' AND v.owner_id = ?) \
-             OR (v.scope = 'task_shared' AND v.task_id = ?)) \
+             OR (v.scope = 'task_shared' AND v.task_id = ?) \
+             OR (v.scope = 'project_shared' AND v.project_id = ? AND EXISTS (\
+                 SELECT 1 FROM project_memberships pm JOIN projects p ON p.id = pm.project_id \
+                 WHERE pm.project_id = v.project_id AND pm.user_id = ? AND pm.revoked_at IS NULL \
+                 AND p.workspace_id = v.workspace_id))) \
              AND NOT EXISTS (SELECT 1 FROM memory_document_versions newer \
                  WHERE newer.workspace_id = v.workspace_id AND newer.memory_id = v.memory_id \
                  AND newer.version > v.version AND newer.lifecycle_status = 'approved' \
@@ -788,6 +795,8 @@ impl MemoryOutbox {
         .bind(workspace_id.to_string())
         .bind(requester_agent_id.to_string())
         .bind(task_id_text)
+        .bind(project_id_text)
+        .bind(requester_user_id.to_string())
         .bind(limit)
         .fetch_all(&self.pool)
         .await?;
@@ -814,6 +823,7 @@ impl MemoryOutbox {
         memory_id: Uuid,
         version: u64,
         requester_agent_id: Uuid,
+        requester_user_id: Uuid,
         task_id: Option<Uuid>,
     ) -> Result<Option<MemoryDocument>, MemoryOutboxError> {
         let version_sql = i64::try_from(version)
@@ -855,8 +865,23 @@ impl MemoryOutbox {
                 task_id.is_some()
                     && stored_task_id.as_deref() == requester_task_id_text.as_deref()
             }
-            // Project membership is not persisted yet, so fail closed.
-            "project_shared" => false,
+            "project_shared" => {
+                let Some(project_id) = stored_project_id.as_deref() else {
+                    false
+                };
+                let membership: Option<i64> = sqlx::query_scalar(
+                    "SELECT 1 FROM project_memberships pm
+                     JOIN projects p ON p.id = pm.project_id
+                     WHERE pm.project_id = ? AND pm.user_id = ?
+                       AND pm.revoked_at IS NULL AND p.workspace_id = ?",
+                )
+                .bind(project_id)
+                .bind(requester_user_id.to_string())
+                .bind(workspace_id.to_string())
+                .fetch_optional(&self.pool)
+                .await?;
+                membership.is_some()
+            },
             _ => false,
         };
         if !visible {
