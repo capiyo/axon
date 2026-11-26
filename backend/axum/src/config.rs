@@ -60,13 +60,12 @@ impl BackendConfig {
         }
 
         let environment = env::var("AXON_ENV").unwrap_or_default();
-        let explicitly_required = match env::var("AXON_MEMORY_DOCUMENTS_REQUIRED") {
-            Ok(value) => parse_bool("AXON_MEMORY_DOCUMENTS_REQUIRED", &value)?,
-            Err(_) => false,
-        };
         // Production cannot silently opt out of the document store. Local and
         // test environments may omit MongoDB by leaving it unconfigured.
-        let required = environment.eq_ignore_ascii_case("production") || explicitly_required;
+        let required = mongo_is_required(
+            &environment,
+            env::var("AXON_MEMORY_DOCUMENTS_REQUIRED").ok().as_deref(),
+        )?;
         let mongo_uri = env::var("AXON_MONGODB_URI").ok();
         let mongo = match mongo_uri {
             Some(uri) => {
@@ -103,12 +102,7 @@ impl BackendConfig {
         };
 
         let qoin_memory_scoring = match env::var("AXON_QOIN_MEMORY_SCORING_CONFIG") {
-            Ok(serialized) => {
-                let policy: QoinScoringConfig = serde_json::from_str(&serialized)
-                    .map_err(|_| ConfigError::InvalidQoinScoringConfig)?;
-                policy.validate().map_err(|_| ConfigError::InvalidQoinScoringConfig)?;
-                policy
-            }
+            Ok(serialized) => parse_qoin_scoring_config(&serialized)?,
             Err(_) => QoinScoringConfig::default(),
         };
 
@@ -128,6 +122,17 @@ fn parse_bool(name: &'static str, value: &str) -> Result<bool, ConfigError> {
     }
 }
 
+fn mongo_is_required(
+    environment: &str,
+    override_value: Option<&str>,
+) -> Result<bool, ConfigError> {
+    let explicitly_required = override_value
+        .map(|value| parse_bool("AXON_MEMORY_DOCUMENTS_REQUIRED", value))
+        .transpose()?
+        .unwrap_or(false);
+    Ok(environment.eq_ignore_ascii_case("production") || explicitly_required)
+}
+
 fn integer_from_env(
     name: &'static str,
     default: u32,
@@ -135,30 +140,48 @@ fn integer_from_env(
     maximum: u32,
 ) -> Result<u32, ConfigError> {
     match env::var(name) {
-        Ok(value) => {
-            let parsed = value
-                .parse::<u32>()
-                .map_err(|_| ConfigError::InvalidInteger(name))?;
-            if !(minimum..=maximum).contains(&parsed) {
-                return Err(ConfigError::InvalidInteger(name));
-            }
-            Ok(parsed)
-        }
+        Ok(value) => parse_bounded_integer(name, &value, minimum, maximum),
         Err(_) => Ok(default),
     }
 }
 
+fn parse_bounded_integer(
+    name: &'static str,
+    value: &str,
+    minimum: u32,
+    maximum: u32,
+) -> Result<u32, ConfigError> {
+    let parsed = value
+        .parse::<u32>()
+        .map_err(|_| ConfigError::InvalidInteger(name))?;
+    if !(minimum..=maximum).contains(&parsed) {
+        return Err(ConfigError::InvalidInteger(name));
+    }
+    Ok(parsed)
+}
+
 fn duration_from_env(name: &'static str, default_ms: u64) -> Result<Duration, ConfigError> {
-    let millis = match env::var(name) {
-        Ok(value) => value
-            .parse::<u64>()
-            .map_err(|_| ConfigError::InvalidInteger(name))?,
-        Err(_) => default_ms,
-    };
+    match env::var(name) {
+        Ok(value) => parse_duration_ms(name, &value),
+        Err(_) => Ok(Duration::from_millis(default_ms)),
+    }
+}
+
+fn parse_duration_ms(name: &'static str, value: &str) -> Result<Duration, ConfigError> {
+    let millis = value
+        .parse::<u64>()
+        .map_err(|_| ConfigError::InvalidInteger(name))?;
     if !(100..=120_000).contains(&millis) {
         return Err(ConfigError::InvalidInteger(name));
     }
     Ok(Duration::from_millis(millis))
+}
+
+fn parse_qoin_scoring_config(serialized: &str) -> Result<QoinScoringConfig, ConfigError> {
+    let policy: QoinScoringConfig = serde_json::from_str(serialized)
+        .map_err(|_| ConfigError::InvalidQoinScoringConfig)?;
+    policy.validate().map_err(|_| ConfigError::InvalidQoinScoringConfig)?;
+    Ok(policy)
 }
 
 #[cfg(test)]
@@ -173,24 +196,28 @@ mod tests {
     }
 
     #[test]
-    fn pool_size_is_bounded() {
-        assert_eq!(integer_from_env_value("POOL", "24", 20, 1, 500), Ok(24));
-        assert!(integer_from_env_value("POOL", "0", 20, 1, 500).is_err());
-        assert!(integer_from_env_value("POOL", "501", 20, 1, 500).is_err());
+    fn production_cannot_disable_required_mongodb() {
+        assert_eq!(mongo_is_required("production", Some("false")), Ok(true));
+        assert_eq!(mongo_is_required("development", Some("false")), Ok(false));
+        assert_eq!(mongo_is_required("test", Some("true")), Ok(true));
     }
 
-    fn integer_from_env_value(
-        name: &'static str,
-        value: &str,
-        _default: u32,
-        minimum: u32,
-        maximum: u32,
-    ) -> Result<u32, ConfigError> {
-        let parsed = value.parse::<u32>().map_err(|_| ConfigError::InvalidInteger(name))?;
-        if !(minimum..=maximum).contains(&parsed) {
-            return Err(ConfigError::InvalidInteger(name));
-        }
-        Ok(parsed)
+    #[test]
+    fn pool_size_and_timeouts_are_bounded() {
+        assert_eq!(parse_bounded_integer("POOL", "24", 1, 500), Ok(24));
+        assert!(parse_bounded_integer("POOL", "0", 1, 500).is_err());
+        assert!(parse_bounded_integer("POOL", "501", 1, 500).is_err());
+        assert_eq!(parse_duration_ms("TIMEOUT", "10000"), Ok(Duration::from_secs(10)));
+        assert!(parse_duration_ms("TIMEOUT", "99").is_err());
+        assert!(parse_duration_ms("TIMEOUT", "120001").is_err());
+    }
+
+    #[test]
+    fn custom_qoin_policy_is_validated_before_startup() {
+        let policy = QoinScoringConfig::default();
+        let serialized = serde_json::to_string(&policy).unwrap();
+        assert_eq!(parse_qoin_scoring_config(&serialized).unwrap(), policy);
+        assert!(parse_qoin_scoring_config("{").is_err());
     }
 
     #[test]
