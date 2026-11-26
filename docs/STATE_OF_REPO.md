@@ -6,12 +6,10 @@
 
 ## Repository
 
-- Repository: `capiyo/Qapten-`
+- Repository: `capiyo/axon`
 - Default branch: `main`
-- Active foundation branch: `foundation/axum-web-skeleton`
-- Active Phase A branch: `production/phase-a-firebase-auth`
-- Foundation review: [Draft PR #1](https://github.com/capiyo/Qapten-/pull/1)
-- Phase A review: [Draft PR #4](https://github.com/capiyo/Qapten-/pull/4)
+- Active implementation branch: `production/phase-b-chats-memory`
+- Repository: [github.com/capiyo/axon](https://github.com/capiyo/axon)
 - License: MIT (see [LICENSE](../LICENSE))
 
 ## Implemented
@@ -64,7 +62,8 @@
 - [ ] Neural embedding-provider integration remains outstanding; newly created MongoDB memory documents now persist versioned deterministic lexical QKV keys and source-text integrity hashes.
 - [x] An authenticated session-bound endpoint resolves the session's immutable epoch and hydrates exact MongoDB document versions with scope, source sequence, QKV version, and SHA-256 verification.
 - [ ] Project-shared memory is disabled until persisted project-membership authorization exists.
-- [x] Added audited dead-letter recovery for valid retained outbox payloads.\n- [ ] Reconciliation, index rebuild, neural embeddings, project-membership authorization, agent-principal authentication, and full MongoDB integration/security tests remain outstanding.
+- [x] Added audited dead-letter recovery for valid retained outbox payloads.
+- [ ] Reconciliation, index rebuild, neural embeddings, project-membership authorization, agent-principal authentication, and full MongoDB integration/security tests remain outstanding.
 
 ### Frontend and design
 - [x] React + TypeScript + Vite web workspace.
