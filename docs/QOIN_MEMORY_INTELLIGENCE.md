@@ -34,3 +34,8 @@ The default `axon-qoin-memory-v1` policy uses normalized components with weights
 - Evaluate the versioned score configuration against a labelled memory-retrieval dataset.
 - The document search endpoint applies the configured Qoin score decomposition after QKV candidate attention and returns score explanations plus the exact scoring configuration.
 - Record retrieval feedback without mutating immutable historical epochs.
+
+
+## Baseline limitations
+
+The shipped deterministic baseline scores semantic-vector similarity, context, dependency overlap, outcome alignment, failure signal, evidence strength, recency, and tags, with component explanations. It does not yet model source reliability, reuse frequency, explicit contradiction detection, duplication penalties, or persisted retrieval-outcome feedback. Those features require defined provenance/feedback data and labelled evaluation; they are not simulated by placeholder coefficients.
