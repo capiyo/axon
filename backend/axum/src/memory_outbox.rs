@@ -717,11 +717,13 @@ impl MemoryOutbox {
         }
         let session = sqlx::query(
             "SELECT memory_epoch_id, task_id FROM agent_memory_sessions
-             WHERE session_id = ? AND workspace_id = ? AND agent_id = ?",
+             WHERE session_id = ? AND workspace_id = ? AND agent_id = ?
+               AND (expires_at IS NULL OR expires_at > ?)",
         )
         .bind(session_id.to_string())
         .bind(workspace_id.to_string())
         .bind(agent_id.to_string())
+        .bind(now.to_rfc3339())
         .fetch_optional(&mut *tx)
         .await?;
         let Some(session) = session else {
