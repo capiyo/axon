@@ -785,11 +785,14 @@ impl MemoryOutbox {
         let limit = i64::try_from(limit.clamp(1, 100))
             .map_err(|_| sqlx::Error::Protocol("epoch document limit exceeds SQLite range".into()))?;
         let rows = sqlx::query(
-            "SELECT memory_id, document_version, content_hash, scope, project_id, task_id, owner_id, \
-                    source_event_sequence, qkv_version, qoin_vector_version \
-             FROM memory_document_epoch_items \
-             WHERE epoch_id = ? AND workspace_id = ? \
-             ORDER BY source_event_sequence DESC, memory_id ASC LIMIT ?",
+            "SELECT e.memory_id, e.document_version, e.content_hash, e.scope, e.project_id, e.task_id, e.owner_id, \
+                    e.source_event_sequence, e.qkv_version, e.qoin_vector_version \
+             FROM memory_document_epoch_items e \
+             WHERE e.epoch_id = ? AND e.workspace_id = ? \
+             AND NOT EXISTS (SELECT 1 FROM memory_document_epoch_items newer \
+                 WHERE newer.epoch_id = e.epoch_id AND newer.memory_id = e.memory_id \
+                 AND newer.document_version > e.document_version) \
+             ORDER BY e.source_event_sequence DESC, e.memory_id ASC LIMIT ?",
         )
         .bind(epoch_id.to_string())
         .bind(workspace_id.to_string())
