@@ -1667,6 +1667,97 @@ mod epoch_document_tests {
     }
 
     #[tokio::test]
+    async fn archive_restore_and_delete_create_new_versions_and_control_current_retrieval() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let account = storage.ensure_firebase_user("axon-test", "lifecycle-user").await.unwrap();
+        let outbox = storage.memory_outbox();
+        let repository = FakeDocumentRepository::default();
+        let mut document = super::tests::document(account.workspace.id, Uuid::new_v4());
+        document.scope = "workspace_shared".into();
+        document.owner_id = None;
+        document.status = "proposed".into();
+        document.validate().unwrap();
+        outbox.enqueue(&mut document, account.user_id).await.unwrap();
+        repository.put_version(document.clone()).await.unwrap();
+        assert!(outbox.approve(account.workspace.id, document.memory_id, 1, account.user_id).await.unwrap());
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+
+        assert!(outbox.transition_lifecycle(
+            &repository, account.workspace.id, document.memory_id, 1, account.user_id,
+            MemoryLifecycleAction::Archive,
+        ).await.unwrap());
+        let archived_payload: String = sqlx::query_scalar(
+            "SELECT payload_json FROM memory_document_outbox WHERE memory_id = ? AND version = 2",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        let archived: MemoryDocument = serde_json::from_str(&archived_payload).unwrap();
+        repository.put_version(archived).await.unwrap();
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 2",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+        let hidden = outbox.list_authorized_document_refs(
+            account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
+        ).await.unwrap();
+        assert!(hidden.is_empty());
+
+        assert!(outbox.transition_lifecycle(
+            &repository, account.workspace.id, document.memory_id, 2, account.user_id,
+            MemoryLifecycleAction::Restore,
+        ).await.unwrap());
+        let restored_payload: String = sqlx::query_scalar(
+            "SELECT payload_json FROM memory_document_outbox WHERE memory_id = ? AND version = 3",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        let restored: MemoryDocument = serde_json::from_str(&restored_payload).unwrap();
+        assert_eq!(restored.status, "ready");
+        repository.put_version(restored).await.unwrap();
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 3",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+        let visible = outbox.list_authorized_document_refs(
+            account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
+        ).await.unwrap();
+        assert_eq!(visible, vec![(document.memory_id, 3)]);
+
+        assert!(outbox.transition_lifecycle(
+            &repository, account.workspace.id, document.memory_id, 3, account.user_id,
+            MemoryLifecycleAction::Delete,
+        ).await.unwrap());
+        let deleted_status: String = sqlx::query_scalar(
+            "SELECT lifecycle_status FROM memory_document_versions WHERE memory_id = ? AND version = 4",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(deleted_status, "deleted");
+        let hidden_after_delete = outbox.list_authorized_document_refs(
+            account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
+        ).await.unwrap();
+        assert!(hidden_after_delete.is_empty());
+    }
+
+    #[tokio::test]
     async fn epoch_hydration_returns_only_the_pinned_authorized_document_version() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let outbox = storage.memory_outbox();
