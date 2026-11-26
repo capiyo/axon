@@ -530,9 +530,13 @@ mod scoring_config_tests {
         let same = QoinScoringConfig::default();
         assert_eq!(baseline.effective_version(), same.effective_version());
 
-        let mut changed = baseline.clone();
-        changed.weights.semantic += 0.01;
-        assert_ne!(baseline.effective_version(), changed.effective_version());
+        let mut changed_weight = baseline.clone();
+        changed_weight.weights.semantic += 0.01;
+        assert_ne!(baseline.effective_version(), changed_weight.effective_version());
+
+        let mut changed_threshold = baseline.clone();
+        changed_threshold.relevant_threshold += 0.01;
+        assert_ne!(baseline.effective_version(), changed_threshold.effective_version());
     }
 
     #[test]
