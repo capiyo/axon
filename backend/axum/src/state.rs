@@ -8,6 +8,7 @@ use crate::{
     model::{Agent, Artifact, Task, Workspace},
     qoin_vectors::QoinVectorClient,
     memory_intelligence::QoinScoringConfig,
+    memory_vector_provider::MemoryVectorProvider,
     robotics::TelemetryEvent,
     storage::{EntityKind, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
 };
@@ -43,6 +44,7 @@ pub struct AppState {
     pub memory_outbox: Option<MemoryOutbox>,
     pub qoin_vectors: Option<QoinVectorClient>,
     pub qoin_memory_scoring: QoinScoringConfig,
+    pub memory_vector_provider: Option<Arc<dyn MemoryVectorProvider>>,
     pub firebase_verifier: Option<FirebaseVerifier>,
     pub simulator_enabled: bool,
 }
@@ -146,6 +148,14 @@ impl AppState {
         config: QoinScoringConfig,
     ) -> Self {
         self.qoin_memory_scoring = config;
+        self
+    }
+
+    pub fn with_memory_vector_provider(
+        mut self,
+        provider: Option<Arc<dyn MemoryVectorProvider>>,
+    ) -> Self {
+        self.memory_vector_provider = provider;
         self
     }
 
