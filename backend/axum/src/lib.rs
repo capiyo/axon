@@ -53,6 +53,7 @@ pub fn app(state: AppState) -> Router {
     };
     Router::new()
         .route("/health", get(routes::health))
+        .route("/ready", get(routes::readiness))
         .route(
             "/api/v1/workspaces/:workspace_id/chats",
             get(chat_memory_routes::list_chats).post(chat_memory_routes::create_chat),
