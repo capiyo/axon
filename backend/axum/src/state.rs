@@ -185,6 +185,17 @@ impl AppState {
         }
     }
 
+    pub async fn is_agent_owner(
+        &self,
+        user_id: Uuid,
+        workspace_id: Uuid,
+        agent_id: Uuid,
+    ) -> bool {
+        self.agents.read().await.get(&agent_id).is_some_and(|agent| {
+            agent.workspace_id == workspace_id && agent.created_by_user_id == Some(user_id)
+        })
+    }
+
     pub async fn is_workspace_member(
         &self,
         user_id: uuid::Uuid,
