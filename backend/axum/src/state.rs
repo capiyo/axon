@@ -149,7 +149,7 @@ impl AppState {
     ) -> Self {
         if let Some(coordinator) = self.memory_epochs.take() {
             self.memory_epochs = Some(
-                coordinator.with_qoin_scoring_version(config.version.clone()),
+                coordinator.with_qoin_scoring_version(config.effective_version()),
             );
         }
         self.qoin_memory_scoring = config;
