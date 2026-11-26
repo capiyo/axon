@@ -329,7 +329,11 @@ fn visible_to(memory: &IndexedMemory, query: &MemoryQuery) -> bool {
     }
 }
 
-fn score_memory(\n    query: &MemoryQuery,\n    memory: &IndexedMemory,\n    config: &QoinScoringConfig,\n) -> ScoreBreakdown {
+fn score_memory(
+    query: &MemoryQuery,
+    memory: &IndexedMemory,
+    config: &QoinScoringConfig,
+) -> ScoreBreakdown {
     let semantic = cosine_similarity(&query.semantic, &memory.vector.semantic);
     let context = 1.0 - (query.context as f64 - memory.vector.context as f64).abs();
     let dependency = overlap(&query.dependency_ids, &memory.dependency_ids);
@@ -487,7 +491,7 @@ mod scoring_config_tests {
         let policy = QoinScoringConfig::default();
         assert!(policy.validate().is_ok());
         assert_eq!(policy.version, QOIN_MEMORY_SCORING_VERSION);
-        assert!((policy.weights.total() - 1.08).abs() < f64::EPSILON);
+        assert!((policy.weights.total() - 1.08).abs() < 1e-12);
     }
 
     #[test]
