@@ -3,7 +3,7 @@ use crate::{
     audit::AuditEvent,
     chat_memory::ChatMemoryStore,
     memory_architecture::MemoryEpochCoordinator,
-    model::{Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace},
+    model::{Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace, WorkspaceMembership},
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -162,6 +162,20 @@ pub trait Storage: Send + Sync {
         name: String,
         actor: String,
     ) -> Result<Workspace, StorageError>;
+
+    async fn add_workspace_member(
+        &self,
+        workspace_id: Uuid,
+        actor_user_id: Uuid,
+        target_user_id: Uuid,
+    ) -> Result<WorkspaceMembership, StorageError>;
+
+    async fn revoke_workspace_member(
+        &self,
+        workspace_id: Uuid,
+        actor_user_id: Uuid,
+        target_user_id: Uuid,
+    ) -> Result<bool, StorageError>;
 
     async fn create_project_for_user(
         &self,
@@ -490,6 +504,106 @@ impl Storage for SqliteStorage {
             .collect()
     }
 
+
+
+    async fn add_workspace_member(
+        &self,
+        workspace_id: Uuid,
+        actor_user_id: Uuid,
+        target_user_id: Uuid,
+    ) -> Result<WorkspaceMembership, StorageError> {
+        let mut tx = self.pool.begin().await?;
+        let actor_is_owner: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM workspace_memberships WHERE workspace_id = ? AND user_id = ? AND role = 'owner'",
+        )
+        .bind(workspace_id.to_string())
+        .bind(actor_user_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if actor_is_owner.is_none() {
+            return Err(StorageError::ProjectAuthorizationDenied);
+        }
+        let target_exists: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM users WHERE id = ?",
+        )
+        .bind(target_user_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if target_exists.is_none() {
+            return Err(StorageError::ProjectWorkspaceMembershipRequired);
+        }
+        let now = Utc::now();
+        sqlx::query(
+            "INSERT INTO workspace_memberships (workspace_id, user_id, role, created_at) VALUES (?, ?, 'member', ?) ON CONFLICT(workspace_id, user_id) DO NOTHING",
+        )
+        .bind(workspace_id.to_string())
+        .bind(target_user_id.to_string())
+        .bind(now.to_rfc3339())
+        .execute(&mut *tx)
+        .await?;
+        let role: String = sqlx::query_scalar(
+            "SELECT role FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(target_user_id.to_string())
+        .fetch_one(&mut *tx)
+        .await?;
+        sqlx::query(
+            "INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, ?, ?, 'workspace.member_added', 'workspace', ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(workspace_id.to_string())
+        .bind(format!("human:{actor_user_id}"))
+        .bind(workspace_id.to_string())
+        .bind(now.to_rfc3339())
+        .bind(serde_json::json!({"user_id": target_user_id, "role": role}).to_string())
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(WorkspaceMembership { workspace_id, user_id: target_user_id, role, created_at: now })
+    }
+
+    async fn revoke_workspace_member(
+        &self,
+        workspace_id: Uuid,
+        actor_user_id: Uuid,
+        target_user_id: Uuid,
+    ) -> Result<bool, StorageError> {
+        let mut tx = self.pool.begin().await?;
+        let actor_is_owner: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM workspace_memberships WHERE workspace_id = ? AND user_id = ? AND role = 'owner'",
+        )
+        .bind(workspace_id.to_string())
+        .bind(actor_user_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if actor_is_owner.is_none() {
+            return Err(StorageError::ProjectAuthorizationDenied);
+        }
+        let changed = sqlx::query(
+            "DELETE FROM workspace_memberships WHERE workspace_id = ? AND user_id = ? AND role = 'member'",
+        )
+        .bind(workspace_id.to_string())
+        .bind(target_user_id.to_string())
+        .execute(&mut *tx)
+        .await?;
+        if changed.rows_affected() == 1 {
+            let now = Utc::now().to_rfc3339();
+            sqlx::query(
+                "INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, ?, ?, 'workspace.member_revoked', 'workspace', ?, ?, ?)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(workspace_id.to_string())
+            .bind(format!("human:{actor_user_id}"))
+            .bind(workspace_id.to_string())
+            .bind(now)
+            .bind(serde_json::json!({"user_id": target_user_id}).to_string())
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(changed.rows_affected() == 1)
+    }
 
     async fn create_project_for_user(
         &self,
