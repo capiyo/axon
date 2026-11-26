@@ -3,6 +3,7 @@ use axon_api::{
     config::BackendConfig,
     firebase_auth::FirebaseVerifier,
     memory_documents::{MemoryDocumentRepository, MongoMemoryDocumentRepository},
+    memory_vector_provider::LexicalMemoryVectorProvider,
     qoin_vectors::QoinVectorClient,
     storage::SqliteStorage,
     AppState,
@@ -92,6 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_memory_outbox(Some(memory_outbox))
         .with_qoin_vector_client(qoin_vectors)
         .with_qoin_memory_scoring_config(config.qoin_memory_scoring)
+        .with_memory_vector_provider(Some(Arc::new(LexicalMemoryVectorProvider)))
         .with_firebase_verifier(verifier, simulator_enabled);
 
     let listener = TcpListener::bind(address).await?;
