@@ -27,6 +27,8 @@ Existing QKV and memory-intelligence tests remain part of the Rust suite. `memor
 - Simulate lease expiry and duplicate delivery.
 - Verify hash mismatch never becomes retrievable.
 - Verify dead-letter handling and audited retry-sync recovery, including malformed payload refusal.
+- Verify reconciliation identifies missing, orphaned, invalid, and metadata-mismatched document versions without changing either database.
+- Verify `/ready` distinguishes SQLite readiness, MongoDB configured state, and MongoDB ping failure.
 - Verify workspace/task/agent scope isolation.
 - Verify a non-member cannot approve a proposed memory document.
 - Verify the combined session-context endpoint returns progressive SQLite memories and the exact MongoDB versions pinned to that same session.
