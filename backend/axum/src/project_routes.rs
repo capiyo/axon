@@ -203,6 +203,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn workspace_revocation_removes_project_access_and_owner_cannot_be_revoked() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap().shared();
+        let state = AppState::with_storage(storage).await.unwrap();
+        let owner = state.ensure_firebase_user("axon-test", "project-owner-3").await.unwrap();
+        let member = state.ensure_firebase_user("axon-test", "project-member-3").await.unwrap();
+        state.add_workspace_member(owner.workspace.id, owner.user_id, member.user_id).await.unwrap();
+        let project = state
+            .create_project_for_user(owner.workspace.id, owner.user_id, "Security".into())
+            .await
+            .unwrap();
+        state
+            .set_project_member(owner.workspace.id, project.id, owner.user_id, member.user_id, ProjectRole::Member)
+            .await
+            .unwrap();
+        assert!(state.is_project_member(owner.workspace.id, project.id, member.user_id).await.unwrap());
+        assert!(state.revoke_workspace_member(owner.workspace.id, owner.user_id, member.user_id).await.unwrap());
+        assert!(!state.is_project_member(owner.workspace.id, project.id, member.user_id).await.unwrap());
+        assert!(matches!(
+            state.revoke_workspace_member(owner.workspace.id, owner.user_id, owner.user_id).await,
+            Err(StorageError::ProjectAuthorizationDenied)
+        ));
+    }
+
+    #[tokio::test]
     async fn project_admin_cannot_grant_admin_or_owner_role() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap().shared();
         let state = AppState::with_storage(storage).await.unwrap();
