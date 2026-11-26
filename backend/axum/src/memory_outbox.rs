@@ -441,7 +441,7 @@ impl MemoryOutbox {
         before_version: Option<u64>,
         requested_limit: usize,
     ) -> Result<Vec<AuthorizedMemoryDocumentVersion>, MemoryOutboxError> {
-        let limit = i64::try_from(requested_limit.clamp(1, 100))
+        let limit = i64::try_from(requested_limit.clamp(1, 101))
             .map_err(|_| sqlx::Error::Protocol("version history limit exceeds SQLite range".into()))?;
         let before_version = before_version
             .map(i64::try_from)
