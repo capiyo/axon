@@ -58,7 +58,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 14. Added bounded, workspace-scoped, read-only SQLite/MongoDB reconciliation and an authenticated report endpoint; no automatic repair is performed.
 15. Added `/ready` to report SQLite readiness and optional/configured MongoDB readiness separately from `/health` liveness.
 16. Added tests for config policy validation, scoring-weight changes, reconciliation mismatches, dead-letter recovery, public readiness, legacy Agent deserialization, and cross-member agent-owner rejection.
-17. Updated architecture, QKV, MongoDB, testing, security, operations, quickstart, data-model, and repository-state documentation. Added bounded graceful-shutdown waiting for the outbox worker.
+17. Updated architecture, QKV, MongoDB, testing, security, operations, quickstart, data-model, and repository-state documentation. Added bounded graceful-shutdown signaling and waiting for both the outbox worker and periodic epoch publisher.
 
 ## 5. Remaining gaps
 
