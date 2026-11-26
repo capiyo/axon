@@ -5,6 +5,8 @@
 > Branch: `production/phase-b-chats-memory`  
 > Status: implementation in progress; compiler/CI verification is still required.
 
+**Forensic limitation:** edits are being made through GitHub file operations because no local checkout or Rust toolchain is available in this environment. Therefore a true `git status`, uncommitted-worktree check, complete repository-wide SQLx/raw-SQL grep, and local build/test run cannot be claimed. The source-level audit covers the listed backend, migration, authentication, CI, and documentation files; it is not a substitute for a local full-tree scan.
+
 ## 1. Verified architecture
 
 - Rust workspace with Axum backend at `backend/axum`.
