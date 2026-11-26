@@ -60,10 +60,13 @@ impl BackendConfig {
         }
 
         let environment = env::var("AXON_ENV").unwrap_or_default();
-        let required = match env::var("AXON_MEMORY_DOCUMENTS_REQUIRED") {
+        let explicitly_required = match env::var("AXON_MEMORY_DOCUMENTS_REQUIRED") {
             Ok(value) => parse_bool("AXON_MEMORY_DOCUMENTS_REQUIRED", &value)?,
-            Err(_) => environment.eq_ignore_ascii_case("production"),
+            Err(_) => false,
         };
+        // Production cannot silently opt out of the document store. Local and
+        // test environments may omit MongoDB by leaving it unconfigured.
+        let required = environment.eq_ignore_ascii_case("production") || explicitly_required;
         let mongo_uri = env::var("AXON_MONGODB_URI").ok();
         let mongo = match mongo_uri {
             Some(uri) => {
