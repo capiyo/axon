@@ -747,9 +747,10 @@ impl MemoryOutbox {
         let project_id: Option<String> = pinned.try_get("project_id")?;
         let owner_id: Option<String> = pinned.try_get("owner_id")?;
         let task_id: Option<String> = pinned.try_get("task_id")?;
+        let agent_id_text = agent_id.to_string();
         match scope.as_str() {
             "workspace_shared" => {}
-            "agent_private" if owner_id.as_deref() == Some(agent_id.to_string().as_str()) => {}
+            "agent_private" if owner_id.as_deref() == Some(agent_id_text.as_str()) => {}
             "task_shared" if task_id.is_some() && task_id == session_task_id => {}
             "project_shared" => {
                 let Some(project_id) = project_id.as_deref() else {
