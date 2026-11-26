@@ -939,10 +939,11 @@ impl MemoryOutbox {
         session_id: Uuid,
         requester_agent_id: Uuid,
         limit: usize,
-    ) -> Result<Option<(Uuid, Option<Uuid>, Vec<MemoryDocument>)>, MemoryOutboxError> {
+    ) -> Result<Option<(Uuid, Option<Uuid>, String, Vec<MemoryDocument>)>, MemoryOutboxError> {
         let session = sqlx::query(
-            "SELECT memory_epoch_id, task_id FROM agent_memory_sessions \
-             WHERE session_id = ? AND workspace_id = ? AND agent_id = ?",
+            "SELECT s.memory_epoch_id, s.task_id, e.qoin_scoring_version \
+             FROM agent_memory_sessions s LEFT JOIN memory_epochs e ON e.epoch_id = s.memory_epoch_id \
+             WHERE s.session_id = ? AND s.workspace_id = ? AND s.agent_id = ?",
         )
         .bind(session_id.to_string())
         .bind(workspace_id.to_string())
@@ -955,6 +956,8 @@ impl MemoryOutbox {
         let epoch_id_text: String = session.try_get("memory_epoch_id")?;
         let epoch_id = Uuid::parse_str(&epoch_id_text)
             .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+        let qoin_scoring_version: Option<String> = session.try_get("qoin_scoring_version")?;
+        let qoin_scoring_version = qoin_scoring_version.ok_or(MemoryOutboxError::VersionConflict)?;
         let task_id_text: Option<String> = session.try_get("task_id")?;
         let task_id = task_id_text
             .map(|value| Uuid::parse_str(&value))
@@ -973,7 +976,7 @@ impl MemoryOutbox {
         else {
             return Err(MemoryOutboxError::VersionConflict);
         };
-        Ok(Some((epoch_id, task_id, documents)))
+        Ok(Some((epoch_id, task_id, qoin_scoring_version, documents)))
     }
 
     pub async fn mark_indexed(
