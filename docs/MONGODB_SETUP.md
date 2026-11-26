@@ -6,7 +6,8 @@ MongoDB is a separate document repository. SQLite remains authoritative for Axon
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `AXON_DATABASE_URL` | Authoritative SQLite database URL | `sqlite://axon.db` |\n| `AXON_MONGODB_URI` | MongoDB connection URI | unset |
+| `AXON_DATABASE_URL` | Authoritative SQLite database URL | `sqlite://axon.db` |
+| `AXON_MONGODB_URI` | MongoDB connection URI | unset |
 | `AXON_MONGODB_DATABASE` | Database name | `axon` |
 | `AXON_MONGODB_COLLECTION` | Memory document collection | `memory_documents` |
 | `AXON_MEMORY_DOCUMENTS_REQUIRED` | Require MongoDB outside production | `false`; production always requires MongoDB |
