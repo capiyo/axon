@@ -82,7 +82,7 @@ mod tests {
     async fn lexical_keys_are_stable_and_normalized() {
         let provider = LexicalMemoryVectorProvider;
         let first = provider.key_for_text("Axon memory QKV retrieval").await.unwrap();
-        let second = provider.key_for_text("Axon memory QKV retrieval").unwrap();
+        let second = provider.key_for_text("Axon memory QKV retrieval").await.unwrap();
         assert_eq!(first.values, second.values);
         assert_eq!(first.values.len(), DIMENSION);
         assert_eq!(first.model_version, LEXICAL_MEMORY_VECTOR_VERSION);
