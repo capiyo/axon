@@ -969,6 +969,7 @@ pub async fn get_agent_session_documents(
             workspace_id,
             session_id,
             agent_id,
+            user.user_id,
             100,
         )
         .await
