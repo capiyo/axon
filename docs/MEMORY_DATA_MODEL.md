@@ -96,3 +96,8 @@ The existing memory-intelligence scorer receives the same lexical vector used by
 ## Agent ownership
 
 The existing serialized `Agent` entity now carries optional `created_by_user_id` metadata. New agents record the authenticated Firebase user who registered them. Memory, handover, and session routes require that owner; older agent entities without this field fail closed until an explicit ownership backfill. This is user ownership/delegation, not an independent cryptographic agent credential.
+
+
+## Version history API
+
+The authenticated agent-scoped history endpoint returns only approved and synchronized versions visible under SQLite scope metadata. It paginates by a descending `before_version` cursor, hydrates each exact MongoDB version, and verifies content hash, scope, project/task/owner metadata, source sequence, and QKV/Qoin versions before returning metadata. Document content is not included in the history response.
