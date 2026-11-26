@@ -578,7 +578,7 @@ pub async fn retrieve_session_context(
         StatusCode::SERVICE_UNAVAILABLE,
         "MongoDB memory documents are unavailable.",
     ))?;
-    let (epoch_id, task_id, pinned_documents) = outbox
+    let (epoch_id, task_id, epoch_qoin_scoring_version, pinned_documents) = outbox
         .list_session_authorized_documents(
             repository.as_ref(),
             workspace_id,
@@ -603,6 +603,16 @@ pub async fn retrieve_session_context(
                 "The session task is no longer assigned to this agent.",
             ));
         }
+    }
+
+    let expected_qoin_scoring_version = state.qoin_memory_scoring.effective_version();
+    let legacy_default_policy = state.qoin_memory_scoring == QoinScoringConfig::default()
+        && epoch_qoin_scoring_version == crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION;
+    if epoch_qoin_scoring_version != expected_qoin_scoring_version && !legacy_default_policy {
+        return Err(error(
+            StatusCode::CONFLICT,
+            "The session epoch was created with a different Qoin scoring policy. Resume with a matching policy or create a new session.",
+        ));
     }
 
     let fallback_provider = LexicalMemoryVectorProvider;
@@ -775,7 +785,7 @@ pub async fn retrieve_session_context(
         &state.qoin_memory_scoring,
     )
     .map_err(|_| error(StatusCode::BAD_REQUEST, "Qoin session memory ranking could not be evaluated."))?;
-    let qoin_scoring_version = qoin.scoring_config.version.clone();
+    let qoin_scoring_version = qoin.scoring_config.effective_version();
     let qoin_scoring_config = qoin.scoring_config.clone();
     let document_candidates_examined = qoin.candidates_examined;
     let document_candidates_ranked = qoin.ranked.len();
