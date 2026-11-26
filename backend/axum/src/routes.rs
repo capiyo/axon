@@ -191,6 +191,7 @@ pub async fn register_agent(
     let agent = Agent {
         id: Uuid::new_v4(),
         workspace_id,
+        created_by_user_id: Some(user.user_id),
         display_name: display_name.to_owned(),
         provider: provider.to_owned(),
         connection_mode: ConnectionMode::Manual,
