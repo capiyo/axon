@@ -2131,6 +2131,10 @@ mod epoch_document_tests {
             account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
         ).await.unwrap();
         assert!(hidden.is_empty());
+        let direct_archived = outbox.get_authorized_document(
+            &repository, account.workspace.id, document.memory_id, 1, Uuid::nil(), account.user_id, None,
+        ).await.unwrap();
+        assert!(direct_archived.is_none());
 
         assert!(outbox.transition_lifecycle(
             &repository, account.workspace.id, document.memory_id, 2, account.user_id,
@@ -2157,6 +2161,10 @@ mod epoch_document_tests {
             account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
         ).await.unwrap();
         assert_eq!(visible, vec![(document.memory_id, 3)]);
+        let direct_restored = outbox.get_authorized_document(
+            &repository, account.workspace.id, document.memory_id, 3, Uuid::nil(), account.user_id, None,
+        ).await.unwrap();
+        assert!(direct_restored.is_some());
 
         assert!(outbox.transition_lifecycle(
             &repository, account.workspace.id, document.memory_id, 3, account.user_id,
@@ -2174,6 +2182,10 @@ mod epoch_document_tests {
             account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
         ).await.unwrap();
         assert!(hidden_after_delete.is_empty());
+        let direct_deleted = outbox.get_authorized_document(
+            &repository, account.workspace.id, document.memory_id, 3, Uuid::nil(), account.user_id, None,
+        ).await.unwrap();
+        assert!(direct_deleted.is_none());
     }
 
     #[tokio::test]
