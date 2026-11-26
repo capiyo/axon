@@ -1986,6 +1986,13 @@ mod epoch_document_tests {
         .await
         .unwrap();
         assert_eq!(count, 1);
+        let signals = outbox
+            .feedback_signals(account.workspace.id, &[(document.memory_id, 1)])
+            .await
+            .unwrap();
+        let (positive, negative) = signals.get(&(document.memory_id, 1)).copied().unwrap();
+        assert!((positive - (2.0 / 3.0)).abs() < 1e-6);
+        assert!((negative - (1.0 / 3.0)).abs() < 1e-6);
 
         let invalid = outbox.record_retrieval_feedback(
             account.workspace.id, session_id, agent.id, account.user_id,
