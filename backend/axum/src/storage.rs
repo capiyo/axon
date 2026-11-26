@@ -1114,6 +1114,16 @@ impl Storage for SqliteStorage {
         if project.is_none() {
             return Err(StorageError::ProjectNotFound);
         }
+        let actor_workspace_member: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(actor_user_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if actor_workspace_member.is_none() {
+            return Err(StorageError::ProjectAuthorizationDenied);
+        }
         let actor_role: Option<String> = sqlx::query_scalar(
             "SELECT role FROM project_memberships WHERE project_id = ? AND user_id = ? AND revoked_at IS NULL",
         )
@@ -1138,6 +1148,9 @@ impl Storage for SqliteStorage {
         .fetch_optional(&mut *tx)
         .await?;
         if target_role.as_deref() == Some("owner") && role != ProjectRole::Owner {
+            return Err(StorageError::ProjectAuthorizationDenied);
+        }
+        if actor_role == "admin" && matches!(target_role.as_deref(), Some("owner" | "admin")) {
             return Err(StorageError::ProjectAuthorizationDenied);
         }
         let target_is_workspace_member: Option<i64> = sqlx::query_scalar(
@@ -1200,6 +1213,16 @@ impl Storage for SqliteStorage {
         if project_exists.is_none() {
             return Err(StorageError::ProjectNotFound);
         }
+        let actor_workspace_member: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(actor_user_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if actor_workspace_member.is_none() {
+            return Err(StorageError::ProjectAuthorizationDenied);
+        }
         let actor_role: Option<String> = sqlx::query_scalar(
             "SELECT role FROM project_memberships WHERE project_id = ? AND user_id = ? AND revoked_at IS NULL",
         )
@@ -1217,7 +1240,9 @@ impl Storage for SqliteStorage {
         .bind(target_user_id.to_string())
         .fetch_optional(&mut *tx)
         .await?;
-        if target_role.as_deref() == Some("owner") {
+        if target_role.as_deref() == Some("owner")
+            || (actor_role.as_deref() == Some("admin") && target_role.as_deref() == Some("admin"))
+        {
             return Err(StorageError::ProjectAuthorizationDenied);
         }
         let now = Utc::now().to_rfc3339();
