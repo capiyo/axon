@@ -1,6 +1,6 @@
 use crate::{
     auth_middleware::AuthenticatedUser,
-    model::{CreateProject, Project, ProjectMembership, ProjectRole, SetProjectMember},
+    model::{AddWorkspaceMember, CreateProject, Project, ProjectMembership, ProjectRole, SetProjectMember, WorkspaceMembership},
     storage::StorageError,
     AppState,
 };
@@ -37,6 +37,44 @@ async fn require_workspace_member(
         return Err(error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
     Ok(())
+}
+
+
+pub async fn add_workspace_member(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path(workspace_id): Path<Uuid>,
+    Json(input): Json<AddWorkspaceMember>,
+) -> ApiResult<(StatusCode, Json<WorkspaceMembership>)> {
+    require_workspace_member(&state, user.user_id, workspace_id).await?;
+    let membership = state
+        .add_workspace_member(workspace_id, user.user_id, input.user_id)
+        .await
+        .map_err(|failure| match failure {
+            StorageError::ProjectAuthorizationDenied => error(StatusCode::FORBIDDEN, "Only a workspace owner can add members."),
+            StorageError::ProjectWorkspaceMembershipRequired => error(StatusCode::NOT_FOUND, "User account was not found."),
+            _ => error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace membership could not be added."),
+        })?;
+    Ok((StatusCode::CREATED, Json(membership)))
+}
+
+pub async fn revoke_workspace_member(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, target_user_id)): Path<(Uuid, Uuid)>,
+) -> ApiResult<StatusCode> {
+    require_workspace_member(&state, user.user_id, workspace_id).await?;
+    let revoked = state
+        .revoke_workspace_member(workspace_id, user.user_id, target_user_id)
+        .await
+        .map_err(|failure| match failure {
+            StorageError::ProjectAuthorizationDenied => error(StatusCode::FORBIDDEN, "Only a workspace owner can revoke members."),
+            _ => error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace membership could not be revoked."),
+        })?;
+    if !revoked {
+        return Err(error(StatusCode::NOT_FOUND, "Revocable workspace membership was not found."));
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn create_project(
