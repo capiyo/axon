@@ -10,8 +10,101 @@ use uuid::Uuid;
 
 pub const QOIN_MEMORY_SCORING_VERSION: &str = "axon-qoin-memory-v1";
 
-const RELEVANCE_THRESHOLD: f64 = 0.72;
-const CONDITIONAL_THRESHOLD: f64 = 0.42;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct QoinScoringWeights {
+    pub semantic: f64,
+    pub context: f64,
+    pub dependency: f64,
+    pub outcome: f64,
+    pub failure: f64,
+    pub evidence: f64,
+    pub recency: f64,
+    pub tags: f64,
+}
+
+impl Default for QoinScoringWeights {
+    fn default() -> Self {
+        Self {
+            semantic: 0.30,
+            context: 0.15,
+            dependency: 0.18,
+            outcome: 0.10,
+            failure: 0.12,
+            evidence: 0.10,
+            recency: 0.05,
+            tags: 0.08,
+        }
+    }
+}
+
+impl QoinScoringWeights {
+    fn total(&self) -> f64 {
+        self.semantic + self.context + self.dependency + self.outcome
+            + self.failure + self.evidence + self.recency + self.tags
+    }
+
+    fn validate(&self) -> bool {
+        let values = [
+            self.semantic, self.context, self.dependency, self.outcome,
+            self.failure, self.evidence, self.recency, self.tags,
+        ];
+        values.iter().all(|value| value.is_finite() && *value >= 0.0)
+            && self.total().is_finite()
+            && self.total() > 0.0
+    }
+}
+
+/// Versioned, serializable scoring policy. Returning this policy with each
+/// retrieval result makes the ranking reproducible and reviewable.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct QoinScoringConfig {
+    pub version: String,
+    pub weights: QoinScoringWeights,
+    pub relevant_threshold: f64,
+    pub conditional_threshold: f64,
+    pub recency_half_life_days: f64,
+    pub strong_failure_signal_threshold: f64,
+    pub strong_semantic_similarity_threshold: f64,
+    pub weak_evidence_threshold: f64,
+}
+
+impl Default for QoinScoringConfig {
+    fn default() -> Self {
+        Self {
+            version: QOIN_MEMORY_SCORING_VERSION.into(),
+            weights: QoinScoringWeights::default(),
+            relevant_threshold: 0.72,
+            conditional_threshold: 0.42,
+            recency_half_life_days: 30.0,
+            strong_failure_signal_threshold: 0.65,
+            strong_semantic_similarity_threshold: 0.75,
+            weak_evidence_threshold: 0.25,
+        }
+    }
+}
+
+impl QoinScoringConfig {
+    pub fn validate(&self) -> Result<(), VectorError> {
+        let thresholds = [
+            self.relevant_threshold,
+            self.conditional_threshold,
+            self.strong_failure_signal_threshold,
+            self.strong_semantic_similarity_threshold,
+            self.weak_evidence_threshold,
+        ];
+        if self.version.trim().is_empty()
+            || self.version.len() > 80
+            || !self.weights.validate()
+            || thresholds.iter().any(|value| !value.is_finite() || !(0.0..=1.0).contains(value))
+            || self.conditional_threshold > self.relevant_threshold
+            || !self.recency_half_life_days.is_finite()
+            || self.recency_half_life_days <= 0.0
+        {
+            return Err(VectorError::InvalidScoringConfig);
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -62,6 +155,7 @@ pub enum VectorError {
     NonFiniteComponent,
     DimensionOutOfRange,
     DimensionMismatch,
+    InvalidScoringConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,6 +228,7 @@ pub struct RankedMemory {
 pub struct RetrievalResult {
     pub candidates_examined: usize,
     pub excluded_by_scope_or_status: usize,
+    pub scoring_config: QoinScoringConfig,
     pub ranked: Vec<RankedMemory>,
 }
 
@@ -143,6 +238,15 @@ pub fn retrieve_memories(
     query: &MemoryQuery,
     memories: &[IndexedMemory],
 ) -> Result<RetrievalResult, VectorError> {
+    retrieve_memories_with_config(query, memories, &QoinScoringConfig::default())
+}
+
+pub fn retrieve_memories_with_config(
+    query: &MemoryQuery,
+    memories: &[IndexedMemory],
+    config: &QoinScoringConfig,
+) -> Result<RetrievalResult, VectorError> {
+    config.validate()?;
     if query.semantic.iter().any(|v| !v.is_finite()) {
         return Err(VectorError::NonFiniteComponent);
     }
@@ -169,10 +273,10 @@ pub fn retrieve_memories(
         {
             return Err(VectorError::DimensionMismatch);
         }
-        let score = score_memory(query, memory);
-        let classification = if score.total >= RELEVANCE_THRESHOLD {
+        let score = score_memory(query, memory, config);
+        let classification = if score.total >= config.relevant_threshold {
             RelevanceClass::Relevant
-        } else if score.total >= CONDITIONAL_THRESHOLD {
+        } else if score.total >= config.conditional_threshold {
             RelevanceClass::ConditionallyRelevant
         } else {
             RelevanceClass::Irrelevant
@@ -181,13 +285,13 @@ pub fn retrieve_memories(
         if score.dependency > 0.0 {
             reasons.push("shares an explicit task or artifact dependency".into());
         }
-        if score.failure >= 0.65 {
+        if score.failure >= config.strong_failure_signal_threshold {
             reasons.push("contains a closely matching failure signal".into());
         }
-        if score.semantic >= 0.75 {
+        if score.semantic >= config.strong_semantic_similarity_threshold {
             reasons.push("has strong semantic-vector similarity".into());
         }
-        if score.evidence < 0.25 {
+        if score.evidence < config.weak_evidence_threshold {
             reasons.push("historical evidence is weak".into());
         }
         ranked.push(RankedMemory {
@@ -207,6 +311,7 @@ pub fn retrieve_memories(
     Ok(RetrievalResult {
         candidates_examined: memories.len(),
         excluded_by_scope_or_status: excluded,
+        scoring_config: config.clone(),
         ranked,
     })
 }
@@ -224,7 +329,7 @@ fn visible_to(memory: &IndexedMemory, query: &MemoryQuery) -> bool {
     }
 }
 
-fn score_memory(query: &MemoryQuery, memory: &IndexedMemory) -> ScoreBreakdown {
+fn score_memory(\n    query: &MemoryQuery,\n    memory: &IndexedMemory,\n    config: &QoinScoringConfig,\n) -> ScoreBreakdown {
     let semantic = cosine_similarity(&query.semantic, &memory.vector.semantic);
     let context = 1.0 - (query.context as f64 - memory.vector.context as f64).abs();
     let dependency = overlap(&query.dependency_ids, &memory.dependency_ids);
@@ -236,18 +341,19 @@ fn score_memory(query: &MemoryQuery, memory: &IndexedMemory) -> ScoreBreakdown {
     let failure = 1.0 - (query.failure as f64 - memory.vector.failure as f64).abs();
     let evidence = memory.vector.evidence as f64 * query.evidence as f64;
     let age_days = query.now_unix.saturating_sub(memory.created_at_unix).max(0) as f64 / 86_400.0;
-    let recency = (1.0 / (1.0 + age_days / 30.0)).clamp(0.0, 1.0);
+    let recency = (1.0 / (1.0 + age_days / config.recency_half_life_days)).clamp(0.0, 1.0);
     let tags = overlap(&query.tags, &memory.tags);
-    // Weights are explicit and explainable; tags are a small additive signal.
-    let total = 0.30 * semantic
-        + 0.15 * context
-        + 0.18 * dependency
-        + 0.10 * outcome
-        + 0.12 * failure
-        + 0.10 * evidence
-        + 0.05 * recency
-        + 0.08 * tags;
-    let total = total / 1.08;
+    let weights = &config.weights;
+    let total = (
+        weights.semantic * semantic
+            + weights.context * context
+            + weights.dependency * dependency
+            + weights.outcome * outcome
+            + weights.failure * failure
+            + weights.evidence * evidence
+            + weights.recency * recency
+            + weights.tags * tags
+    ) / weights.total();
     ScoreBreakdown {
         semantic,
         context,
@@ -369,6 +475,47 @@ pub fn reconstruct_history(
         event_count: ordered.len(),
         issues,
         matches_expected,
+    }
+}
+
+#[cfg(test)]
+mod scoring_config_tests {
+    use super::*;
+
+    #[test]
+    fn default_scoring_policy_is_valid_and_reproducible() {
+        let policy = QoinScoringConfig::default();
+        assert!(policy.validate().is_ok());
+        assert_eq!(policy.version, QOIN_MEMORY_SCORING_VERSION);
+        assert!((policy.weights.total() - 1.08).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn invalid_weights_and_thresholds_are_rejected() {
+        let mut policy = QoinScoringConfig::default();
+        policy.weights.semantic = f64::NAN;
+        assert_eq!(policy.validate(), Err(VectorError::InvalidScoringConfig));
+
+        let mut policy = QoinScoringConfig::default();
+        policy.conditional_threshold = 0.9;
+        assert_eq!(policy.validate(), Err(VectorError::InvalidScoringConfig));
+    }
+
+    #[test]
+    fn weights_are_normalized_by_their_sum() {
+        let mut policy = QoinScoringConfig::default();
+        policy.weights = QoinScoringWeights {
+            semantic: 3.0,
+            context: 1.5,
+            dependency: 1.8,
+            outcome: 1.0,
+            failure: 1.2,
+            evidence: 1.0,
+            recency: 0.5,
+            tags: 0.8,
+        };
+        assert!(policy.validate().is_ok());
+        assert!((policy.weights.total() - 10.8).abs() < f64::EPSILON);
     }
 }
 
