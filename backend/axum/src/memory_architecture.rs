@@ -365,10 +365,8 @@ impl MemoryEpochCoordinator {
         }
     }
 
-    pub fn with_qoin_scoring_version(mut self, version: String) -> Self {
-        if !version.trim().is_empty() && version.len() <= 80 {
-            self.qoin_scoring_version = version;
-        }
+    pub(crate) fn with_qoin_scoring_version(mut self, version: String) -> Self {
+        self.qoin_scoring_version = version;
         self
     }
 
