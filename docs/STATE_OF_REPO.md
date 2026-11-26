@@ -55,16 +55,16 @@
 - [x] Added versioned immutable MongoDB document writes with a unique `memory_id + version` index and SHA-256 content verification.
 - [x] Added SQLite document-version metadata and transactional outbox migrations (`0010`, `0011`).
 - [x] Added a leased outbox worker with idempotent delivery, bounded retries, dead-letter state, audited retry-sync recovery, lease-safe completion/failure transactions, and graceful shutdown.
-- [x] Added authenticated memory-document creation for workspace-shared, task-shared, and agent-private scopes.
+- [x] Added authenticated memory-document creation for workspace-shared, task-shared, and agent-private scopes; agent-private creation is bound to the registering user who owns the agent.
 - [x] Added validated MongoDB configuration, redacted URI debug output, bounded connection timeouts, bounded pool size, production-required startup behavior, and separate SQLite/MongoDB readiness probes.
 - [x] Added approved, scope-checked agent document retrieval and query search using deterministic lexical QKV attention followed by configurable, versioned Qoin memory scoring. Search responses return the scoring policy and per-candidate breakdown.
 - [x] Immutable memory-document epoch metadata now pins exact document version, content hash, source sequence, QKV version, and Qoin scoring version.
 - [ ] A production neural embedding provider remains outstanding; the asynchronous provider abstraction is injected through AppState and defaults to deterministic lexical QKV keys with source-text integrity hashes.
-- [x] An authenticated session-bound endpoint resolves the session's immutable epoch and hydrates exact MongoDB document versions with scope, source sequence, QKV version, and SHA-256 verification.
+- [x] Agent ownership is persisted in the serialized Agent entity; agent-specific document, handover, and session routes reject cross-member agent impersonation.\n- [x] A session-bound endpoint resolves the session's immutable epoch and hydrates/ranks exact MongoDB document versions through QKV and Qoin.
 - [ ] Project-shared memory is disabled until persisted project-membership authorization exists.
 - [x] Added audited dead-letter recovery for valid retained outbox payloads.
 - [x] Added bounded, workspace-scoped read-only SQLite/MongoDB reconciliation reports.
-- [ ] Automatic reconciliation repair, searchable vector index rebuild, neural embeddings, project-membership authorization, cryptographic agent-principal authentication, and full MongoDB integration/security tests remain outstanding.
+- [ ] Automatic reconciliation repair, searchable vector index rebuild, neural embeddings, project-membership authorization, independent cryptographic agent-principal authentication, legacy agent ownership backfill, and full MongoDB integration/security tests remain outstanding.
 
 ### Frontend and design
 - [x] React + TypeScript + Vite web workspace.
