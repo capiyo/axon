@@ -285,7 +285,7 @@ impl MemoryOutbox {
         if completed.rows_affected() != 1 {
             return Err(MemoryOutboxError::LeaseLost);
         }
-        sqlx::query(
+        let metadata_updated = sqlx::query(
             "UPDATE memory_document_versions SET sync_status = 'stored', updated_at = ?              WHERE memory_id = ? AND version = ? AND content_hash = ?",
         )
         .bind(&now)
@@ -294,6 +294,9 @@ impl MemoryOutbox {
         .bind(&event.document.content_hash)
         .execute(&mut *transaction)
         .await?;
+        if metadata_updated.rows_affected() != 1 {
+            return Err(MemoryOutboxError::VersionConflict);
+        }
         transaction.commit().await?;
         Ok(())
     }
@@ -322,7 +325,7 @@ impl MemoryOutbox {
         let available_at = (now + ChronoDuration::seconds(delay_seconds)).to_rfc3339();
         let status = if dead { "dead_letter" } else { "pending" };
         let mut transaction = self.pool.begin().await?;
-        sqlx::query(
+        let updated = sqlx::query(
             "UPDATE memory_document_outbox SET status = ?, available_at = ?, lease_owner = NULL,              lease_until = NULL, last_error = ?, updated_at = ?              WHERE event_id = ? AND status = 'processing' AND lease_owner = ?",
         )
         .bind(status)
@@ -333,6 +336,9 @@ impl MemoryOutbox {
         .bind(worker_id)
         .execute(&mut *transaction)
         .await?;
+        if updated.rows_affected() != 1 {
+            return Err(MemoryOutboxError::LeaseLost);
+        }
         if dead {
             sqlx::query(
                 "UPDATE memory_document_versions SET sync_status = 'failed', updated_at = ?                  WHERE memory_id = (SELECT memory_id FROM memory_document_outbox WHERE event_id = ?)                  AND version = (SELECT version FROM memory_document_outbox WHERE event_id = ?)",
