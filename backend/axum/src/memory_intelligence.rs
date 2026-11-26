@@ -547,6 +547,10 @@ mod scoring_config_tests {
         let mut changed_threshold = baseline.clone();
         changed_threshold.relevant_threshold += 0.01;
         assert_ne!(baseline.effective_version(), changed_threshold.effective_version());
+
+        let mut changed_feedback_weight = baseline.clone();
+        changed_feedback_weight.feedback_weight = 0.75;
+        assert_ne!(baseline.effective_version(), changed_feedback_weight.effective_version());
     }
 
     #[test]
@@ -557,6 +561,10 @@ mod scoring_config_tests {
 
         let mut policy = QoinScoringConfig::default();
         policy.conditional_threshold = 0.9;
+        assert_eq!(policy.validate(), Err(VectorError::InvalidScoringConfig));
+
+        let mut policy = QoinScoringConfig::default();
+        policy.feedback_weight = 1.1;
         assert_eq!(policy.validate(), Err(VectorError::InvalidScoringConfig));
     }
 
