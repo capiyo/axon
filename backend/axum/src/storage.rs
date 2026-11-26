@@ -590,6 +590,14 @@ impl Storage for SqliteStorage {
         if changed.rows_affected() == 1 {
             let now = Utc::now().to_rfc3339();
             sqlx::query(
+                "UPDATE project_memberships SET revoked_at = ? WHERE user_id = ? AND project_id IN (SELECT id FROM projects WHERE workspace_id = ?) AND revoked_at IS NULL AND role != 'owner'",
+            )
+            .bind(&now)
+            .bind(target_user_id.to_string())
+            .bind(workspace_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query(
                 "INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, ?, ?, 'workspace.member_revoked', 'workspace', ?, ?, ?)",
             )
             .bind(Uuid::new_v4().to_string())
@@ -671,6 +679,7 @@ impl Storage for SqliteStorage {
             "SELECT p.id, p.workspace_id, p.name, p.created_by_user_id, p.created_at
              FROM projects p
              JOIN project_memberships m ON m.project_id = p.id
+             JOIN workspace_memberships w ON w.workspace_id = p.workspace_id AND w.user_id = m.user_id
              WHERE p.workspace_id = ? AND m.user_id = ? AND m.revoked_at IS NULL
              ORDER BY p.created_at ASC, p.id ASC",
         )
@@ -703,6 +712,7 @@ impl Storage for SqliteStorage {
         let exists: Option<i64> = sqlx::query_scalar(
             "SELECT 1 FROM projects p
              JOIN project_memberships m ON m.project_id = p.id
+             JOIN workspace_memberships w ON w.workspace_id = p.workspace_id AND w.user_id = m.user_id
              WHERE p.id = ? AND p.workspace_id = ? AND m.user_id = ? AND m.revoked_at IS NULL",
         )
         .bind(project_id.to_string())
