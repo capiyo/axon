@@ -31,7 +31,7 @@ Existing QKV and memory-intelligence tests remain part of the Rust suite. `memor
 - Verify `/ready` distinguishes SQLite readiness, MongoDB configured state, and MongoDB ping failure.
 - Verify workspace/task/agent scope isolation.
 - Verify a non-member cannot approve a proposed memory document.
-- Verify the combined session-context endpoint returns progressive SQLite memories and the exact MongoDB versions pinned to that same session, with QKV attention and Qoin score explanations.
+- Verify the combined session-context endpoint returns progressive SQLite memories and the exact MongoDB versions pinned to that same session, with QKV attention and Qoin score explanations; verify mismatched model versions require `query_text`.
 - Verify a session belonging to another agent cannot be used, and task reassignment fails closed.
 - Verify the document context byte budget omits whole documents and reports truncation.
 - Verify search results are budgeted by full serialized size and set `results_truncated` when candidates do not fit. Unit tests in `memory_routes.rs` cover both fitting and truncating document sets.
