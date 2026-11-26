@@ -36,3 +36,10 @@ Back up SQLite with a consistent SQLite backup procedure and MongoDB using its s
 ## Graceful shutdown
 
 The API signals the memory outbox worker during graceful shutdown and waits up to five seconds for it to finish its in-flight operation. Unclaimed work remains durable in SQLite and is eligible for recovery on the next process start. If the worker does not stop within the bounded wait, the process logs a warning; it does not mark pending events complete.
+
+
+## Readiness and reconciliation
+
+- `GET /health` is the liveness probe; it does not prove database readiness.
+- `GET /ready` checks SQLite and, when configured, MongoDB ping readiness. In explicit local SQLite-only mode, MongoDB is reported as not configured while overall readiness may still be true.
+- `GET /api/v1/workspaces/{workspace_id}/memory/reconciliation?limit=1000` returns a bounded, workspace-scoped, read-only comparison of SQLite authority and MongoDB versions. It reports missing, orphaned, invalid, and metadata-mismatched records plus outbox queue counts. It never repairs records or returns document content. Review the report and use an explicit audited repair procedure; automatic repair is not implemented.
