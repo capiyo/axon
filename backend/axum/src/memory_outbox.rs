@@ -1535,11 +1535,11 @@ mod tests {
         .unwrap();
 
         let visible = outbox
-            .list_authorized_document_refs(workspace_id, agent_id, None, 20)
+            .list_authorized_document_refs(workspace_id, agent_id, Uuid::nil(), None, None, 20)
             .await
             .unwrap();
         let hidden = outbox
-            .list_authorized_document_refs(workspace_id, Uuid::new_v4(), None, 20)
+            .list_authorized_document_refs(workspace_id, Uuid::new_v4(), Uuid::nil(), None, None, 20)
             .await
             .unwrap();
         assert_eq!(visible, vec![(document.memory_id, 1)]);
@@ -1972,21 +1972,21 @@ mod latest_version_search_tests {
         .unwrap();
 
         let refs = outbox.list_authorized_document_refs(
-            workspace_id, agent_id, None, 200,
+            workspace_id, agent_id, Uuid::nil(), None, None, 200,
         ).await.unwrap();
         assert_eq!(refs, vec![(first.memory_id, 2)]);
 
         let first_history_page = outbox.list_authorized_document_versions(
-            workspace_id, first.memory_id, agent_id, None, None, 1,
+            workspace_id, first.memory_id, agent_id, Uuid::nil(), None, None, None, 1,
         ).await.unwrap();
         assert_eq!(first_history_page.iter().map(|item| item.version).collect::<Vec<_>>(), vec![2]);
         let second_history_page = outbox.list_authorized_document_versions(
-            workspace_id, first.memory_id, agent_id, None,
+            workspace_id, first.memory_id, agent_id, Uuid::nil(), None, None,
             first_history_page.last().map(|item| item.version), 1,
         ).await.unwrap();
         assert_eq!(second_history_page.iter().map(|item| item.version).collect::<Vec<_>>(), vec![1]);
         let denied_history = outbox.list_authorized_document_versions(
-            workspace_id, first.memory_id, Uuid::new_v4(), None, None, 100,
+            workspace_id, first.memory_id, Uuid::new_v4(), Uuid::nil(), None, None, None, 100,
         ).await.unwrap();
         assert!(denied_history.is_empty());
 
