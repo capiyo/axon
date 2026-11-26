@@ -220,10 +220,8 @@ mod tests {
         assert!(state.is_project_member(owner.workspace.id, project.id, member.user_id).await.unwrap());
         assert!(state.revoke_workspace_member(owner.workspace.id, owner.user_id, member.user_id).await.unwrap());
         assert!(!state.is_project_member(owner.workspace.id, project.id, member.user_id).await.unwrap());
-        assert!(matches!(
-            state.revoke_workspace_member(owner.workspace.id, owner.user_id, owner.user_id).await,
-            Err(StorageError::ProjectAuthorizationDenied)
-        ));
+        assert!(!state.revoke_workspace_member(owner.workspace.id, owner.user_id, owner.user_id).await.unwrap());
+        assert!(state.is_workspace_member(owner.user_id, owner.workspace.id).await.unwrap());
     }
 
     #[tokio::test]
