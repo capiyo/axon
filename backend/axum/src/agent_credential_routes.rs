@@ -116,10 +116,11 @@ mod tests {
         let agent = Agent {
             id: Uuid::new_v4(),
             workspace_id: account.workspace.id,
-            name: "Credential test agent".into(),
-            description: "Agent credential integration test".into(),
-            created_at: Utc::now(),
             created_by_user_id: Some(account.user_id),
+            display_name: "Credential test agent".into(),
+            provider: "test".into(),
+            connection_mode: crate::model::ConnectionMode::Manual,
+            created_at: Utc::now(),
         };
         storage.apply(crate::storage::StorageMutation {
             entity: crate::storage::StoredEntity::Agent(agent.clone()),
@@ -140,7 +141,7 @@ mod tests {
         let issued = storage.issue_agent_credential(account.workspace.id, agent.id, account.user_id).await.unwrap();
         let stored_hash: String = sqlx::query_scalar("SELECT secret_hash FROM agent_credentials WHERE id = ?")
             .bind(issued.credential_id.to_string())
-            .fetch_one(storage.pool())
+            .fetch_one(storage.test_pool())
             .await
             .unwrap();
         assert!(!stored_hash.is_empty());
