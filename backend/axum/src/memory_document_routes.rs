@@ -913,8 +913,9 @@ pub async fn search_agent_memory_documents(
         let mut failure = normalized_metadata_score(&document, "failure");
         let evidence = normalized_metadata_score(&document, "evidence");
         if let Some((positive_signal, negative_signal)) = feedback_signals.get(&(memory_id, version)) {
-            outcome = (outcome + *positive_signal) / 2.0;
-            failure = (failure + *negative_signal) / 2.0;
+            let feedback_weight = state.qoin_memory_scoring.feedback_weight as f32;
+            outcome = outcome * (1.0 - feedback_weight) + *positive_signal * feedback_weight;
+            failure = failure * (1.0 - feedback_weight) + *negative_signal * feedback_weight;
         }
         let source_sequence = i64::try_from(document.source_event_sequence)
             .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Invalid memory source sequence."))?;
