@@ -647,6 +647,17 @@ impl Storage for SqliteStorage {
         owner_user_id: Uuid,
     ) -> Result<Option<IssuedAgentCredential>, StorageError> {
         let mut tx = self.pool.begin().await?;
+        let owner_is_member: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(owner_user_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if owner_is_member.is_none() {
+            tx.rollback().await?;
+            return Ok(None);
+        }
         let owner_is_agent_owner: Option<String> = sqlx::query_scalar(
             "SELECT payload_json FROM entities WHERE kind = 'agent' AND id = ? AND workspace_id = ?",
         )
@@ -717,6 +728,29 @@ impl Storage for SqliteStorage {
     ) -> Result<bool, StorageError> {
         let now = Utc::now().to_rfc3339();
         let mut tx = self.pool.begin().await?;
+        let owner_is_member: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(owner_user_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        let agent_payload: Option<String> = sqlx::query_scalar(
+            "SELECT payload_json FROM entities WHERE kind = 'agent' AND id = ? AND workspace_id = ?",
+        )
+        .bind(agent_id.to_string())
+        .bind(workspace_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        let is_owner = agent_payload
+            .map(|payload| serde_json::from_str::<StoredEntity>(&payload))
+            .transpose()?
+            .is_some_and(|entity| matches!(entity, StoredEntity::Agent(ref agent)
+                if agent.created_by_user_id == Some(owner_user_id)));
+        if owner_is_member.is_none() || !is_owner {
+            tx.rollback().await?;
+            return Ok(false);
+        }
         let revoked = sqlx::query(
             "UPDATE agent_credentials SET revoked_at = ? WHERE id = ? AND workspace_id = ? AND agent_id = ? AND owner_user_id = ? AND revoked_at IS NULL",
         )
