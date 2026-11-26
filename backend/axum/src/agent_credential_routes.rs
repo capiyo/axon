@@ -128,11 +128,11 @@ mod tests {
             audit: crate::audit::AuditEvent {
                 sequence: 0,
                 event_id: Uuid::new_v4(),
-                workspace_id: account.workspace.id,
+                workspace_id: Some(account.workspace.id),
                 actor: format!("human:{}", account.user_id),
                 event_type: "agent.registered".into(),
                 entity_type: "agent".into(),
-                entity_id: agent.id,
+                entity_id: agent.id.to_string(),
                 occurred_at: Utc::now(),
                 metadata: serde_json::json!({}),
             },
