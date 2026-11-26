@@ -815,6 +815,13 @@ pub async fn search_agent_memory_documents(
             tracing::error!(error = %error, "memory document candidate lookup failed");
             api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document search failed.")
         })?;
+    let feedback_signals = outbox
+        .feedback_signals(workspace_id, &refs)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "memory retrieval feedback lookup failed");
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory feedback could not be loaded.")
+        })?;
 
     if input.query.trim().is_empty() || input.query.len() > 4096 {
         return Err(api_error(StatusCode::BAD_REQUEST, "query must contain 1–4096 bytes."));
@@ -902,8 +909,13 @@ pub async fn search_agent_memory_documents(
         }
         let key_values = key.values.clone();
         let dependencies = metadata_dependencies(&document);
-        let outcome = normalized_metadata_score(&document, "outcome");
+        let mut outcome = normalized_metadata_score(&document, "outcome");
+        let mut failure = normalized_metadata_score(&document, "failure");
         let evidence = normalized_metadata_score(&document, "evidence");
+        if let Some((positive_signal, negative_signal)) = feedback_signals.get(&(memory_id, version)) {
+            outcome = (outcome + *positive_signal) / 2.0;
+            failure = (failure + *negative_signal) / 2.0;
+        }
         let source_sequence = i64::try_from(document.source_event_sequence)
             .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Invalid memory source sequence."))?;
         attention_candidates.push(AttentionMemory {
@@ -937,7 +949,7 @@ pub async fn search_agent_memory_documents(
                 semantic: key_values,
                 context: normalized_metadata_score(&document, "context"),
                 outcome,
-                failure: normalized_metadata_score(&document, "failure"),
+                failure,
                 evidence,
             },
             tags: document.tags.iter().cloned().collect(),
