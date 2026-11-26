@@ -26,7 +26,7 @@ Do not delete SQLite outbox rows manually to resolve delivery failures.
 - Retries use bounded exponential backoff.
 - Eight failed attempts move an event to `dead_letter`.
 - Each document creation records an append-only SQLite audit event; its sequence is copied into document metadata and the MongoDB payload.
-- The current implementation does not yet provide a supported operator retry/reconciliation command for dead-letter events.
+- A workspace-authenticated recovery endpoint is available at `POST /api/v1/workspaces/{workspace_id}/memory/documents/{memory_id}/{version}/retry-sync`. It only requeues a dead-letter event with a retained valid payload, resets its attempt counter, changes SQLite synchronization state back to pending, and records an audit event in one SQLite transaction. The current role model has no administrator capability, so this endpoint is currently available to workspace members; restrict it to a dedicated operator role when role-based permissions are added.
 
 ## Backups
 
