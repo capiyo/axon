@@ -535,7 +535,8 @@ impl MemoryOutbox {
             return Ok(false);
         }
         let allowed_transition = match action {
-            MemoryLifecycleAction::Archive | MemoryLifecycleAction::Delete => lifecycle_status == "approved",
+            MemoryLifecycleAction::Archive => lifecycle_status == "approved",
+            MemoryLifecycleAction::Delete => matches!(lifecycle_status.as_str(), "proposed" | "approved" | "archived"),
             MemoryLifecycleAction::Restore => lifecycle_status == "archived",
         };
         if !allowed_transition {
