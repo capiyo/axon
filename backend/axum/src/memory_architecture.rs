@@ -459,10 +459,14 @@ impl MemoryEpochCoordinator {
              (epoch_id, workspace_id, memory_id, document_version, content_hash, scope, project_id, \
               task_id, owner_id, source_event_sequence, qkv_version, qoin_vector_version, \
               qoin_scoring_version, snapshot_at) \
-             SELECT ?, workspace_id, memory_id, version, content_hash, scope, project_id, task_id, \
-                    owner_id, source_event_sequence, qkv_version, qoin_vector_version, ?, ? \
-             FROM memory_document_versions WHERE workspace_id = ? AND lifecycle_status = 'approved' \
-                    AND sync_status IN ('stored', 'indexed')",
+             SELECT ?, v.workspace_id, v.memory_id, v.version, v.content_hash, v.scope, v.project_id, v.task_id, \
+                    v.owner_id, v.source_event_sequence, v.qkv_version, v.qoin_vector_version, ?, ? \
+             FROM memory_document_versions v WHERE v.workspace_id = ? AND v.lifecycle_status = 'approved' \
+                    AND v.sync_status IN ('stored', 'indexed') \
+                    AND NOT EXISTS (SELECT 1 FROM memory_document_versions newer \
+                        WHERE newer.workspace_id = v.workspace_id AND newer.memory_id = v.memory_id \
+                        AND newer.version > v.version AND newer.lifecycle_status = 'approved' \
+                        AND newer.sync_status IN ('stored', 'indexed'))",
         )
         .bind(id.to_string())
         .bind(&self.qoin_scoring_version)
