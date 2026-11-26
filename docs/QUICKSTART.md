@@ -151,7 +151,7 @@ curl -X POST "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/agents/$AGEN
   -d '{"query":"immutable memory snapshots","limit":10,"tags":["architecture"]}'
 ```
 
-The response identifies its retrieval mode as `deterministic_lexical_qkv_v1`. This is a stable hashed lexical representation, not a neural embedding. Results include QKV attention and Qoin score breakdowns, expose both algorithm versions, and are bounded to a 64 KiB content budget.
+The response identifies its retrieval mode as `deterministic_lexical_qkv_v1`. This is a stable hashed lexical representation, not a neural embedding. Results include QKV attention and Qoin score breakdowns, expose both algorithm versions, and are bounded to a 64 KiB serialized-result budget with an explicit `results_truncated` flag.
 
 
 ## 7. Memory operations
