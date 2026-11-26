@@ -3,7 +3,7 @@
 //! Qoin owns semantic vector production and vector-space conventions. Axon owns
 //! authorization, QKV attention, event provenance, epoch publication, Pareto
 //! context selection, and task-local progressive retrieval.
-use crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION;
+use crate::memory_intelligence::QoinScoringConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use thiserror::Error;
@@ -361,7 +361,7 @@ impl MemoryEpochCoordinator {
     pub fn new(pool: SqlitePool) -> Self {
         Self {
             pool,
-            qoin_scoring_version: QOIN_MEMORY_SCORING_VERSION.to_owned(),
+            qoin_scoring_version: QoinScoringConfig::default().effective_version(),
         }
     }
 
