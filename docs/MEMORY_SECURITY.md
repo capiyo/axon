@@ -27,3 +27,10 @@ The workspace reconciliation endpoint is read-only and returns identifiers/statu
 ## Project and workspace membership
 
 Projects and memberships are persisted in SQLite. A project is bound to a workspace and its creator must be a workspace owner. Project members must also be active workspace members. The API exposes workspace-member addition/revocation and project creation/listing/member grants/revocation. Only workspace owners can manage workspace membership; project owners and admins can grant member/viewer access, but only project owners can grant owner/admin roles. Existing project owners cannot be demoted or revoked through these routes. Revoking workspace membership also revokes project memberships in that workspace. Memory authorization checks the current membership state on every project-scoped retrieval and approval; an immutable epoch pin does not bypass a later revocation.
+
+
+## Lifecycle authorization
+
+Archive, restore, and logical deletion require active workspace membership. Project-shared transitions additionally require active project membership; agent-private transitions require the authenticated user to own the referenced agent in the authoritative SQLite entity store. The transition checks the requested version is the latest synchronized version, validates the exact MongoDB document against SQLite metadata, and creates a new version through the transactional outbox. Tombstones hide older approved versions from normal retrieval without rewriting existing epoch pins. Current authorization is re-evaluated when historical session context is hydrated.
+
+The delete endpoint is a logical tombstone only. It does not physically remove MongoDB content, outbox history, or immutable epoch references.
