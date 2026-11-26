@@ -68,7 +68,7 @@
 - [x] Independent hashed agent credentials with 90-day expiry, atomic rotation/revocation, current-owner checks, and middleware binding to a single agent's memory routes.
 - [x] Added audited dead-letter recovery for valid retained outbox payloads.
 - [x] Added bounded, workspace-scoped read-only SQLite/MongoDB reconciliation reports.
-- [ ] Automatic reconciliation repair, searchable vector index rebuild, neural embeddings, project-membership authorization, independent cryptographic agent-principal authentication, legacy agent ownership backfill, and full MongoDB integration/security tests remain outstanding.
+- [ ] Automatic reconciliation repair, searchable vector index rebuild, neural embeddings, scope promotion, physical deletion/retention purge, general-purpose capability grants for all resource families, legacy agent ownership backfill, and full MongoDB integration/security tests remain outstanding.
 
 ### Frontend and design
 - [x] React + TypeScript + Vite web workspace.
