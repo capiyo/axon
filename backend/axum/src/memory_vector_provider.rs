@@ -5,6 +5,7 @@
 //! changing the QKV/Qoin ranking pipeline or mixing vector model versions.
 
 use crate::memory_architecture::QoinVector;
+use async_trait::async_trait;
 use thiserror::Error;
 
 pub const LEXICAL_MEMORY_VECTOR_VERSION: &str = "axon-lexical-qkv-v1";
@@ -14,22 +15,30 @@ const DIMENSION: usize = 64;
 pub enum MemoryVectorProviderError {
     #[error("memory query contains no searchable terms")]
     EmptyQuery,
+    #[error("configured memory embedding provider is unavailable")]
+    ProviderUnavailable,
+    #[error("memory embedding provider returned an invalid vector")]
+    InvalidVector,
+    #[error("memory embedding provider returned an incompatible model version")]
+    ModelVersionMismatch,
 }
 
+#[async_trait]
 pub trait MemoryVectorProvider: Send + Sync {
     fn model_version(&self) -> &'static str;
-    fn key_for_text(&self, text: &str) -> Result<QoinVector, MemoryVectorProviderError>;
+    async fn key_for_text(&self, text: &str) -> Result<QoinVector, MemoryVectorProviderError>;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LexicalMemoryVectorProvider;
 
+#[async_trait]
 impl MemoryVectorProvider for LexicalMemoryVectorProvider {
     fn model_version(&self) -> &'static str {
         LEXICAL_MEMORY_VECTOR_VERSION
     }
 
-    fn key_for_text(&self, text: &str) -> Result<QoinVector, MemoryVectorProviderError> {
+    async fn key_for_text(&self, text: &str) -> Result<QoinVector, MemoryVectorProviderError> {
         let mut values = vec![0.0_f32; DIMENSION];
         for token in text
             .split(|character: char| !character.is_alphanumeric())
@@ -69,10 +78,10 @@ impl MemoryVectorProvider for LexicalMemoryVectorProvider {
 mod tests {
     use super::*;
 
-    #[test]
-    fn lexical_keys_are_stable_and_normalized() {
+    #[tokio::test]
+    async fn lexical_keys_are_stable_and_normalized() {
         let provider = LexicalMemoryVectorProvider;
-        let first = provider.key_for_text("Axon memory QKV retrieval").unwrap();
+        let first = provider.key_for_text("Axon memory QKV retrieval").await.unwrap();
         let second = provider.key_for_text("Axon memory QKV retrieval").unwrap();
         assert_eq!(first.values, second.values);
         assert_eq!(first.values.len(), DIMENSION);
@@ -86,20 +95,20 @@ mod tests {
         assert!((norm - 1.0).abs() < 1e-5);
     }
 
-    #[test]
-    fn punctuation_only_text_is_rejected() {
+    #[tokio::test]
+    async fn punctuation_only_text_is_rejected() {
         let provider = LexicalMemoryVectorProvider;
         assert_eq!(
-            provider.key_for_text("... !!! ---").unwrap_err(),
+            provider.key_for_text("... !!! ---").await.unwrap_err(),
             MemoryVectorProviderError::EmptyQuery
         );
     }
 
-    #[test]
-    fn unrelated_text_produces_different_keys() {
+    #[tokio::test]
+    async fn unrelated_text_produces_different_keys() {
         let provider = LexicalMemoryVectorProvider;
-        let memory = provider.key_for_text("workspace memory document retrieval").unwrap();
-        let market = provider.key_for_text("volatility liquidity orderbook futures").unwrap();
+        let memory = provider.key_for_text("workspace memory document retrieval").await.unwrap();
+        let market = provider.key_for_text("volatility liquidity orderbook futures").await.unwrap();
         assert_ne!(memory.values, market.values);
     }
 }
