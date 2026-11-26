@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use futures_util::TryStreamExt;
 use mongodb::{
     bson::doc,
-    options::IndexOptions,
+    options::{ClientOptions, IndexOptions},
     Client, Collection, Database, IndexModel,
 };
 use serde::{Deserialize, Serialize};
@@ -201,14 +201,40 @@ impl MongoMemoryDocumentRepository {
         database_name: &str,
         collection_name: &str,
     ) -> Result<Self, MemoryDocumentError> {
+        Self::connect_with_options(
+            uri,
+            database_name,
+            collection_name,
+            std::time::Duration::from_secs(10),
+            std::time::Duration::from_secs(5),
+            20,
+        )
+        .await
+    }
+
+    pub async fn connect_with_options(
+        uri: &str,
+        database_name: &str,
+        collection_name: &str,
+        connect_timeout: std::time::Duration,
+        server_selection_timeout: std::time::Duration,
+        max_pool_size: u32,
+    ) -> Result<Self, MemoryDocumentError> {
         if uri.trim().is_empty()
             || database_name.trim().is_empty()
             || collection_name.trim().is_empty()
+            || connect_timeout.is_zero()
+            || server_selection_timeout.is_zero()
+            || max_pool_size == 0
         {
             return Err(MemoryDocumentError::InvalidDocument);
         }
 
-        let client = Client::with_uri_str(uri).await?;
+        let mut options = ClientOptions::parse(uri).await?;
+        options.connect_timeout = Some(connect_timeout);
+        options.server_selection_timeout = Some(server_selection_timeout);
+        options.max_pool_size = Some(max_pool_size);
+        let client = Client::with_options(options)?;
         let database = client.database(database_name);
         database.run_command(doc! { "ping": 1 }, None).await?;
         let collection = database.collection::<MemoryDocument>(collection_name);
