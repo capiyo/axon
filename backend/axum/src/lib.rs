@@ -99,6 +99,10 @@ pub fn app(state: AppState) -> Router {
             get(memory_document_routes::get_agent_memory_document),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-documents/:memory_id/versions",
+            get(memory_document_routes::get_agent_memory_document_versions),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-documents/search",
             post(memory_document_routes::search_agent_memory_documents),
         )
