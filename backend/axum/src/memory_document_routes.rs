@@ -253,7 +253,6 @@ pub async fn create_memory_document(
 #[derive(Debug, Deserialize)]
 pub struct MemoryDocumentTaskQuery {
     pub task_id: Option<Uuid>,
-    pub project_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
