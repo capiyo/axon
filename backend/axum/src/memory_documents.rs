@@ -159,6 +159,8 @@ pub enum MemoryDocumentError {
     ContentHashMismatch,
     #[error("an immutable memory version already exists with different content")]
     VersionConflict,
+    #[error("workspace document enumeration is not supported by this repository")]
+    ListingUnavailable,
 }
 
 #[async_trait]
@@ -182,9 +184,11 @@ pub trait MemoryDocumentRepository: Send + Sync {
     /// contain content and must remain inside trusted service code.
     async fn list_workspace_documents(
         &self,
-        workspace_id: Uuid,
-        limit: usize,
-    ) -> Result<Vec<MemoryDocument>, MemoryDocumentError>;
+        _workspace_id: Uuid,
+        _limit: usize,
+    ) -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
+        Err(MemoryDocumentError::ListingUnavailable)
+    }
 
     async fn verify_version(
         &self,
