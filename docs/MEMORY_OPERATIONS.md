@@ -68,3 +68,13 @@ The target user must already have an Axon account and be an active member of the
 - `DELETE /api/v1/workspaces/{workspace_id}/memory/documents/{memory_id}/{version}` creates a logical deletion tombstone.
 
 These operations create new immutable versions through the SQLite outbox. They do not rewrite existing MongoDB versions or immutable epoch items. Tombstones suppress the memory from normal search and newly published epochs; existing sessions can still resolve their pinned historical version if the caller remains authorized. Logical deletion does not physically purge content from MongoDB. Do not treat it as a retention or legal-deletion workflow.
+
+
+## Agent credentials
+
+Credential issuance, rotation, and revocation are human-owner operations:
+- `POST /api/v1/workspaces/{workspace_id}/agents/{agent_id}/credentials`
+- `POST /api/v1/workspaces/{workspace_id}/agents/{agent_id}/credentials/{credential_id}/rotate`
+- `DELETE /api/v1/workspaces/{workspace_id}/agents/{agent_id}/credentials/{credential_id}`
+
+The issue/rotation response contains the bearer token once. Deliver it to the agent through a secure secret channel; do not put it in source control, logs, issue trackers, or ordinary telemetry. Axon stores only a SHA-256 hash. Credentials expire after 90 days. Rotation revokes the previous credential and creates its replacement atomically. A credential is accepted only on its bound agent's memory-document, memory-session, and memory-context routes; it cannot be used for another agent or for credential-management/workspace routes.
