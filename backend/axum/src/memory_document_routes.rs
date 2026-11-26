@@ -426,20 +426,22 @@ pub async fn get_agent_memory_document_versions(
         api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
     })?;
     let limit = query.limit.clamp(1, 100);
-    let references = outbox
+    let mut references = outbox
         .list_authorized_document_versions(
             workspace_id,
             memory_id,
             agent_id,
             query.task_id,
             query.before_version,
-            limit,
+            limit + 1,
         )
         .await
         .map_err(|error| {
             tracing::error!(error = %error, "memory version history lookup failed");
             api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory version history could not be retrieved.")
         })?;
+    let has_more = references.len() > limit;
+    references.truncate(limit);
 
     let mut versions = Vec::with_capacity(references.len());
     for reference in &references {
@@ -477,7 +479,7 @@ pub async fn get_agent_memory_document_versions(
             updated_at: document.updated_at,
         });
     }
-    let next_before_version = if references.len() == limit {
+    let next_before_version = if has_more {
         references.last().map(|reference| reference.version)
     } else {
         None
