@@ -57,7 +57,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 13. Added audited dead-letter retry for valid retained payloads, with SQLite-only transaction semantics and tests for invalid payload refusal.
 14. Added bounded, workspace-scoped, read-only SQLite/MongoDB reconciliation and an authenticated report endpoint; no automatic repair is performed.
 15. Added `/ready` to report SQLite readiness and optional/configured MongoDB readiness separately from `/health` liveness.
-16. Added tests for config policy validation, scoring-weight changes, reconciliation mismatches, dead-letter recovery, and public readiness.
+16. Added tests for config policy validation, scoring-weight changes, reconciliation mismatches, dead-letter recovery, public readiness, legacy Agent deserialization, and cross-member agent-owner rejection.
 17. Updated architecture, QKV, MongoDB, testing, security, operations, quickstart, data-model, and repository-state documentation. Added bounded graceful-shutdown waiting for the outbox worker.
 
 ## 5. Remaining gaps
@@ -98,7 +98,7 @@ A MongoDB-enabled integration run must also exercise outbox retries/restart, has
 - `backend/axum/src/memory_intelligence.rs`
 - `backend/axum/src/memory_documents.rs`
 - `backend/axum/src/memory_outbox.rs`
-- `backend/axum/src/memory_vector_provider.rs`
+- `backend/axum/src/memory_vector_provider.rs`\n- `backend/axum/src/config.rs`\n- `backend/axum/src/model.rs`\n- `backend/axum/src/auth_middleware.rs`\n- `backend/axum/src/auth_middleware_tests.rs`\n- `backend/axum/src/routes.rs`
 - `backend/axum/src/memory_document_routes.rs`
 - `backend/axum/src/qoin_vectors.rs`
 - `backend/axum/src/chat_memory.rs`
