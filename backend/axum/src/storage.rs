@@ -317,6 +317,11 @@ impl SqliteStorage {
     pub fn shared(self) -> Arc<dyn Storage> {
         Arc::new(self)
     }
+
+    #[cfg(test)]
+    pub(crate) fn test_pool(&self) -> &SqlitePool {
+        &self.pool
+    }
 }
 
 #[async_trait]
