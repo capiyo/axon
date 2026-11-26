@@ -14,7 +14,7 @@ Axon's memory-ranking logic is distinct from Qoin's financial-market strategy se
 - Recency.
 - Tag overlap.
 
-It applies explicit normalized components under the version identifier `axon-qoin-memory-v1`, ranks deterministically, filters by workspace/status/scope, and returns explanations.
+It applies explicit normalized components, ranks deterministically, filters by workspace/status/scope, and returns explanations. The versioned `QoinScoringConfig` exposes the scoring version, component weights, relevance thresholds, recency half-life, and explanation thresholds. Its exact configuration is included in each memory-document search response.
 
 ## Existing attention ranking
 
@@ -24,9 +24,9 @@ It applies explicit normalized components under the version identifier `axon-qoi
 
 `qoin_vectors.rs` calls a separate Qoin service for market vectors, including event-time historical lookups. Market strategy vectors and trading actions must not become memory relevance scores by accident.
 
-## Remaining work
+## Default scoring policy\n\nThe default `axon-qoin-memory-v1` policy uses normalized components with weights: semantic 0.30, context 0.15, dependency 0.18, outcome 0.10, failure 0.12, evidence 0.10, recency 0.05, and tags 0.08. The sum (1.08) is normalized during scoring. These are explicit baseline coefficients, not trained parameters. Operators can supply a JSON `QoinScoringConfig` through `AXON_QOIN_MEMORY_SCORING_CONFIG`; invalid weights, thresholds, or versions stop startup.\n\n## Remaining work
 
-- Version the memory score configuration.
+- Evaluate the versioned score configuration against a labelled memory-retrieval dataset.
 - Add evidence/source reliability and contradiction/duplication features only when their semantics and normalization are defined.
 - Expose score breakdowns consistently across document retrieval.
 - Evaluate ranking against a labelled memory-retrieval dataset.
