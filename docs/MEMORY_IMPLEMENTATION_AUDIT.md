@@ -98,7 +98,12 @@ A MongoDB-enabled integration run must also exercise outbox retries/restart, has
 - `backend/axum/src/memory_intelligence.rs`
 - `backend/axum/src/memory_documents.rs`
 - `backend/axum/src/memory_outbox.rs`
-- `backend/axum/src/memory_vector_provider.rs`\n- `backend/axum/src/config.rs`\n- `backend/axum/src/model.rs`\n- `backend/axum/src/auth_middleware.rs`\n- `backend/axum/src/auth_middleware_tests.rs`\n- `backend/axum/src/routes.rs`
+- `backend/axum/src/memory_vector_provider.rs`
+- `backend/axum/src/config.rs`
+- `backend/axum/src/model.rs`
+- `backend/axum/src/auth_middleware.rs`
+- `backend/axum/src/auth_middleware_tests.rs`
+- `backend/axum/src/routes.rs`
 - `backend/axum/src/memory_document_routes.rs`
 - `backend/axum/src/qoin_vectors.rs`
 - `backend/axum/src/chat_memory.rs`
