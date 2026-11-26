@@ -44,7 +44,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 
 1. Added exact-version document hydration from the SQLite immutable epoch snapshot.
 2. Added session-bound hydration that resolves the epoch from `agent_memory_sessions`; callers cannot select an arbitrary epoch.
-3. Added authenticated session-document retrieval and a combined session-context endpoint that returns progressive SQLite retrieval and MongoDB documents pinned to the same session epoch.
+3. Added authenticated session-document retrieval and a combined session-context endpoint that returns progressive SQLite retrieval and the exact MongoDB documents pinned to the same session epoch, ranked through QKV attention and Qoin.
 4. Enforced workspace membership for document approval and retrieval, plus agent/session association, task assignment, pinned visibility scope, authoritative SQLite metadata, MongoDB version identity, QKV version, and SHA-256 integrity before returning document values. Agent identity is still path-selected rather than cryptographically authenticated; see remaining security gaps.
 5. Bounded serialized MongoDB session document context to 256 KiB and complete serialized QKV/Qoin search results to 64 KiB; whole documents/results are omitted rather than truncated, and responses report truncation.
 6. New document creation persists deterministic lexical QKV keys and model versions in MongoDB `key_metadata`.
