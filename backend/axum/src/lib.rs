@@ -92,6 +92,18 @@ pub fn app(state: AppState) -> Router {
             post(memory_document_routes::approve_memory_document),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/memory/documents/:memory_id/:version/archive",
+            post(memory_document_routes::archive_memory_document),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memory/documents/:memory_id/:version/restore",
+            post(memory_document_routes::restore_memory_document),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memory/documents/:memory_id/:version",
+            delete(memory_document_routes::delete_memory_document),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/memory/documents/:memory_id/:version/retry-sync",
             post(memory_document_routes::retry_memory_document_sync),
         )
