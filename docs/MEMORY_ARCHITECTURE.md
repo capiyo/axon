@@ -38,7 +38,7 @@ The document schema supports:
 - `project_shared`
 - `workspace_shared`
 
-The current create endpoint enables workspace-shared, task-shared, and agent-private scopes. Project-shared creation is rejected because the current repository does not yet have a persisted project-membership authorization model. This is intentional fail-closed behavior.
+Project membership is now persisted in SQLite. Projects are created by workspace owners; workspace owners can add/revoke workspace members; project owners/admins can add project members and viewers, while only project owners can grant elevated project roles. Project owners cannot be demoted or revoked through the membership API. Project-shared memory creation requires a project ID and active membership. Search, direct retrieval, version history, approval, and immutable session hydration re-check current project membership against SQLite. Epochs may pin project-scoped versions, but a revoked member cannot retrieve them. Scope promotion between existing documents is not yet implemented.
 
 ## Production gates
 
@@ -46,7 +46,6 @@ Before claiming end-to-end multi-agent memory completion, implement and test:
 - A neural embedding-provider implementation behind the existing `MemoryVectorProvider` abstraction, with model/version compatibility checks.
 - A separately searchable precomputed vector index and safe index rebuild.
 - Explicit, audited repair workflows based on the new read-only reconciliation report.
-- Persisted project-membership authorization.
 - Cryptographic agent-principal authentication; current routes bind agent IDs to their registering Firebase user but do not authenticate the agent process independently.
 - Agent/client consumers that use the combined session-context endpoint; no provider-backed agent execution runtime exists yet.
 - Real MongoDB outage, restart, and cross-scope security tests.
