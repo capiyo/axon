@@ -26,16 +26,16 @@ It applies explicit normalized components, ranks deterministically, filters by w
 
 ## Default scoring policy
 
-The default `axon-qoin-memory-v1` policy uses normalized components with weights: semantic 0.30, context 0.15, dependency 0.18, outcome 0.10, failure 0.12, evidence 0.10, recency 0.05, and tags 0.08. The sum (1.08) is normalized during scoring. These are explicit baseline coefficients, not trained parameters. Operators can supply a JSON `QoinScoringConfig` through `AXON_QOIN_MEMORY_SCORING_CONFIG`; invalid weights, thresholds, or versions stop startup.
+The default `axon-qoin-memory-v2` policy uses normalized components with weights: semantic 0.30, context 0.15, dependency 0.18, outcome 0.10, failure 0.12, evidence 0.10, recency 0.05, and tags 0.08. The sum (1.08) is normalized during scoring. These are explicit baseline coefficients, not trained parameters. Operators can supply a JSON `QoinScoringConfig` through `AXON_QOIN_MEMORY_SCORING_CONFIG`; invalid weights, thresholds, or versions stop startup.
 
 ## Remaining work
 
 - Add evidence/source reliability and contradiction/duplication features only when their semantics and normalization are defined.
 - Evaluate the versioned score configuration against a labelled memory-retrieval dataset.
 - The document search endpoint applies the configured Qoin score decomposition after QKV candidate attention and returns score explanations plus the exact scoring configuration.
-- Record retrieval feedback without mutating immutable historical epochs.
+- Extend the feedback-derived outcome/failure signals with source reliability, explicit contradiction/duplication and reuse-frequency features after defining their semantics and validating them against a labelled dataset.
 
 
 ## Baseline limitations
 
-The shipped deterministic baseline scores semantic-vector similarity, context, dependency overlap, outcome alignment, failure signal, evidence strength, recency, and tags, with component explanations. It does not yet model source reliability, reuse frequency, explicit contradiction detection, duplication penalties, or persisted retrieval-outcome feedback. Those features require defined provenance/feedback data and labelled evaluation; they are not simulated by placeholder coefficients.
+The shipped deterministic baseline scores semantic-vector similarity, context, dependency overlap, outcome alignment, failure signal, evidence strength, recency, and tags, with component explanations. It now incorporates persisted, session-pinned feedback (`helpful`, `selected`, `reused`, `irrelevant`, `contradicted`, and `incorrect`) into outcome/failure signals using the versioned `feedback_weight`. Feedback is stored against exact memory versions and cannot rewrite historical epoch pins. It does not yet model source reliability, explicit contradiction detection, duplication penalties, or reuse-frequency beyond the explicit `reused` feedback event. Those additional features require labelled evaluation; they are not simulated by placeholder coefficients.
