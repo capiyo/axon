@@ -1905,6 +1905,62 @@ mod epoch_document_tests {
     }
 
     #[tokio::test]
+    async fn project_scoped_memory_requires_active_project_membership_for_search_and_direct_reads() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let owner = storage.ensure_firebase_user("axon-test", "project-memory-owner").await.unwrap();
+        let member = storage.ensure_firebase_user("axon-test", "project-memory-member").await.unwrap();
+        storage.add_workspace_member(owner.workspace.id, owner.user_id, member.user_id).await.unwrap();
+        let project = storage.create_project_for_user(owner.workspace.id, owner.user_id, "Project memory".into()).await.unwrap();
+        storage.set_project_member(
+            owner.workspace.id, project.id, owner.user_id, member.user_id, crate::model::ProjectRole::Member,
+        ).await.unwrap();
+
+        let outbox = storage.memory_outbox();
+        let repository = FakeDocumentRepository::default();
+        let agent_id = Uuid::new_v4();
+        let mut document = super::tests::document(owner.workspace.id, agent_id);
+        document.scope = "project_shared".into();
+        document.project_id = Some(project.id);
+        document.owner_id = None;
+        document.status = "proposed".into();
+        outbox.enqueue(&mut document, owner.user_id).await.unwrap();
+        repository.put_version(document.clone()).await.unwrap();
+        assert!(outbox.approve(owner.workspace.id, document.memory_id, 1, owner.user_id).await.unwrap());
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+
+        let visible = outbox.list_authorized_document_refs(
+            owner.workspace.id, agent_id, member.user_id, None, Some(project.id), 20,
+        ).await.unwrap();
+        assert_eq!(visible, vec![(document.memory_id, 1)]);
+        let without_project = outbox.list_authorized_document_refs(
+            owner.workspace.id, agent_id, member.user_id, None, None, 20,
+        ).await.unwrap();
+        assert!(without_project.is_empty());
+        let outsider = outbox.list_authorized_document_refs(
+            owner.workspace.id, agent_id, Uuid::new_v4(), None, Some(project.id), 20,
+        ).await.unwrap();
+        assert!(outsider.is_empty());
+
+        let direct = outbox.get_authorized_document(
+            &repository, owner.workspace.id, document.memory_id, 1, agent_id, member.user_id, None,
+        ).await.unwrap();
+        assert!(direct.is_some());
+        assert!(storage.revoke_project_member(
+            owner.workspace.id, project.id, owner.user_id, member.user_id,
+        ).await.unwrap());
+        let revoked = outbox.get_authorized_document(
+            &repository, owner.workspace.id, document.memory_id, 1, agent_id, member.user_id, None,
+        ).await.unwrap();
+        assert!(revoked.is_none());
+    }
+
+    #[tokio::test]
     async fn retrieval_feedback_is_session_pinned_authorized_and_audited() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let account = storage.ensure_firebase_user("axon-test", "feedback-owner").await.unwrap();
