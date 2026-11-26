@@ -45,7 +45,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 1. Added exact-version document hydration from the SQLite immutable epoch snapshot.
 2. Added session-bound hydration that resolves the epoch from `agent_memory_sessions`; callers cannot select an arbitrary epoch.
 3. Added authenticated session-document retrieval and a combined session-context endpoint that returns progressive SQLite retrieval and the exact MongoDB documents pinned to the same session epoch, ranked through QKV attention and Qoin.
-4. Enforced workspace membership for document approval and retrieval, plus agent/session association, task assignment, pinned visibility scope, authoritative SQLite metadata, MongoDB version identity, QKV version, and SHA-256 integrity before returning document values. Agent identity is still path-selected rather than cryptographically authenticated; see remaining security gaps.
+4. Enforced workspace membership and registering-user ownership for agent-specific document, handover, and session retrieval, plus agent/session association, task assignment, pinned visibility scope, authoritative SQLite metadata, MongoDB version identity, QKV version, and SHA-256 integrity before returning document values. New agents persist their registering Firebase user and agent memory/session routes enforce that owner before use. Cryptographic agent credentials remain outstanding; legacy unowned agents fail closed.
 5. Bounded serialized MongoDB session document context to 256 KiB and complete serialized QKV/Qoin search results to 64 KiB; whole documents/results are omitted rather than truncated, and responses report truncation.
 6. New document creation persists deterministic lexical QKV keys and model versions in MongoDB `key_metadata`.
 7. Added SHA-256 source hashing over the exact ordered title/content/tag text used to build each persisted QKV key.
@@ -68,7 +68,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 - Retrieval feedback persistence and evaluation against a labelled memory-retrieval dataset.
 - Full MongoDB outage/restart integration tests.
 - Full readiness/observability coverage (basic DB readiness exists, worker health/metrics do not), backup/restore drills, production secrets management, and measured performance results.
-- Cryptographic agent-principal authentication is not implemented. Current agent IDs are selected in authenticated workspace-member routes; a workspace member can request context for another registered agent. Agent-private scope is therefore agent-ID isolation, not a security boundary against other members of the same workspace. Do not treat it as production-grade isolation until agent credentials/principal authorization are implemented.
+- Cryptographic agent-principal authentication is not implemented. New agent IDs are bound to their registering Firebase user, preventing cross-member agent impersonation; legacy agent records without owner metadata fail closed. The registering user still acts on behalf of the agent, so a separate agent process cannot yet authenticate independently.
 - Session-document hydration is now bound to the persisted session epoch, and a combined session-context API returns it alongside progressive retrieval. The repository still has no autonomous provider-backed agent execution runtime to wire this context into; client/agent consumer integration needs to use the new endpoint.
 
 ## 6. Verification status
