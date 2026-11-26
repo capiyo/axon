@@ -92,7 +92,22 @@ Project-shared memory is now enabled for creation and retrieval. Current members
 
 The migration SQL was exercised independently with Python's SQLite engine, including project creation, membership lookup, and access revocation. This is not a substitute for the Rust migration/test suite.
 
-## 6. Verification status
+
+## 6. Immutable lifecycle implementation pass (2026-11-26)
+
+Added archive, restore, and logical deletion as new document versions:
+- Archive writes an `archived` lifecycle version.
+- Restore is permitted only from the latest archived version and writes a new approved version.
+- Delete writes a `deleted` tombstone version.
+- Each transition validates the exact MongoDB source version against SQLite metadata, checks current workspace and scope authorization, and enqueues the new immutable version through the existing outbox.
+- Agent-private lifecycle changes require the registering user to own the agent; project-shared changes require active project membership.
+- Lifecycle audit events distinguish creation, approval, archive, and deletion.
+- Tombstones immediately suppress older approved versions from normal candidate search and from newly published epochs. Existing epoch items are not modified and remain reproducible, subject to current authorization.
+- Added deterministic lifecycle tests covering archive, restore, delete, and retrieval visibility.
+
+The delete operation is logical only. MongoDB historical content is retained; permanent purge, retention scheduling, and legal-hold handling are not implemented.
+
+## 7. Verification status
 
 The GitHub connector in this session can read and commit repository files but does not provide a Rust build/test runtime. No `cargo fmt`, `cargo check`, `cargo test`, or `cargo clippy` pass is claimed.
 
