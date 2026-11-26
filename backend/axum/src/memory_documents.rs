@@ -112,7 +112,7 @@ impl MemoryDocument {
         if !valid_scope {
             return Err(MemoryDocumentError::InvalidDocument);
         }
-        if !matches!(self.status.as_str(), "proposed" | "ready" | "archived") {
+        if !matches!(self.status.as_str(), "proposed" | "ready" | "archived" | "deleted") {
             return Err(MemoryDocumentError::InvalidDocument);
         }
         if self.content_hash != self.calculate_content_hash() {
