@@ -172,6 +172,7 @@ mod tests {
         let state = AppState::with_storage(storage).await.unwrap();
         let owner = state.ensure_firebase_user("axon-test", "project-owner").await.unwrap();
         let member = state.ensure_firebase_user("axon-test", "project-member").await.unwrap();
+        state.add_workspace_member(owner.workspace.id, owner.user_id, member.user_id).await.unwrap();
         let created = state
             .create_project_for_user(owner.workspace.id, owner.user_id, "Research".into())
             .await
@@ -208,6 +209,8 @@ mod tests {
         let owner = state.ensure_firebase_user("axon-test", "project-owner-2").await.unwrap();
         let admin = state.ensure_firebase_user("axon-test", "project-admin-2").await.unwrap();
         let target = state.ensure_firebase_user("axon-test", "project-target-2").await.unwrap();
+        state.add_workspace_member(owner.workspace.id, owner.user_id, admin.user_id).await.unwrap();
+        state.add_workspace_member(owner.workspace.id, owner.user_id, target.user_id).await.unwrap();
         let project = state
             .create_project_for_user(owner.workspace.id, owner.user_id, "Research".into())
             .await
