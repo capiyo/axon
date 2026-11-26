@@ -33,7 +33,8 @@ Existing QKV and memory-intelligence tests remain part of the Rust suite. `memor
 - Verify a non-member cannot approve a proposed memory document.
 - Verify the combined session-context endpoint returns progressive SQLite memories and the exact MongoDB versions pinned to that same session.
 - Verify a session belonging to another agent cannot be used, and task reassignment fails closed.
-- Verify the document context byte budget omits whole documents and reports truncation.\n- Verify search results are budgeted by full serialized size and set `results_truncated` when candidates do not fit. Unit tests in `memory_routes.rs` cover both fitting and truncating document sets.
+- Verify the document context byte budget omits whole documents and reports truncation.
+- Verify search results are budgeted by full serialized size and set `results_truncated` when candidates do not fit. Unit tests in `memory_routes.rs` cover both fitting and truncating document sets.
 - Run the full suite with a real isolated MongoDB instance.
 
 The connected GitHub file-edit workflow does not provide a Rust runtime in this session. No compilation or test pass should be claimed until CI or a local checkout executes these commands.
