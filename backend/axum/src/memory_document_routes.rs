@@ -451,8 +451,11 @@ pub async fn get_agent_memory_document_versions(
         if document.validate().is_err()
             || document.workspace_id != workspace_id
             || document.memory_id != memory_id
+            || document.version != reference.version
             || document.content_hash != reference.content_hash
             || document.scope != reference.scope
+            || document.project_id != reference.project_id
+            || document.owner_id != reference.owner_id
             || document.source_event_sequence != reference.source_event_sequence
             || document.qkv_version != reference.qkv_version
             || document.qoin_vector_version != reference.qoin_vector_version
