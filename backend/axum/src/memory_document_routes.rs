@@ -2,7 +2,7 @@ use crate::{
     auth_middleware::AuthenticatedUser,
     memory_architecture::{qkv_attention, AttentionMemory, AttentionQuery, QoinVector},
     memory_documents::MemoryDocument,
-    memory_outbox::MemoryReconciliationReport,
+    memory_outbox::{MemoryLifecycleAction, MemoryReconciliationReport},
     memory_vector_provider::{validate_memory_key, LexicalMemoryVectorProvider, MemoryVectorProvider, MemoryVectorProviderError, LEXICAL_MEMORY_VECTOR_VERSION},
     memory_intelligence::{
         retrieve_memories_with_config, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
@@ -292,6 +292,94 @@ pub async fn approve_memory_document(
         version,
         lifecycle_status: "approved",
     }))
+}
+
+#[derive(Debug, Serialize)]
+pub struct MemoryDocumentLifecycleResponse {
+    pub memory_id: Uuid,
+    pub previous_version: u64,
+    pub current_version: u64,
+    pub lifecycle_status: &'static str,
+}
+
+async fn transition_memory_document(
+    state: AppState,
+    user_id: Uuid,
+    workspace_id: Uuid,
+    memory_id: Uuid,
+    version: u64,
+    action: MemoryLifecycleAction,
+) -> Result<Json<MemoryDocumentLifecycleResponse>, (StatusCode, Json<ApiError>)> {
+    let member = state
+        .is_workspace_member(user_id, workspace_id)
+        .await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+    if !member {
+        return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
+    }
+    let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document metadata is unavailable.")
+    })?;
+    let repository = state.memory_documents.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
+    })?;
+    let transitioned = outbox
+        .transition_lifecycle(
+            repository.as_ref(),
+            workspace_id,
+            memory_id,
+            version,
+            user_id,
+            action,
+        )
+        .await
+        .map_err(|failure| {
+            tracing::error!(error = %failure, "memory lifecycle transition failed");
+            match failure {
+                crate::memory_outbox::MemoryOutboxError::VersionConflict => {
+                    api_error(StatusCode::CONFLICT, "Memory version changed or failed integrity validation.")
+                }
+                _ => api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory lifecycle transition failed."),
+            }
+        })?;
+    if !transitioned {
+        return Err(api_error(StatusCode::NOT_FOUND, "Authorized current memory version was not found."));
+    }
+    let lifecycle_status = match action {
+        MemoryLifecycleAction::Archive => "archived",
+        MemoryLifecycleAction::Restore => "approved",
+        MemoryLifecycleAction::Delete => "deleted",
+    };
+    Ok(Json(MemoryDocumentLifecycleResponse {
+        memory_id,
+        previous_version: version,
+        current_version: version.saturating_add(1),
+        lifecycle_status,
+    }))
+}
+
+pub async fn archive_memory_document(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, memory_id, version)): Path<(Uuid, Uuid, u64)>,
+) -> Result<Json<MemoryDocumentLifecycleResponse>, (StatusCode, Json<ApiError>)> {
+    transition_memory_document(state, user.user_id, workspace_id, memory_id, version, MemoryLifecycleAction::Archive).await
+}
+
+pub async fn restore_memory_document(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, memory_id, version)): Path<(Uuid, Uuid, u64)>,
+) -> Result<Json<MemoryDocumentLifecycleResponse>, (StatusCode, Json<ApiError>)> {
+    transition_memory_document(state, user.user_id, workspace_id, memory_id, version, MemoryLifecycleAction::Restore).await
+}
+
+pub async fn delete_memory_document(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, memory_id, version)): Path<(Uuid, Uuid, u64)>,
+) -> Result<Json<MemoryDocumentLifecycleResponse>, (StatusCode, Json<ApiError>)> {
+    transition_memory_document(state, user.user_id, workspace_id, memory_id, version, MemoryLifecycleAction::Delete).await
 }
 
 #[derive(Debug, Serialize)]
