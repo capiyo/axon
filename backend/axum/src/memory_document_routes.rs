@@ -457,6 +457,25 @@ pub struct MemoryDocumentSearchResponse {
     pub results: Vec<RankedMemoryDocument>,
 }
 
+fn bounded_ranked_memory_documents(
+    candidates: Vec<RankedMemoryDocument>,
+    budget_bytes: usize,
+) -> Result<(Vec<RankedMemoryDocument>, usize, bool), serde_json::Error> {
+    let mut used = 0usize;
+    let mut selected = Vec::new();
+    let mut truncated = false;
+    for candidate in candidates {
+        let size = serde_json::to_vec(&candidate)?.len();
+        if size > budget_bytes.saturating_sub(used) {
+            truncated = true;
+            continue;
+        }
+        used += size;
+        selected.push(candidate);
+    }
+    Ok((selected, used, truncated))
+}
+
 fn normalized_metadata_score(document: &MemoryDocument, key: &str) -> f32 {
     document
         .key_metadata
@@ -711,14 +730,12 @@ pub async fn search_agent_memory_documents(
     let qoin_scoring_config = qoin.scoring_config.clone();
 
     const MAX_CONTEXT_BYTES: usize = 64 * 1024;
-    let mut context_bytes_used = 0_usize;
-    let mut results_truncated = false;
-    let mut results = Vec::with_capacity(qoin.ranked.len());
+    let mut candidates = Vec::with_capacity(qoin.ranked.len());
     for ranked in qoin.ranked {
         let Some(document) = documents.remove(&ranked.memory_id) else {
             continue;
         };
-        let result = RankedMemoryDocument {
+        candidates.push(RankedMemoryDocument {
             memory_id: document.memory_id,
             version: document.version,
             title: document.title,
@@ -730,17 +747,11 @@ pub async fn search_agent_memory_documents(
             qkv_attention_score: attention_scores.get(&ranked.memory_id).copied().unwrap_or(0.0),
             qoin_score: ranked.score,
             qoin_reasons: ranked.reasons,
-        };
-        let result_bytes = serde_json::to_vec(&result)
-            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory search result could not be serialized."))?
-            .len();
-        if result_bytes > MAX_CONTEXT_BYTES.saturating_sub(context_bytes_used) {
-            results_truncated = true;
-            continue;
-        }
-        context_bytes_used += result_bytes;
-        results.push(result);
+        });
     }
+    let (results, context_bytes_used, results_truncated) =
+        bounded_ranked_memory_documents(candidates, MAX_CONTEXT_BYTES)
+            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory search results could not be serialized."))?;
 
     let retrieval_mode = if qkv_model_version == LEXICAL_MEMORY_VECTOR_VERSION {
         "deterministic_lexical_qkv_v1".to_owned()
@@ -818,4 +829,47 @@ pub async fn get_agent_session_documents(
         }
     }
     Ok(Json(MemoryEpochDocumentResponse { session_id, epoch_id, documents }))
+}
+
+#[cfg(test)]
+mod search_budget_tests {
+    use super::*;
+
+    fn candidate(memory_id: Uuid, content: &str) -> RankedMemoryDocument {
+        RankedMemoryDocument {
+            memory_id,
+            version: 1,
+            title: "Budget test".into(),
+            content: content.into(),
+            content_hash: "hash".into(),
+            source: "test".into(),
+            source_kind: "test".into(),
+            source_event_sequence: 1,
+            qkv_attention_score: 0.5,
+            qoin_score: ScoreBreakdown {
+                semantic: 0.5,
+                context: 0.5,
+                dependency: 0.0,
+                outcome: 0.5,
+                failure: 0.5,
+                evidence: 0.5,
+                recency: 0.5,
+                tags: 0.0,
+                total: 0.5,
+            },
+            qoin_reasons: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn search_budget_counts_full_serialized_results_and_reports_omissions() {
+        let first = candidate(Uuid::new_v4(), "small");
+        let second = candidate(Uuid::new_v4(), &"x".repeat(2048));
+        let first_size = serde_json::to_vec(&first).unwrap().len();
+        let (selected, used, truncated) =
+            bounded_ranked_memory_documents(vec![first, second], first_size).unwrap();
+        assert_eq!(selected.len(), 1);
+        assert_eq!(used, first_size);
+        assert!(truncated);
+    }
 }
