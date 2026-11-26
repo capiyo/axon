@@ -5,7 +5,7 @@ use crate::{
     memory_vector_provider::{LexicalMemoryVectorProvider, MemoryVectorProvider, LEXICAL_MEMORY_VECTOR_VERSION},
     memory_intelligence::{
         retrieve_memories_with_config, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
-        MemoryVisibility, ScoreBreakdown,
+        MemoryVisibility, QoinScoringConfig, ScoreBreakdown,
     },
     AppState,
 };
@@ -397,6 +397,7 @@ pub struct MemoryDocumentSearchResponse {
     pub retrieval_mode: &'static str,
     pub qkv_model_version: &'static str,
     pub qoin_scoring_version: String,
+    pub qoin_scoring_config: QoinScoringConfig,
     pub candidates_examined: usize,
     pub context_bytes_used: usize,
     pub results: Vec<RankedMemoryDocument>,
@@ -633,6 +634,7 @@ pub async fn search_agent_memory_documents(
     )
     .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Qoin memory ranking could not be evaluated."))?;
     let qoin_scoring_version = qoin.scoring_config.version.clone();
+    let qoin_scoring_config = qoin.scoring_config.clone();
 
     const MAX_CONTEXT_BYTES: usize = 64 * 1024;
     let mut context_bytes_used = 0_usize;
@@ -664,6 +666,7 @@ pub async fn search_agent_memory_documents(
         retrieval_mode: "deterministic_lexical_qkv_v1",
         qkv_model_version: LEXICAL_MEMORY_VECTOR_VERSION,
         qoin_scoring_version,
+        qoin_scoring_config,
         candidates_examined: indexed_memories.len(),
         context_bytes_used,
         results,
