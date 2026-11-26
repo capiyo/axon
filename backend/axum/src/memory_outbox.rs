@@ -836,15 +836,22 @@ impl MemoryOutbox {
         if versions.is_empty() {
             return Ok(HashMap::new());
         }
+        let normalized_versions = versions
+            .iter()
+            .map(|(memory_id, version)| {
+                i64::try_from(*version)
+                    .map(|version| (memory_id.to_string(), version))
+                    .map_err(|_| sqlx::Error::Protocol("feedback version exceeds SQLite range".into()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         let mut query = QueryBuilder::<Sqlite>::new(
             "SELECT memory_id, document_version, event_type, COUNT(*) AS event_count
              FROM memory_retrieval_feedback WHERE workspace_id = ",
         );
         query.push_bind(workspace_id.to_string());
         query.push(" AND (memory_id, document_version) IN ");
-        query.push_tuples(versions.iter(), |mut row, (memory_id, version)| {
-            row.push_bind(memory_id.to_string())
-                .push_bind(i64::try_from(*version).unwrap_or(i64::MAX));
+        query.push_tuples(normalized_versions.iter(), |mut row, (memory_id, version)| {
+            row.push_bind(memory_id).push_bind(*version);
         });
         query.push(" GROUP BY memory_id, document_version, event_type");
         let rows = query.build().fetch_all(&self.pool).await?;
