@@ -13,7 +13,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 ## Current unit coverage
 
-`memory_documents.rs` includes tests for stable SHA-256 content hashing, stale-hash rejection, supported private scope, and invalid-scope rejection. `memory_outbox.rs` tests idempotent enqueue, transactional approval audit, and private-agent scope filtering. `memory_vector_provider.rs` tests deterministic lexical QKV vector generation and normalization. The outbox integration test also verifies immutable document-version/hash/QKV/Qoin epoch pins.
+`memory_documents.rs` includes tests for stable SHA-256 content hashing, stale-hash rejection, supported private scope, and invalid-scope rejection. `memory_outbox.rs` tests idempotent enqueue, transactional approval audit, and private-agent scope filtering. `memory_vector_provider.rs` tests deterministic lexical QKV vector generation and normalization through the asynchronous provider interface. The outbox integration test also verifies immutable document-version/hash/QKV/Qoin epoch pins.
 
 Existing QKV and memory-intelligence tests remain part of the Rust suite. `memory_intelligence.rs` also validates scoring-policy weights/thresholds and deterministic policy serialization; `config.rs` tests MongoDB URI redaction and bounded pool/timeout parsing.
 
