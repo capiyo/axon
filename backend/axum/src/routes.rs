@@ -47,6 +47,40 @@ pub async fn list_audit_events(
     ))
 }
 
+#[derive(Debug, Serialize)]
+pub struct Readiness {
+    pub ready: bool,
+    pub sqlite_ready: bool,
+    pub mongodb_configured: bool,
+    pub mongodb_ready: bool,
+}
+
+pub async fn readiness(
+    State(state): State<AppState>,
+) -> (StatusCode, Json<Readiness>) {
+    let sqlite_ready = state.storage_is_ready().await;
+    let mongodb_configured = state.memory_documents.is_some();
+    let mongodb_ready = match state.memory_documents.as_ref() {
+        Some(repository) => repository.ping().await.is_ok(),
+        None => false,
+    };
+    let ready = sqlite_ready && (!mongodb_configured || mongodb_ready);
+    let status = if ready {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    };
+    (
+        status,
+        Json(Readiness {
+            ready,
+            sqlite_ready,
+            mongodb_configured,
+            mongodb_ready,
+        }),
+    )
+}
+
 pub async fn health(State(state): State<AppState>) -> Json<Health> {
     Json(Health {
         status: "ok",
