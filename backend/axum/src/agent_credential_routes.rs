@@ -152,6 +152,24 @@ mod tests {
         ).await.unwrap();
         assert_eq!(accepted.status(), axum::http::StatusCode::SERVICE_UNAVAILABLE);
 
+        let feedback_path = format!(
+            "/api/v1/workspaces/{}/agents/{}/memory-sessions/{}/feedback",
+            account.workspace.id, agent.id, Uuid::new_v4()
+        );
+        let feedback = app.clone().oneshot(
+            axum::http::Request::builder()
+                .method("POST")
+                .uri(&feedback_path)
+                .header(axum::http::header::AUTHORIZATION, format!("Bearer {}", credential.token))
+                .header(axum::http::header::CONTENT_TYPE, "application/json")
+                .body(axum::body::Body::from(format!(
+                    r#"{{"memory_id":"{}","document_version":1,"event_type":"helpful"}}"#,
+                    Uuid::new_v4()
+                )))
+                .unwrap(),
+        ).await.unwrap();
+        assert_eq!(feedback.status(), axum::http::StatusCode::FORBIDDEN);
+
         let wrong_agent_path = format!(
             "/api/v1/workspaces/{}/agents/{}/memory-documents/{}/1",
             account.workspace.id, Uuid::new_v4(), Uuid::new_v4()
