@@ -3,7 +3,7 @@ use crate::{
     memory_architecture::{qkv_attention, AttentionMemory, AttentionQuery, QoinVector},
     memory_documents::MemoryDocument,
     memory_outbox::MemoryReconciliationReport,
-    memory_vector_provider::{LexicalMemoryVectorProvider, MemoryVectorProvider, LEXICAL_MEMORY_VECTOR_VERSION},
+    memory_vector_provider::{LexicalMemoryVectorProvider, MemoryVectorProvider, MemoryVectorProviderError, LEXICAL_MEMORY_VECTOR_VERSION},
     memory_intelligence::{
         retrieve_memories_with_config, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
         MemoryVisibility, QoinScoringConfig, ScoreBreakdown,
@@ -149,10 +149,23 @@ pub async fn create_memory_document(
         key_text.push(' ');
         key_text.push_str(tag);
     }
-    let vector_provider = LexicalMemoryVectorProvider;
+    let fallback_provider = LexicalMemoryVectorProvider;
+    let vector_provider: &dyn MemoryVectorProvider = state
+        .memory_vector_provider
+        .as_deref()
+        .unwrap_or(&fallback_provider);
     let qkv_key = vector_provider
         .key_for_text(&key_text)
-        .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Memory document contains no searchable terms."))?;
+        .await
+        .map_err(|provider_error| match provider_error {
+            MemoryVectorProviderError::EmptyQuery => {
+                api_error(StatusCode::BAD_REQUEST, "Memory document contains no searchable terms.")
+            }
+            _ => api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
+        })?;
+    if qkv_key.model_version != vector_provider.model_version() {
+        return Err(api_error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an incompatible model version."));
+    }
     let mut key_metadata = match input.key_metadata {
         Value::Object(metadata) => metadata,
         Value::Null => Map::new(),
@@ -161,7 +174,7 @@ pub async fn create_memory_document(
     let serialized_key = serde_json::to_value(&qkv_key)
         .map_err(|_| api_error(StatusCode::BAD_REQUEST, "QKV key could not be serialized."))?;
     key_metadata.insert("qkv_key".into(), serialized_key);
-    key_metadata.insert("qkv_key_version".into(), Value::String(LEXICAL_MEMORY_VECTOR_VERSION.into()));
+    key_metadata.insert("qkv_key_version".into(), Value::String(qkv_key.model_version.clone()));
 
     let now = Utc::now();
     let mut document = MemoryDocument {
@@ -185,7 +198,7 @@ pub async fn create_memory_document(
         content_hash: String::new(),
         key_metadata: Value::Object(key_metadata),
         value_payload: input.value_payload,
-        qkv_version: LEXICAL_MEMORY_VECTOR_VERSION.into(),
+        qkv_version: qkv_key.model_version.clone(),
         qoin_vector_version: None,
         status: "proposed".into(),
         retention_policy: input.retention_policy,
@@ -434,8 +447,8 @@ pub struct RankedMemoryDocument {
 
 #[derive(Debug, Serialize)]
 pub struct MemoryDocumentSearchResponse {
-    pub retrieval_mode: &'static str,
-    pub qkv_model_version: &'static str,
+    pub retrieval_mode: String,
+    pub qkv_model_version: String,
     pub qoin_scoring_version: String,
     pub qoin_scoring_config: QoinScoringConfig,
     pub candidates_examined: usize,
@@ -529,10 +542,24 @@ pub async fn search_agent_memory_documents(
             api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document search failed.")
         })?;
 
-    let vector_provider = LexicalMemoryVectorProvider;
+    let fallback_provider = LexicalMemoryVectorProvider;
+    let vector_provider: &dyn MemoryVectorProvider = state
+        .memory_vector_provider
+        .as_deref()
+        .unwrap_or(&fallback_provider);
     let query_vector = vector_provider
         .key_for_text(&input.query)
-        .map_err(|_| api_error(StatusCode::BAD_REQUEST, "The query contains no searchable terms."))?;
+        .await
+        .map_err(|provider_error| match provider_error {
+            MemoryVectorProviderError::EmptyQuery => {
+                api_error(StatusCode::BAD_REQUEST, "The query contains no searchable terms.")
+            }
+            _ => api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
+        })?;
+    if query_vector.model_version != vector_provider.model_version() {
+        return Err(api_error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an incompatible model version."));
+    }
+    let qkv_model_version = query_vector.model_version.clone();
     let query_values = query_vector.values.clone();
 
     let mut documents = HashMap::new();
@@ -581,7 +608,8 @@ pub async fn search_agent_memory_documents(
             // QKV keys were stored in MongoDB.
             vector_provider
                 .key_for_text(&key_text)
-                .map_err(|_| api_error(StatusCode::BAD_REQUEST, "A memory document has no searchable terms."))?
+                .await
+                .map_err(|_| api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."))?
         };
         if document.qkv_version != key.model_version {
             // Never compare vectors from different model spaces.
@@ -702,9 +730,14 @@ pub async fn search_agent_memory_documents(
         });
     }
 
+    let retrieval_mode = if qkv_model_version == LEXICAL_MEMORY_VECTOR_VERSION {
+        "deterministic_lexical_qkv_v1".to_owned()
+    } else {
+        "configured_embedding_provider".to_owned()
+    };
     Ok(Json(MemoryDocumentSearchResponse {
-        retrieval_mode: "deterministic_lexical_qkv_v1",
-        qkv_model_version: LEXICAL_MEMORY_VECTOR_VERSION,
+        retrieval_mode,
+        qkv_model_version,
         qoin_scoring_version,
         qoin_scoring_config,
         candidates_examined: indexed_memories.len(),
