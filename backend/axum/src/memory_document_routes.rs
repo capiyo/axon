@@ -609,7 +609,12 @@ pub async fn search_agent_memory_documents(
             vector_provider
                 .key_for_text(&key_text)
                 .await
-                .map_err(|_| api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."))?
+                .map_err(|provider_error| match provider_error {
+                    MemoryVectorProviderError::EmptyQuery => {
+                        api_error(StatusCode::BAD_REQUEST, "A memory document has no searchable terms.")
+                    }
+                    _ => api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
+                })?
         };
         if document.qkv_version != key.model_version {
             // Never compare vectors from different model spaces.
