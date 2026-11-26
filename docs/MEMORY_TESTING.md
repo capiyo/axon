@@ -15,7 +15,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 `memory_documents.rs` includes tests for stable SHA-256 content hashing, stale-hash rejection, supported private scope, and invalid-scope rejection. `memory_outbox.rs` tests idempotent enqueue, transactional approval audit, and private-agent scope filtering. `memory_vector_provider.rs` tests deterministic lexical QKV vector generation and normalization. The outbox integration test also verifies immutable document-version/hash/QKV/Qoin epoch pins.
 
-Existing QKV and memory-intelligence tests remain part of the Rust suite.
+Existing QKV and memory-intelligence tests remain part of the Rust suite. `memory_intelligence.rs` also validates scoring-policy weights/thresholds and deterministic policy serialization; `config.rs` tests MongoDB URI redaction and bounded pool/timeout parsing.
 
 ## Required integration coverage before production
 
@@ -26,7 +26,7 @@ Existing QKV and memory-intelligence tests remain part of the Rust suite.
 - Simulate MongoDB outage and worker restart.
 - Simulate lease expiry and duplicate delivery.
 - Verify hash mismatch never becomes retrievable.
-- Verify dead-letter handling and operator recovery.
+- Verify dead-letter handling and audited retry-sync recovery, including malformed payload refusal.
 - Verify workspace/task/agent scope isolation.
 - Verify a non-member cannot approve a proposed memory document.
 - Verify the combined session-context endpoint returns progressive SQLite memories and the exact MongoDB versions pinned to that same session.
