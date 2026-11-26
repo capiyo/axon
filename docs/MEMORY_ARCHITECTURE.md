@@ -52,7 +52,7 @@ Before claiming end-to-end multi-agent memory completion, implement and test:
 - A neural embedding-provider implementation behind the existing `MemoryVectorProvider` abstraction, with model/version compatibility checks.
 - A separately searchable precomputed vector index and safe index rebuild.
 - Explicit, audited repair workflows based on the new read-only reconciliation report.
-- Cryptographic agent-principal authentication; current routes bind agent IDs to their registering Firebase user but do not authenticate the agent process independently.
+- General-purpose persisted capability grants for all workspace resources; agent credentials are implemented for a fixed allowlist of agent memory routes, bound to one agent/workspace, with 90-day expiry, rotation, and revocation.
 - Agent/client consumers that use the combined session-context endpoint; no provider-backed agent execution runtime exists yet.
 - Real MongoDB outage, restart, and cross-scope security tests.
 - Qoin source reliability, contradiction/duplication, reuse-frequency, and retrieval-feedback features backed by labelled evaluation data.
