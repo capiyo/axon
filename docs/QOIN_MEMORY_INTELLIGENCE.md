@@ -24,7 +24,11 @@ It applies explicit normalized components, ranks deterministically, filters by w
 
 `qoin_vectors.rs` calls a separate Qoin service for market vectors, including event-time historical lookups. Market strategy vectors and trading actions must not become memory relevance scores by accident.
 
-## Default scoring policy\n\nThe default `axon-qoin-memory-v1` policy uses normalized components with weights: semantic 0.30, context 0.15, dependency 0.18, outcome 0.10, failure 0.12, evidence 0.10, recency 0.05, and tags 0.08. The sum (1.08) is normalized during scoring. These are explicit baseline coefficients, not trained parameters. Operators can supply a JSON `QoinScoringConfig` through `AXON_QOIN_MEMORY_SCORING_CONFIG`; invalid weights, thresholds, or versions stop startup.\n\n## Remaining work
+## Default scoring policy
+
+The default `axon-qoin-memory-v1` policy uses normalized components with weights: semantic 0.30, context 0.15, dependency 0.18, outcome 0.10, failure 0.12, evidence 0.10, recency 0.05, and tags 0.08. The sum (1.08) is normalized during scoring. These are explicit baseline coefficients, not trained parameters. Operators can supply a JSON `QoinScoringConfig` through `AXON_QOIN_MEMORY_SCORING_CONFIG`; invalid weights, thresholds, or versions stop startup.
+
+## Remaining work
 
 - Evaluate the versioned score configuration against a labelled memory-retrieval dataset.
 - Add evidence/source reliability and contradiction/duplication features only when their semantics and normalization are defined.
