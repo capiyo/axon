@@ -45,8 +45,9 @@ pub struct AuthorizedMemoryDocumentVersion {
     pub qkv_version: String,
     pub qoin_vector_version: Option<String>,
     pub scope: String,
-    pub task_id: Option<Uuid>,
-}
+    pub project_id: Option<Uuid>,
+    pub owner_id: Option<Uuid>,
+    pub task_id: Option<Uuid>,}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MemoryReconciliationIssue {
@@ -447,7 +448,7 @@ impl MemoryOutbox {
             .transpose()
             .map_err(|_| sqlx::Error::Protocol("version cursor exceeds SQLite range".into()))?;
         let rows = sqlx::query(
-            "SELECT version, content_hash, source_event_sequence, qkv_version, qoin_vector_version, scope, task_id \
+            "SELECT version, content_hash, source_event_sequence, qkv_version, qoin_vector_version, scope, project_id, owner_id, task_id \
              FROM memory_document_versions \
              WHERE workspace_id = ? AND memory_id = ? AND lifecycle_status = 'approved' \
              AND sync_status IN ('stored', 'indexed') \
@@ -478,6 +479,14 @@ impl MemoryOutbox {
                 qkv_version: row.try_get("qkv_version")?,
                 qoin_vector_version: row.try_get("qoin_vector_version")?,
                 scope: row.try_get("scope")?,
+                project_id: row.try_get::<Option<String>, _>("project_id")?
+                    .map(|value| Uuid::parse_str(&value))
+                    .transpose()
+                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?,
+                owner_id: row.try_get::<Option<String>, _>("owner_id")?
+                    .map(|value| Uuid::parse_str(&value))
+                    .transpose()
+                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?,
                 task_id: task_id_text
                     .map(|value| Uuid::parse_str(&value))
                     .transpose()
