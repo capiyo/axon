@@ -50,4 +50,5 @@ Before claiming end-to-end multi-agent memory completion, implement and test:
 - Cryptographic agent-principal authentication; current routes bind agent IDs to their registering Firebase user but do not authenticate the agent process independently.
 - Agent/client consumers that use the combined session-context endpoint; no provider-backed agent execution runtime exists yet.
 - Real MongoDB outage, restart, and cross-scope security tests.
+- Qoin source reliability, contradiction/duplication, reuse-frequency, and retrieval-feedback features backed by labelled evaluation data.
 - Backup/restore drills, worker health metrics, and measured retrieval/indexing performance.
