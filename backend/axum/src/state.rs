@@ -10,7 +10,7 @@ use crate::{
     memory_intelligence::QoinScoringConfig,
     memory_vector_provider::MemoryVectorProvider,
     robotics::TelemetryEvent,
-    storage::{EntityKind, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
+    storage::{AgentCredentialIdentity, EntityKind, IssuedAgentCredential, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -233,6 +233,54 @@ impl AppState {
         }
     }
 
+
+    pub async fn issue_agent_credential(
+        &self,
+        workspace_id: Uuid,
+        agent_id: Uuid,
+        owner_user_id: Uuid,
+    ) -> Result<IssuedAgentCredential, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.issue_agent_credential(workspace_id, agent_id, owner_user_id).await,
+            None => Err(StorageError::IdentityStorageUnavailable),
+        }
+    }
+
+    pub async fn rotate_agent_credential(
+        &self,
+        workspace_id: Uuid,
+        agent_id: Uuid,
+        credential_id: Uuid,
+        owner_user_id: Uuid,
+    ) -> Result<Option<IssuedAgentCredential>, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.rotate_agent_credential(workspace_id, agent_id, credential_id, owner_user_id).await,
+            None => Err(StorageError::IdentityStorageUnavailable),
+        }
+    }
+
+    pub async fn revoke_agent_credential(
+        &self,
+        workspace_id: Uuid,
+        agent_id: Uuid,
+        credential_id: Uuid,
+        owner_user_id: Uuid,
+    ) -> Result<bool, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.revoke_agent_credential(workspace_id, agent_id, credential_id, owner_user_id).await,
+            None => Err(StorageError::IdentityStorageUnavailable),
+        }
+    }
+
+    pub async fn authenticate_agent_credential(
+        &self,
+        token: &str,
+    ) -> Result<Option<AgentCredentialIdentity>, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.authenticate_agent_credential(token).await,
+            None => Ok(None),
+        }
+    }
 
     pub async fn add_workspace_member(
         &self,
