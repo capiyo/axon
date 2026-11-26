@@ -124,7 +124,16 @@ Added tests for hash-only storage, authentication, rotation, revocation, cross-a
 
 The credential currently represents a fixed memory-route capability boundary. The broader capability-grant model in `identity.rs` is not yet persisted or enforced for all Axon resource families.
 
-## 8. Verification status
+
+## 8. Retrieval feedback and Qoin v2 implementation pass (2026-11-26)
+
+Added migration `0015_memory_retrieval_feedback.sql` and a session-bound feedback API. Accepted events are retrieved, selected, ignored, reused, helpful, irrelevant, contradicted, and incorrect. A feedback event is accepted only when the exact memory ID/version is pinned in the authenticated session epoch and the actor owns the agent and is authorized for the document scope. Evidence JSON is bounded to 4 KiB. Feedback is stored in SQLite and audited; it does not mutate memory documents or historical epochs.
+
+Qoin scoring is now v2. The new configurable `feedback_weight` is validated and included in the effective scoring fingerprint. Smoothed positive feedback (helpful/selected/reused) adjusts outcome; negative feedback (irrelevant/contradicted/incorrect) adjusts failure. Both document search and session-context ranking consume the version-bound feedback signals. Legacy sessions pinned to the v1 default do not apply v2 feedback weighting.
+
+Added tests for exact-epoch feedback authorization, invalid events, unpinned versions, and policy fingerprint changes. Rust tests remain unexecuted in this environment.
+
+## 9. Verification status
 
 The GitHub connector in this session can read and commit repository files but does not provide a Rust build/test runtime. No `cargo fmt`, `cargo check`, `cargo test`, or `cargo clippy` pass is claimed.
 
