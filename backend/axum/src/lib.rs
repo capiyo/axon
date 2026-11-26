@@ -173,6 +173,10 @@ pub fn app(state: AppState) -> Router {
             post(memory_routes::retrieve_session_context),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-sessions/:session_id/feedback",
+            post(memory_routes::record_session_feedback),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/audit",
             get(routes::list_audit_events),
         )
