@@ -962,6 +962,14 @@ impl Storage for SqliteStorage {
             .execute(&mut *tx)
             .await?;
             sqlx::query(
+                "UPDATE agent_credentials SET revoked_at = ? WHERE owner_user_id = ? AND workspace_id = ? AND revoked_at IS NULL",
+            )
+            .bind(&now)
+            .bind(target_user_id.to_string())
+            .bind(workspace_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query(
                 "INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, ?, ?, 'workspace.member_revoked', 'workspace', ?, ?, ?)",
             )
             .bind(Uuid::new_v4().to_string())
