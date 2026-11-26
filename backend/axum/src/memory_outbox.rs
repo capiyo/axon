@@ -9,7 +9,7 @@ use crate::memory_documents::{
 use chrono::{Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
-use std::{sync::Arc, time::Duration};
+use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::{sync::watch, time::sleep};
 use uuid::Uuid;
@@ -35,6 +35,25 @@ pub enum MemoryOutboxError {
 pub struct MemoryOutboxEvent {
     pub event_id: Uuid,
     pub document: MemoryDocument,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MemoryReconciliationIssue {
+    pub memory_id: Uuid,
+    pub version: u64,
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct MemoryReconciliationReport {
+    pub workspace_id: Uuid,
+    pub sqlite_versions_scanned: usize,
+    pub mongo_documents_scanned: usize,
+    pub pending_outbox_events: u64,
+    pub processing_outbox_events: u64,
+    pub dead_letter_outbox_events: u64,
+    pub scan_limit_reached: bool,
+    pub issues: Vec<MemoryReconciliationIssue>,
 }
 
 #[derive(Clone)]
@@ -396,6 +415,140 @@ impl MemoryOutbox {
         .await?;
         transaction.commit().await?;
         Ok(true)
+    }
+
+    /// Read-only, bounded consistency audit for one workspace. It reports
+    /// mismatches but never repairs or exposes document content.
+    pub async fn reconcile_workspace(
+        &self,
+        repository: &dyn MemoryDocumentRepository,
+        workspace_id: Uuid,
+        requested_limit: usize,
+    ) -> Result<MemoryReconciliationReport, MemoryOutboxError> {
+        let limit = requested_limit.clamp(1, 5_000);
+        let limit_sql = i64::try_from(limit)
+            .map_err(|_| sqlx::Error::Protocol("reconciliation limit exceeds SQLite range".into()))?;
+        let rows = sqlx::query(
+            "SELECT memory_id, version, scope, content_hash, source_event_sequence, qkv_version, qoin_vector_version, sync_status \
+             FROM memory_document_versions WHERE workspace_id = ? ORDER BY memory_id ASC, version ASC LIMIT ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(limit_sql)
+        .fetch_all(&self.pool)
+        .await?;
+        let documents = repository.list_workspace_documents(workspace_id, limit).await?;
+        let mut mongo_by_key = HashMap::new();
+        let mut issues = Vec::new();
+
+        for document in &documents {
+            let key = (document.memory_id, document.version);
+            if mongo_by_key.insert(key, document).is_some() {
+                issues.push(MemoryReconciliationIssue {
+                    memory_id: document.memory_id,
+                    version: document.version,
+                    kind: "duplicate_mongo_version".into(),
+                });
+            }
+            if document.validate().is_err() {
+                issues.push(MemoryReconciliationIssue {
+                    memory_id: document.memory_id,
+                    version: document.version,
+                    kind: "invalid_mongo_document".into(),
+                });
+            }
+        }
+
+        let mut sqlite_keys = HashSet::with_capacity(rows.len());
+        for row in &rows {
+            let memory_id_text: String = row.try_get("memory_id")?;
+            let memory_id = Uuid::parse_str(&memory_id_text)
+                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            let version_sql: i64 = row.try_get("version")?;
+            let version = u64::try_from(version_sql)
+                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            let key = (memory_id, version);
+            sqlite_keys.insert(key);
+            let scope: String = row.try_get("scope")?;
+            let content_hash: String = row.try_get("content_hash")?;
+            let source_sequence: i64 = row.try_get("source_event_sequence")?;
+            let qkv_version: String = row.try_get("qkv_version")?;
+            let qoin_version: Option<String> = row.try_get("qoin_vector_version")?;
+            let sync_status: String = row.try_get("sync_status")?;
+
+            let Some(document) = mongo_by_key.get(&key) else {
+                issues.push(MemoryReconciliationIssue {
+                    memory_id,
+                    version,
+                    kind: match sync_status.as_str() {
+                        "pending" => "mongo_document_pending_delivery",
+                        "failed" => "mongo_document_missing_after_failure",
+                        _ => "sqlite_version_missing_in_mongo",
+                    }.into(),
+                });
+                continue;
+            };
+
+            let source_sequence = u64::try_from(source_sequence)
+                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            if document.workspace_id != workspace_id
+                || document.scope != scope
+                || document.content_hash != content_hash
+                || document.source_event_sequence != source_sequence
+                || document.qkv_version != qkv_version
+                || document.qoin_vector_version != qoin_version
+            {
+                issues.push(MemoryReconciliationIssue {
+                    memory_id,
+                    version,
+                    kind: "sqlite_mongo_metadata_mismatch".into(),
+                });
+            }
+        }
+
+        for document in &documents {
+            if !sqlite_keys.contains(&(document.memory_id, document.version)) {
+                issues.push(MemoryReconciliationIssue {
+                    memory_id: document.memory_id,
+                    version: document.version,
+                    kind: "mongo_document_without_sqlite_authority".into(),
+                });
+            }
+        }
+
+        let status_rows = sqlx::query(
+            "SELECT o.status, COUNT(*) AS count FROM memory_document_outbox o \
+             JOIN memory_document_versions v ON v.memory_id = o.memory_id AND v.version = o.version \
+             WHERE v.workspace_id = ? GROUP BY o.status",
+        )
+        .bind(workspace_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+        let mut pending = 0_u64;
+        let mut processing = 0_u64;
+        let mut dead_letter = 0_u64;
+        for row in status_rows {
+            let status: String = row.try_get("status")?;
+            let count: i64 = row.try_get("count")?;
+            let count = u64::try_from(count)
+                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            match status.as_str() {
+                "pending" => pending = count,
+                "processing" => processing = count,
+                "dead_letter" => dead_letter = count,
+                _ => {}
+            }
+        }
+
+        Ok(MemoryReconciliationReport {
+            workspace_id,
+            sqlite_versions_scanned: rows.len(),
+            mongo_documents_scanned: documents.len(),
+            pending_outbox_events: pending,
+            processing_outbox_events: processing,
+            dead_letter_outbox_events: dead_letter,
+            scan_limit_reached: rows.len() == limit || documents.len() == limit,
+            issues,
+        })
     }
 
     /// Requeues a valid dead-letter event without changing the immutable
