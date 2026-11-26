@@ -2201,6 +2201,36 @@ mod epoch_document_tests {
         .await
         .unwrap();
         assert_eq!(deleted_status, "deleted");
+        let deleted_payload: String = sqlx::query_scalar(
+            "SELECT payload_json FROM memory_document_outbox WHERE memory_id = ? AND version = 4",
+        )
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        let deleted: MemoryDocument = serde_json::from_str(&deleted_payload).unwrap();
+        repository.put_version(deleted).await.unwrap();
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 4",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
+        let latest_epoch_items: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM memory_document_epoch_items i
+             JOIN memory_epochs e ON e.id = i.epoch_id
+             WHERE i.workspace_id = ? AND e.epoch_number = (
+                 SELECT MAX(epoch_number) FROM memory_epochs WHERE workspace_id = ?
+             )",
+        )
+        .bind(account.workspace.id.to_string())
+        .bind(account.workspace.id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(latest_epoch_items, 0);
         let hidden_after_delete = outbox.list_authorized_document_refs(
             account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
         ).await.unwrap();
