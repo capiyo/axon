@@ -36,7 +36,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let storage = SqliteStorage::connect(&config.database_url).await?;
     let memory_epochs = storage.memory_epoch_coordinator()
         .with_qoin_scoring_version(config.qoin_memory_scoring.effective_version());
-    tokio::spawn(memory_epochs.run_hourly());
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let epoch_worker = tokio::spawn(memory_epochs.run_hourly_until(shutdown_rx.clone()));
     let memory_outbox = storage.memory_outbox();
 
     let memory_documents: Option<Arc<dyn MemoryDocumentRepository>> =
@@ -77,7 +78,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok()
         .map(|url| QoinVectorClient::new(&url))
         .transpose()?;
-    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     let outbox_worker = if let Some(repository) = memory_documents.clone() {
         Some(tokio::spawn(memory_outbox.clone().run(
             repository,
@@ -106,15 +106,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         qoin_vectors = env::var("QOIN_API_URL").is_ok(),
         "Axon API listening with Firebase authentication and durable SQLite storage"
     );
-    axum::serve(listener, app(state))
-        .with_graceful_shutdown(async move {
+    let serve_result = axum::serve(listener, app(state))
+        .with_graceful_shutdown(async {
             shutdown_signal().await;
-            let _ = shutdown_tx.send(true);
         })
-        .await?;
+        .await;
 
-    // Allow an in-flight outbox write to finish and the worker to observe the
-    // shutdown signal. Any unclaimed event remains durable in SQLite.
+    let _ = shutdown_tx.send(true);
+    // Both workers leave unclaimed work durable in SQLite. Bound shutdown
+    // waiting so a stalled provider cannot prevent process termination.
     if let Some(worker) = outbox_worker {
         match tokio::time::timeout(std::time::Duration::from_secs(5), worker).await {
             Ok(Ok(())) => tracing::info!("memory outbox worker stopped cleanly"),
@@ -122,6 +122,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(_) => tracing::warn!("memory outbox worker did not stop within five seconds; pending events remain recoverable"),
         }
     }
+    match tokio::time::timeout(std::time::Duration::from_secs(5), epoch_worker).await {
+        Ok(Ok(())) => tracing::info!("memory epoch worker stopped cleanly"),
+        Ok(Err(error)) => tracing::error!(error = %error, "memory epoch worker task failed"),
+        Err(_) => tracing::warn!("memory epoch worker did not stop within five seconds; next process can republish due epochs"),
+    }
+    serve_result?;
     Ok(())
 }
 
