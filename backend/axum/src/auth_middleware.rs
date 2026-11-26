@@ -53,7 +53,11 @@ pub async fn authenticate(
         };
         let allowed_agent_endpoint = segments.get(3) == Some(&"workspaces")
             && segments.get(5) == Some(&"agents")
-            && matches!(segments.get(7), Some(&"memory-documents" | &"memory-sessions" | &"memory-context"));
+            && segments.get(7).is_some_and(|endpoint| {
+                *endpoint == "memory-documents"
+                    || *endpoint == "memory-sessions"
+                    || *endpoint == "memory-context"
+            });
         if !allowed_agent_endpoint {
             return response(StatusCode::FORBIDDEN);
         }
