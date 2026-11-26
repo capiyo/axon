@@ -828,6 +828,7 @@ impl MemoryOutbox {
              OR (v.scope = 'task_shared' AND v.task_id = ?) \
              OR (v.scope = 'project_shared' AND v.project_id = ? AND EXISTS (\
                  SELECT 1 FROM project_memberships pm JOIN projects p ON p.id = pm.project_id \
+                 JOIN workspace_memberships wm ON wm.workspace_id = p.workspace_id AND wm.user_id = pm.user_id \
                  WHERE pm.project_id = v.project_id AND pm.user_id = ? AND pm.revoked_at IS NULL \
                  AND p.workspace_id = v.workspace_id))) \
              AND NOT EXISTS (SELECT 1 FROM memory_document_versions newer \
@@ -914,6 +915,7 @@ impl MemoryOutbox {
                     let membership: Option<i64> = sqlx::query_scalar(
                         "SELECT 1 FROM project_memberships pm
                          JOIN projects p ON p.id = pm.project_id
+                         JOIN workspace_memberships wm ON wm.workspace_id = p.workspace_id AND wm.user_id = pm.user_id
                          WHERE pm.project_id = ? AND pm.user_id = ?
                            AND pm.revoked_at IS NULL AND p.workspace_id = ?",
                     )
