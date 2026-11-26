@@ -47,4 +47,4 @@ The API signals the memory outbox worker during graceful shutdown and waits up t
 
 ## Version history
 
-`GET /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-documents/{memory_id}/versions?limit=20&before_version=...` returns a bounded page of approved, synchronized version metadata. For task-shared memories, supply `task_id`; the API rechecks task workspace and agent assignment. It verifies each exact MongoDB version against SQLite before returning title/hash/provenance metadata, and does not return document content.
+`GET /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-documents/{memory_id}/versions/history?limit=20&before_version=...` returns a bounded page of approved, synchronized version metadata. For task-shared memories, supply `task_id`; the API rechecks task workspace and agent assignment. It verifies each exact MongoDB version against SQLite before returning title/hash/provenance metadata, and does not return document content.
