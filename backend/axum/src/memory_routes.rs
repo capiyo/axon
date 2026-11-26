@@ -876,6 +876,28 @@ mod session_context_tests {
         }
     }
 
+    #[tokio::test]
+    async fn agent_session_access_is_bound_to_the_registering_user() {
+        let state = AppState::default();
+        let owner_id = Uuid::new_v4();
+        let other_member_id = Uuid::new_v4();
+        let workspace_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+        state.agents.write().await.insert(agent_id, crate::model::Agent {
+            id: agent_id,
+            workspace_id,
+            created_by_user_id: Some(owner_id),
+            display_name: "Owned agent".into(),
+            provider: "manual".into(),
+            connection_mode: crate::model::ConnectionMode::Manual,
+            created_at: Utc::now(),
+        });
+
+        assert!(require_agent_owner(&state, owner_id, workspace_id, agent_id).await.is_ok());
+        assert!(require_agent_owner(&state, other_member_id, workspace_id, agent_id).await.is_err());
+        assert!(require_agent_owner(&state, owner_id, Uuid::new_v4(), agent_id).await.is_err());
+    }
+
     #[test]
     fn context_budget_omits_whole_ranked_documents_and_reports_truncation() {
         let first = ranked_document("short");
