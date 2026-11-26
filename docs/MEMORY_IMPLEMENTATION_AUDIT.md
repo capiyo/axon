@@ -71,7 +71,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 - Full MongoDB outage/restart integration tests.
 - Qoin source-reliability, contradiction, duplication, reuse-frequency, and persisted retrieval-feedback features with a labelled evaluation set.
 - Full readiness/observability coverage (basic DB readiness exists, worker health/metrics do not), backup/restore drills, production secrets management, and measured performance results.
-- Cryptographic agent-principal authentication is not implemented. New agent IDs are bound to their registering Firebase user, preventing cross-member agent impersonation; legacy agent records without owner metadata fail closed. The registering user still acts on behalf of the agent, so a separate agent process cannot yet authenticate independently.
+- Independent agent bearer credentials are now implemented for a fixed allowlist of memory routes. Tokens are high-entropy, SHA-256-hashed at rest, expire after 90 days, and support atomic rotation/revocation. Middleware binds each token to one agent and workspace. General-purpose persisted capability grants for all Axon resource families remain outstanding; legacy agents without an owner still fail closed.
 - Session-document hydration is now bound to the persisted session epoch, and a combined session-context API returns it alongside progressive retrieval. The repository still has no autonomous provider-backed agent execution runtime to wire this context into; client/agent consumer integration needs to use the new endpoint.
 
 
