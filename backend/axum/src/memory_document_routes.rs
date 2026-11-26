@@ -4,8 +4,8 @@ use crate::{
     memory_documents::MemoryDocument,
     memory_vector_provider::{LexicalMemoryVectorProvider, MemoryVectorProvider, LEXICAL_MEMORY_VECTOR_VERSION},
     memory_intelligence::{
-        retrieve_memories, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
-        MemoryVisibility, ScoreBreakdown, QOIN_MEMORY_SCORING_VERSION,
+        retrieve_memories_with_config, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
+        MemoryVisibility, ScoreBreakdown,
     },
     AppState,
 };
@@ -357,7 +357,7 @@ pub struct RankedMemoryDocument {
 pub struct MemoryDocumentSearchResponse {
     pub retrieval_mode: &'static str,
     pub qkv_model_version: &'static str,
-    pub qoin_scoring_version: &'static str,
+    pub qoin_scoring_version: String,
     pub candidates_examined: usize,
     pub context_bytes_used: usize,
     pub results: Vec<RankedMemoryDocument>,
@@ -572,7 +572,7 @@ pub async fn search_agent_memory_documents(
         .map(|score| (score.memory_id, score.total))
         .collect();
 
-    let qoin = retrieve_memories(
+    let qoin = retrieve_memories_with_config(
         &MemoryQuery {
             workspace_id,
             requester_agent_id: Some(agent_id),
@@ -590,8 +590,10 @@ pub async fn search_agent_memory_documents(
             limit: input.limit.clamp(1, 20),
         },
         &indexed_memories,
+        &state.qoin_memory_scoring,
     )
     .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Qoin memory ranking could not be evaluated."))?;
+    let qoin_scoring_version = qoin.scoring_config.version.clone();
 
     const MAX_CONTEXT_BYTES: usize = 64 * 1024;
     let mut context_bytes_used = 0_usize;
@@ -622,7 +624,7 @@ pub async fn search_agent_memory_documents(
     Ok(Json(MemoryDocumentSearchResponse {
         retrieval_mode: "deterministic_lexical_qkv_v1",
         qkv_model_version: LEXICAL_MEMORY_VECTOR_VERSION,
-        qoin_scoring_version: QOIN_MEMORY_SCORING_VERSION,
+        qoin_scoring_version,
         candidates_examined: indexed_memories.len(),
         context_bytes_used,
         results,
