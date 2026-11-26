@@ -6,6 +6,7 @@ pub mod chat_memory;
 pub mod config;
 mod chat_memory_routes;
 mod memory_document_routes;
+mod project_routes;
 pub mod firebase_auth;
 pub mod identity;
 pub mod memory_architecture;
@@ -28,7 +29,7 @@ pub use state::AppState;
 use axum::{
     http::{header, HeaderValue, Method},
     middleware,
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post},
     Router,
 };
 use tower_http::{
@@ -48,7 +49,7 @@ pub fn app(state: AppState) -> Router {
     } else {
         CorsLayer::new()
             .allow_origin(AllowOrigin::list(allowed_origins))
-            .allow_methods([Method::GET, Method::POST, Method::PATCH])
+            .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
             .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
     };
     Router::new()
@@ -154,6 +155,18 @@ pub fn app(state: AppState) -> Router {
             "/api/v1/sim/devices/:device_id/telemetry",
             get(robotics_routes::list_simulated_telemetry)
                 .post(robotics_routes::ingest_simulated_telemetry),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/projects",
+            get(project_routes::list_projects).post(project_routes::create_project),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/projects/:project_id/members",
+            post(project_routes::set_project_member),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/projects/:project_id/members/:target_user_id",
+            delete(project_routes::revoke_project_member),
         )
         .route(
             "/api/v1/workspaces",
