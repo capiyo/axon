@@ -857,6 +857,7 @@ impl MemoryOutbox {
         }
 
         let requester_agent_id_text = requester_agent_id.to_string();
+        let requester_user_id_text = requester_user_id.to_string();
         let requester_task_id_text = task_id.map(|id| id.to_string());
         let visible = match scope.as_str() {
             "workspace_shared" => true,
@@ -925,6 +926,7 @@ impl MemoryOutbox {
         workspace_id: Uuid,
         epoch_id: Uuid,
         requester_agent_id: Uuid,
+        requester_user_id: Uuid,
         task_id: Option<Uuid>,
         limit: usize,
     ) -> Result<Option<Vec<MemoryDocument>>, MemoryOutboxError> {
@@ -983,8 +985,25 @@ impl MemoryOutbox {
                 "agent_private" => owner_id.as_deref() == Some(requester_agent_id_text.as_str()),
                 "task_shared" => task_id.is_some()
                     && stored_task_id.as_deref() == requester_task_id_text.as_deref(),
-                // Project membership is not yet backed by persisted authorization.
-                "project_shared" => false,
+                "project_shared" => {
+                    if let Some(project_id) = project_id.as_deref() {
+                        let membership: Option<i64> = sqlx::query_scalar(
+                            "SELECT 1 FROM project_memberships pm
+                             JOIN projects p ON p.id = pm.project_id
+                             JOIN workspace_memberships wm ON wm.workspace_id = p.workspace_id AND wm.user_id = pm.user_id
+                             WHERE pm.project_id = ? AND pm.user_id = ?
+                               AND pm.revoked_at IS NULL AND p.workspace_id = ?",
+                        )
+                        .bind(project_id)
+                        .bind(&requester_user_id_text)
+                        .bind(workspace_id.to_string())
+                        .fetch_optional(&self.pool)
+                        .await?;
+                        membership.is_some()
+                    } else {
+                        false
+                    }
+                },
                 _ => false,
             };
             if !visible {
@@ -1043,6 +1062,7 @@ impl MemoryOutbox {
         workspace_id: Uuid,
         session_id: Uuid,
         requester_agent_id: Uuid,
+        requester_user_id: Uuid,
         limit: usize,
     ) -> Result<Option<(Uuid, Option<Uuid>, Option<String>, Vec<MemoryDocument>)>, MemoryOutboxError> {
         let session = sqlx::query(
@@ -1084,6 +1104,7 @@ impl MemoryOutbox {
                 workspace_id,
                 epoch_id,
                 requester_agent_id,
+                requester_user_id,
                 task_id,
                 limit,
             )
