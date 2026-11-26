@@ -51,7 +51,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 7. Added SHA-256 source hashing over the exact ordered title/content/tag text used to build each persisted QKV key.
 8. Document validation rejects malformed, partial, non-normalized, model-version-mismatched, or source-hash-mismatched persisted keys. Legacy documents without stored keys retain deterministic query-time fallback.
 9. Added tests for exact epoch hydration, session binding, private-scope denial, missing epochs, persisted QKV-key validation, and context-budget selection.
-10. Added validated startup configuration for production-required MongoDB, connection/server-selection timeouts, maximum pool size, and URI-redacted Debug output.
+10. Added validated startup configuration for production-required MongoDB, connection/server-selection timeouts, maximum pool size, URI-redacted Debug output, and a pluggable asynchronous QKV provider injected through AppState.
 11. Added configurable, versioned Qoin scoring policies and returned the exact policy with ranked search results.
 12. Made outbox completion and failure transitions verify their lease and authoritative metadata row before committing.
 13. Added audited dead-letter retry for valid retained payloads, with SQLite-only transaction semantics and tests for invalid payload refusal.
@@ -62,7 +62,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 
 ## 5. Remaining gaps
 
-- Neural embedding-provider implementation. The `MemoryVectorProvider` abstraction exists; only the deterministic lexical implementation is currently available.
+- A production neural embedding-provider implementation and configuration. The asynchronous `MemoryVectorProvider` abstraction is injected and ready for an implementation; only the deterministic lexical provider is currently shipped.
 - Project-shared memory remains fail-closed because persisted project-membership authorization does not yet exist.
 - A separately searchable precomputed vector index and safe index-rebuild workflow. A bounded read-only reconciliation report now exists, but it does not repair data.
 - Retrieval feedback persistence and evaluation against a labelled memory-retrieval dataset.
