@@ -110,3 +110,13 @@ Migration `0013_projects_and_memberships.sql` adds:
 - `project_memberships`: project/user association, role (`owner`, `admin`, `member`, `viewer`), creation time, and revocation timestamp.
 
 Project creation is restricted to workspace owners. Project members must be workspace members. Workspace membership revocation revokes project memberships in the same transaction. Project-scoped memory creation, search, direct retrieval, version history, approval, and session hydration check current active membership. Immutable epoch records retain their historical pins, but current authorization revocation takes precedence at read time.
+
+
+## Immutable lifecycle versions
+
+Archive, restore, and logical delete are version transitions, not in-place edits to MongoDB documents. Each transition writes a new `memory_document_versions` row and a matching outbox payload:
+- Archive writes lifecycle `archived`.
+- Restore from the latest archived version writes a new approved (`ready`) version.
+- Delete writes lifecycle `deleted` as a tombstone.
+
+Tombstones suppress older approved versions from normal search and from newly published epochs. Already-published epochs keep their exact historical version pins. MongoDB retains the immutable document versions; the delete endpoint is logical deletion, not physical purge. Retention/purge execution and legal-hold policy are not implemented.
