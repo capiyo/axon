@@ -21,7 +21,7 @@ pub async fn authenticate(
     mut request: Request<Body>,
     next: Next,
 ) -> Response<Body> {
-    if request.uri().path() == "/health" {
+    if matches!(request.uri().path(), "/health" | "/ready") {
         return next.run(request).await;
     }
 
