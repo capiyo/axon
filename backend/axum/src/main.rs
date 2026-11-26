@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = BackendConfig::from_env()?;
     let storage = SqliteStorage::connect(&config.database_url).await?;
     let memory_epochs = storage.memory_epoch_coordinator()
-        .with_qoin_scoring_version(config.qoin_memory_scoring.version.clone());
+        .with_qoin_scoring_version(config.qoin_memory_scoring.effective_version());
     tokio::spawn(memory_epochs.run_hourly());
     let memory_outbox = storage.memory_outbox();
 
