@@ -178,6 +178,13 @@ pub trait MemoryDocumentRepository: Send + Sync {
         memory_id: Uuid,
     ) -> Result<Vec<MemoryDocument>, MemoryDocumentError>;
 
+    /// Bounded, read-only scan used by reconciliation. Returned documents
+    /// contain content and must remain inside trusted service code.
+    async fn list_documents(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<MemoryDocument>, MemoryDocumentError>;
+
     async fn verify_version(
         &self,
         memory_id: Uuid,
@@ -316,6 +323,28 @@ impl MemoryDocumentRepository for MongoMemoryDocumentRepository {
         let mut versions: Vec<MemoryDocument> = cursor.try_collect().await?;
         versions.sort_by_key(|document| document.version);
         Ok(versions)
+    }
+
+    async fn list_documents(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
+        let limit = limit.clamp(1, 5_000);
+        let mut cursor = self.collection.find(doc! {}, None).await?;
+        let mut documents = Vec::with_capacity(limit.min(256));
+        while documents.len() < limit {
+            match cursor.try_next().await? {
+                Some(document) => documents.push(document),
+                None => break,
+            }
+        }
+        documents.sort_by(|left, right| {
+            left.memory_id
+                .as_bytes()
+                .cmp(right.memory_id.as_bytes())
+                .then_with(|| left.version.cmp(&right.version))
+        });
+        Ok(documents)
     }
 
     async fn verify_version(
