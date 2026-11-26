@@ -38,6 +38,17 @@ pub struct MemoryOutboxEvent {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct AuthorizedMemoryDocumentVersion {
+    pub version: u64,
+    pub content_hash: String,
+    pub source_event_sequence: u64,
+    pub qkv_version: String,
+    pub qoin_vector_version: Option<String>,
+    pub scope: String,
+    pub task_id: Option<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct MemoryReconciliationIssue {
     pub memory_id: Uuid,
     pub version: u64,
@@ -415,6 +426,65 @@ impl MemoryOutbox {
         .await?;
         transaction.commit().await?;
         Ok(true)
+    }
+
+    /// Returns only approved, synchronized versions visible to this
+    /// workspace-owned agent. The query runs against SQLite before MongoDB
+    /// content is hydrated by the API layer.
+    pub async fn list_authorized_document_versions(
+        &self,
+        workspace_id: Uuid,
+        memory_id: Uuid,
+        requester_agent_id: Uuid,
+        task_id: Option<Uuid>,
+        before_version: Option<u64>,
+        requested_limit: usize,
+    ) -> Result<Vec<AuthorizedMemoryDocumentVersion>, MemoryOutboxError> {
+        let limit = i64::try_from(requested_limit.clamp(1, 100))
+            .map_err(|_| sqlx::Error::Protocol("version history limit exceeds SQLite range".into()))?;
+        let before_version = before_version
+            .map(i64::try_from)
+            .transpose()
+            .map_err(|_| sqlx::Error::Protocol("version cursor exceeds SQLite range".into()))?;
+        let rows = sqlx::query(
+            "SELECT version, content_hash, source_event_sequence, qkv_version, qoin_vector_version, scope, task_id \
+             FROM memory_document_versions \
+             WHERE workspace_id = ? AND memory_id = ? AND lifecycle_status = 'approved' \
+             AND sync_status IN ('stored', 'indexed') \
+             AND (scope = 'workspace_shared' OR (scope = 'agent_private' AND owner_id = ?) \
+                  OR (scope = 'task_shared' AND task_id = ?)) \
+             AND (? IS NULL OR version < ?) ORDER BY version DESC LIMIT ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(memory_id.to_string())
+        .bind(requester_agent_id.to_string())
+        .bind(task_id.map(|value| value.to_string()))
+        .bind(before_version)
+        .bind(before_version)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        let mut versions = Vec::with_capacity(rows.len());
+        for row in rows {
+            let version: i64 = row.try_get("version")?;
+            let source_sequence: i64 = row.try_get("source_event_sequence")?;
+            let task_id_text: Option<String> = row.try_get("task_id")?;
+            versions.push(AuthorizedMemoryDocumentVersion {
+                version: u64::try_from(version)
+                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?,
+                content_hash: row.try_get("content_hash")?,
+                source_event_sequence: u64::try_from(source_sequence)
+                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?,
+                qkv_version: row.try_get("qkv_version")?,
+                qoin_vector_version: row.try_get("qoin_vector_version")?,
+                scope: row.try_get("scope")?,
+                task_id: task_id_text
+                    .map(|value| Uuid::parse_str(&value))
+                    .transpose()
+                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?,
+            });
+        }
+        Ok(versions)
     }
 
     /// Read-only, bounded consistency audit for one workspace. It reports
