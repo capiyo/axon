@@ -376,6 +376,7 @@ pub async fn retry_memory_document_sync(
 #[derive(Debug, Deserialize)]
 pub struct MemoryDocumentVersionHistoryQuery {
     pub task_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
     #[serde(default = "default_version_history_limit")]
     pub limit: usize,
     pub before_version: Option<u64>,
@@ -424,8 +425,17 @@ pub async fn get_agent_memory_document_versions(
     if let Some(task_id) = query.task_id {
         let task_matches = state.tasks.read().await.get(&task_id)
             .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
-        if !task_matches {
+        if !task_matches || query.project_id.is_some() {
             return Err(api_error(StatusCode::NOT_FOUND, "Task not found for this agent in the workspace."));
+        }
+    }
+    if let Some(project_id) = query.project_id {
+        let project_member = state
+            .is_project_member(workspace_id, project_id, user.user_id)
+            .await
+            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Project membership could not be checked."))?;
+        if !project_member {
+            return Err(api_error(StatusCode::NOT_FOUND, "Project not found in this workspace."));
         }
     }
 
@@ -441,7 +451,9 @@ pub async fn get_agent_memory_document_versions(
             workspace_id,
             memory_id,
             agent_id,
+            user.user_id,
             query.task_id,
+            query.project_id,
             query.before_version,
             limit + 1,
         )
