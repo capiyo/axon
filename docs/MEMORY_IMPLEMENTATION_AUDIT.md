@@ -65,7 +65,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 ## 5. Remaining gaps
 
 - A production neural embedding-provider implementation and configuration. The asynchronous `MemoryVectorProvider` abstraction is injected and ready for an implementation; only the deterministic lexical provider is currently shipped.
-- Project-shared memory remains fail-closed because persisted project-membership authorization does not yet exist.
+- Scope promotion between existing memory documents is not yet implemented. Project-scoped access now uses persistent SQLite project membership.
 - A separately searchable precomputed vector index and safe index-rebuild workflow. A bounded read-only reconciliation report now exists, but it does not repair data.
 - Retrieval feedback persistence and evaluation against a labelled memory-retrieval dataset.
 - Full MongoDB outage/restart integration tests.
@@ -73,6 +73,24 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 - Full readiness/observability coverage (basic DB readiness exists, worker health/metrics do not), backup/restore drills, production secrets management, and measured performance results.
 - Cryptographic agent-principal authentication is not implemented. New agent IDs are bound to their registering Firebase user, preventing cross-member agent impersonation; legacy agent records without owner metadata fail closed. The registering user still acts on behalf of the agent, so a separate agent process cannot yet authenticate independently.
 - Session-document hydration is now bound to the persisted session epoch, and a combined session-context API returns it alongside progressive retrieval. The repository still has no autonomous provider-backed agent execution runtime to wire this context into; client/agent consumer integration needs to use the new endpoint.
+
+
+## 5. Project membership implementation pass (2026-11-26)
+
+Added forward-only migration `0013_projects_and_memberships.sql` with workspace-bound projects, active/revoked project memberships, role constraints, indexes, and database guards requiring an owner to create a project and every project member to belong to its workspace.
+
+Added storage and API support for:
+- Workspace-owner project creation.
+- Listing projects visible to the authenticated user.
+- Workspace-owner addition and revocation of workspace members.
+- Project owner/admin member grants and revocation.
+- Owner-only assignment of elevated project roles.
+- Protection against demoting or revoking an existing project owner.
+- Audited membership changes.
+
+Project-shared memory is now enabled for creation and retrieval. Current membership is checked for project-scoped search, direct retrieval, version history, approval, and immutable session hydration. Workspace-member revocation also revokes project membership rows in the same SQLite transaction. Historical epoch pins remain immutable, but current authorization revocation takes precedence when hydrating them.
+
+The migration SQL was exercised independently with Python's SQLite engine, including project creation, membership lookup, and access revocation. This is not a substitute for the Rust migration/test suite.
 
 ## 6. Verification status
 
