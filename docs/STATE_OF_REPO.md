@@ -60,7 +60,8 @@
 - [x] Added approved, scope-checked agent document retrieval and query search using deterministic lexical QKV attention followed by configurable, versioned Qoin memory scoring. Search responses return the scoring policy and per-candidate breakdown.
 - [x] Immutable memory-document epoch metadata now pins exact document version, content hash, source sequence, QKV version, and Qoin scoring version.
 - [ ] A production neural embedding provider remains outstanding; the asynchronous provider abstraction is injected through AppState and defaults to deterministic lexical QKV keys with source-text integrity hashes.
-- [x] Agent ownership is persisted in the serialized Agent entity; agent-specific document, handover, and session routes reject cross-member agent impersonation.\n- [x] A session-bound endpoint resolves the session's immutable epoch and hydrates/ranks exact MongoDB document versions through QKV and Qoin.
+- [x] Agent ownership is persisted in the serialized Agent entity; agent-specific document, handover, and session routes reject cross-member agent impersonation.
+- [x] A session-bound endpoint resolves the session's immutable epoch and hydrates/ranks exact MongoDB document versions through QKV and Qoin.
 - [ ] Project-shared memory is disabled until persisted project-membership authorization exists.
 - [x] Added audited dead-letter recovery for valid retained outbox payloads.
 - [x] Added bounded, workspace-scoped read-only SQLite/MongoDB reconciliation reports.
