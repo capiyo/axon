@@ -29,6 +29,29 @@ pub trait MemoryVectorProvider: Send + Sync {
     async fn key_for_text(&self, text: &str) -> Result<QoinVector, MemoryVectorProviderError>;
 }
 
+pub fn validate_memory_key(
+    key: &QoinVector,
+    expected_model_version: &str,
+) -> Result<(), MemoryVectorProviderError> {
+    if key.model_version != expected_model_version {
+        return Err(MemoryVectorProviderError::ModelVersionMismatch);
+    }
+    if key.values.is_empty()
+        || key.values.len() > 4096
+        || key.values.iter().any(|value| !value.is_finite())
+    {
+        return Err(MemoryVectorProviderError::InvalidVector);
+    }
+    let norm = key.values.iter()
+        .map(|value| (*value as f64).powi(2))
+        .sum::<f64>()
+        .sqrt();
+    if !norm.is_finite() || (norm - 1.0).abs() > 1e-4 {
+        return Err(MemoryVectorProviderError::InvalidVector);
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LexicalMemoryVectorProvider;
 
@@ -101,6 +124,27 @@ mod tests {
         assert_eq!(
             provider.key_for_text("... !!! ---").await.unwrap_err(),
             MemoryVectorProviderError::EmptyQuery
+        );
+    }
+
+    #[test]
+    fn provider_key_validation_checks_version_dimension_and_normalization() {
+        let valid = QoinVector {
+            values: vec![0.6, 0.8],
+            model_version: "test-v1".into(),
+        };
+        assert!(validate_memory_key(&valid, "test-v1").is_ok());
+        assert_eq!(
+            validate_memory_key(&valid, "test-v2"),
+            Err(MemoryVectorProviderError::ModelVersionMismatch),
+        );
+        let invalid_norm = QoinVector {
+            values: vec![2.0, 0.0],
+            model_version: "test-v1".into(),
+        };
+        assert_eq!(
+            validate_memory_key(&invalid_norm, "test-v1"),
+            Err(MemoryVectorProviderError::InvalidVector),
         );
     }
 
