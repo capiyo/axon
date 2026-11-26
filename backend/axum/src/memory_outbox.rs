@@ -939,10 +939,12 @@ impl MemoryOutbox {
         session_id: Uuid,
         requester_agent_id: Uuid,
         limit: usize,
-    ) -> Result<Option<(Uuid, Option<Uuid>, String, Vec<MemoryDocument>)>, MemoryOutboxError> {
+    ) -> Result<Option<(Uuid, Option<Uuid>, Option<String>, Vec<MemoryDocument>)>, MemoryOutboxError> {
         let session = sqlx::query(
-            "SELECT s.memory_epoch_id, s.task_id, e.qoin_scoring_version \
-             FROM agent_memory_sessions s LEFT JOIN memory_epochs e ON e.epoch_id = s.memory_epoch_id \
+            "SELECT s.memory_epoch_id, s.task_id, \
+             (SELECT d.qoin_scoring_version FROM memory_document_epoch_items d \
+              WHERE d.epoch_id = s.memory_epoch_id ORDER BY d.memory_id LIMIT 1) AS qoin_scoring_version \
+             FROM agent_memory_sessions s \
              WHERE s.session_id = ? AND s.workspace_id = ? AND s.agent_id = ?",
         )
         .bind(session_id.to_string())
@@ -957,7 +959,6 @@ impl MemoryOutbox {
         let epoch_id = Uuid::parse_str(&epoch_id_text)
             .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
         let qoin_scoring_version: Option<String> = session.try_get("qoin_scoring_version")?;
-        let qoin_scoring_version = qoin_scoring_version.ok_or(MemoryOutboxError::VersionConflict)?;
         let task_id_text: Option<String> = session.try_get("task_id")?;
         let task_id = task_id_text
             .map(|value| Uuid::parse_str(&value))
@@ -1373,6 +1374,7 @@ mod epoch_document_tests {
         ).await.unwrap().unwrap();
         assert_eq!(session_documents.0, epoch_id);
         assert!(session_documents.1.is_none());
+        assert_eq!(session_documents.2.as_deref(), Some("test-qoin-memory-v2"));
         assert_eq!(session_documents.3.len(), 1);
         assert_eq!(session_documents.3[0].memory_id, document.memory_id);
 
