@@ -116,3 +116,26 @@ pub struct TaskTransition {
     pub note: String,
     pub occurred_at: DateTime<Utc>,
 }
+
+#[cfg(test)]
+mod agent_ownership_tests {
+    use super::*;
+    use chrono::Utc;
+
+    #[test]
+    fn legacy_agent_records_deserialize_without_owner_metadata() {
+        let agent = Agent {
+            id: Uuid::new_v4(),
+            workspace_id: Uuid::new_v4(),
+            created_by_user_id: Some(Uuid::new_v4()),
+            display_name: "Agent".into(),
+            provider: "manual".into(),
+            connection_mode: ConnectionMode::Manual,
+            created_at: Utc::now(),
+        };
+        let mut serialized = serde_json::to_value(agent).unwrap();
+        serialized.as_object_mut().unwrap().remove("created_by_user_id");
+        let legacy: Agent = serde_json::from_value(serialized).unwrap();
+        assert_eq!(legacy.created_by_user_id, None);
+    }
+}
