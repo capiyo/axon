@@ -17,12 +17,12 @@ use crate::{
     qoin_vectors::{QoinVectorError, QoinVectorSnapshot},
     AppState,
 };
-use chrono::Utc;
 use axum::{
     extract::{Extension, Path, Query, State},
     http::StatusCode,
     Json,
 };
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
@@ -50,7 +50,10 @@ async fn require_agent_owner(
     if state.is_agent_owner(user_id, workspace_id, agent_id).await {
         Ok(())
     } else {
-        Err(error(StatusCode::NOT_FOUND, "Agent not found for this user in the workspace."))
+        Err(error(
+            StatusCode::NOT_FOUND,
+            "Agent not found for this user in the workspace.",
+        ))
     }
 }
 
@@ -591,14 +594,19 @@ pub async fn record_session_feedback(
     Json(input): Json<AgentSessionFeedbackRequest>,
 ) -> ApiResult<Json<AgentSessionFeedbackResponse>> {
     if agent_principal.is_some() {
-        return Err(error(StatusCode::FORBIDDEN, "Retrieval quality feedback must be submitted by the authenticated human owner."));
+        return Err(error(
+            StatusCode::FORBIDDEN,
+            "Retrieval quality feedback must be submitted by the authenticated human owner.",
+        ));
     }
     require_member(&state, user.user_id, workspace_id).await?;
     require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
-    let outbox = state.memory_outbox.as_ref().ok_or_else(|| error(
-        StatusCode::SERVICE_UNAVAILABLE,
-        "Memory feedback storage is unavailable.",
-    ))?;
+    let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Memory feedback storage is unavailable.",
+        )
+    })?;
     let feedback = outbox
         .record_retrieval_feedback(
             workspace_id,
@@ -614,13 +622,22 @@ pub async fn record_session_feedback(
         .map_err(|failure| {
             tracing::error!(error = %failure, "memory retrieval feedback failed");
             match failure {
-                crate::memory_outbox::MemoryOutboxError::VersionConflict => {
-                    error(StatusCode::BAD_REQUEST, "Feedback event, version, or evidence is invalid.")
-                }
-                _ => error(StatusCode::INTERNAL_SERVER_ERROR, "Memory feedback could not be recorded."),
+                crate::memory_outbox::MemoryOutboxError::VersionConflict => error(
+                    StatusCode::BAD_REQUEST,
+                    "Feedback event, version, or evidence is invalid.",
+                ),
+                _ => error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Memory feedback could not be recorded.",
+                ),
             }
         })?
-        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Session or pinned memory version not found for this agent."))?;
+        .ok_or_else(|| {
+            error(
+                StatusCode::NOT_FOUND,
+                "Session or pinned memory version not found for this agent.",
+            )
+        })?;
     Ok(Json(AgentSessionFeedbackResponse {
         feedback_id: feedback.feedback_id,
         memory_id: feedback.memory_id,
@@ -639,14 +656,18 @@ pub async fn retrieve_session_context(
     require_member(&state, user.user_id, workspace_id).await?;
     require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
 
-    let outbox = state.memory_outbox.as_ref().ok_or_else(|| error(
-        StatusCode::SERVICE_UNAVAILABLE,
-        "Memory document metadata is unavailable.",
-    ))?;
-    let repository = state.memory_documents.as_ref().ok_or_else(|| error(
-        StatusCode::SERVICE_UNAVAILABLE,
-        "MongoDB memory documents are unavailable.",
-    ))?;
+    let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Memory document metadata is unavailable.",
+        )
+    })?;
+    let repository = state.memory_documents.as_ref().ok_or_else(|| {
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "MongoDB memory documents are unavailable.",
+        )
+    })?;
     let (epoch_id, task_id, epoch_qoin_scoring_version, pinned_documents) = outbox
         .list_session_authorized_documents(
             repository.as_ref(),
@@ -657,11 +678,18 @@ pub async fn retrieve_session_context(
             100,
         )
         .await
-        .map_err(|_| error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Pinned session memory documents could not be verified.",
-        ))?
-        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Memory session not found for this agent."))?;
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Pinned session memory documents could not be verified.",
+            )
+        })?
+        .ok_or_else(|| {
+            error(
+                StatusCode::NOT_FOUND,
+                "Memory session not found for this agent.",
+            )
+        })?;
 
     if let Some(task_id) = task_id {
         let tasks = state.tasks.read().await;
@@ -682,21 +710,26 @@ pub async fn retrieve_session_context(
     let feedback_signals = outbox
         .feedback_signals(workspace_id, &feedback_versions)
         .await
-        .map_err(|_| error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Pinned session feedback could not be loaded.",
-        ))?;
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Pinned session feedback could not be loaded.",
+            )
+        })?;
 
     let mut feedback_weight = 0.0f32;
     if !pinned_documents.is_empty() {
-        let epoch_qoin_scoring_version = epoch_qoin_scoring_version.ok_or_else(|| error(
-            StatusCode::CONFLICT,
-            "The pinned document epoch has no Qoin scoring policy metadata.",
-        ))?;
+        let epoch_qoin_scoring_version = epoch_qoin_scoring_version.ok_or_else(|| {
+            error(
+                StatusCode::CONFLICT,
+                "The pinned document epoch has no Qoin scoring policy metadata.",
+            )
+        })?;
         let expected_qoin_scoring_version = state.qoin_memory_scoring.effective_version();
         let current_policy = epoch_qoin_scoring_version == expected_qoin_scoring_version;
         let legacy_default_policy = state.qoin_memory_scoring == QoinScoringConfig::default()
-            && epoch_qoin_scoring_version == crate::memory_intelligence::LEGACY_QOIN_MEMORY_SCORING_VERSION;
+            && epoch_qoin_scoring_version
+                == crate::memory_intelligence::LEGACY_QOIN_MEMORY_SCORING_VERSION;
         if !current_policy && !legacy_default_policy {
             return Err(error(
                 StatusCode::CONFLICT,
@@ -715,23 +748,40 @@ pub async fn retrieve_session_context(
         .unwrap_or(&fallback_provider);
     let document_query_vector = if let Some(query_text) = input.query_text.as_deref() {
         if query_text.trim().is_empty() || query_text.len() > 4096 {
-            return Err(error(StatusCode::BAD_REQUEST, "query_text must contain 1–4096 bytes."));
+            return Err(error(
+                StatusCode::BAD_REQUEST,
+                "query_text must contain 1–4096 bytes.",
+            ));
         }
         let key = vector_provider
             .key_for_text(query_text)
             .await
             .map_err(|provider_error| match provider_error {
-                MemoryVectorProviderError::EmptyQuery => {
-                    error(StatusCode::BAD_REQUEST, "query_text contains no searchable terms.")
-                }
-                _ => error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
+                MemoryVectorProviderError::EmptyQuery => error(
+                    StatusCode::BAD_REQUEST,
+                    "query_text contains no searchable terms.",
+                ),
+                _ => error(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Memory embedding provider is unavailable.",
+                ),
             })?;
-        validate_memory_key(&key, vector_provider.model_version())
-            .map_err(|_| error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an invalid or incompatible query key."))?;
+        validate_memory_key(&key, vector_provider.model_version()).map_err(|_| {
+            error(
+                StatusCode::BAD_GATEWAY,
+                "Memory embedding provider returned an invalid or incompatible query key.",
+            )
+        })?;
         key
     } else if input.progressive.query.model_version == vector_provider.model_version() {
-        validate_memory_key(&input.progressive.query, vector_provider.model_version())
-            .map_err(|_| error(StatusCode::BAD_REQUEST, "The supplied session query key is invalid."))?;
+        validate_memory_key(&input.progressive.query, vector_provider.model_version()).map_err(
+            |_| {
+                error(
+                    StatusCode::BAD_REQUEST,
+                    "The supplied session query key is invalid.",
+                )
+            },
+        )?;
         input.progressive.query.clone()
     } else {
         return Err(error(
@@ -750,10 +800,12 @@ pub async fn retrieve_session_context(
             input.progressive.clone(),
         )
         .await
-        .map_err(|_| error(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            "Could not retrieve additional context from this agent's pinned memory epoch.",
-        ))?;
+        .map_err(|_| {
+            error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Could not retrieve additional context from this agent's pinned memory epoch.",
+            )
+        })?;
 
     let query_vector = document_query_vector;
     let mut attention_candidates = Vec::with_capacity(pinned_documents.len());
@@ -761,8 +813,14 @@ pub async fn retrieve_session_context(
     let mut documents_by_id = HashMap::with_capacity(pinned_documents.len());
     for document in pinned_documents {
         let key = match document.key_metadata.get("qkv_key") {
-            Some(stored_key) => serde_json::from_value::<QoinVector>(stored_key.clone())
-                .map_err(|_| error(StatusCode::UNPROCESSABLE_ENTITY, "A pinned memory QKV key is invalid."))?,
+            Some(stored_key) => {
+                serde_json::from_value::<QoinVector>(stored_key.clone()).map_err(|_| {
+                    error(
+                        StatusCode::UNPROCESSABLE_ENTITY,
+                        "A pinned memory QKV key is invalid.",
+                    )
+                })?
+            }
             None => {
                 let mut key_text = document.title.clone();
                 key_text.push(' ');
@@ -779,12 +837,19 @@ pub async fn retrieve_session_context(
                             StatusCode::UNPROCESSABLE_ENTITY,
                             "A pinned memory document has no searchable terms.",
                         ),
-                        _ => error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
+                        _ => error(
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            "Memory embedding provider is unavailable.",
+                        ),
                     })?
             }
         };
-        validate_memory_key(&key, vector_provider.model_version())
-            .map_err(|_| error(StatusCode::UNPROCESSABLE_ENTITY, "A pinned memory QKV key has an incompatible model version or vector shape."))?;
+        validate_memory_key(&key, vector_provider.model_version()).map_err(|_| {
+            error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "A pinned memory QKV key has an incompatible model version or vector shape.",
+            )
+        })?;
         if document.qkv_version != key.model_version
             || key.model_version != query_vector.model_version
         {
@@ -805,10 +870,18 @@ pub async fn retrieve_session_context(
             failure = failure * (1.0 - feedback_weight) + *negative_signal * feedback_weight;
         }
         let dependencies = session_memory_dependencies(&document);
-        let visibility = session_memory_visibility(&document.scope)
-            .ok_or_else(|| error(StatusCode::UNPROCESSABLE_ENTITY, "A pinned memory document has an unsupported scope."))?;
-        let source_sequence = i64::try_from(document.source_event_sequence)
-            .map_err(|_| error(StatusCode::UNPROCESSABLE_ENTITY, "A pinned memory source sequence is invalid."))?;
+        let visibility = session_memory_visibility(&document.scope).ok_or_else(|| {
+            error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "A pinned memory document has an unsupported scope.",
+            )
+        })?;
+        let source_sequence = i64::try_from(document.source_event_sequence).map_err(|_| {
+            error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "A pinned memory source sequence is invalid.",
+            )
+        })?;
         attention_candidates.push(AttentionMemory {
             memory_id: document.memory_id,
             source_kind: document.source_kind.clone(),
@@ -855,7 +928,12 @@ pub async fn retrieve_session_context(
         },
         &attention_candidates,
     )
-    .map_err(|_| error(StatusCode::UNPROCESSABLE_ENTITY, "Pinned session QKV retrieval could not be evaluated."))?;
+    .map_err(|_| {
+        error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Pinned session QKV retrieval could not be evaluated.",
+        )
+    })?;
     let attention_scores: HashMap<Uuid, f64> = attention
         .into_iter()
         .map(|score| (score.memory_id, score.total))
@@ -883,7 +961,12 @@ pub async fn retrieve_session_context(
         &indexed_memories,
         &state.qoin_memory_scoring,
     )
-    .map_err(|_| error(StatusCode::BAD_REQUEST, "Qoin session memory ranking could not be evaluated."))?;
+    .map_err(|_| {
+        error(
+            StatusCode::BAD_REQUEST,
+            "Qoin session memory ranking could not be evaluated.",
+        )
+    })?;
     let qoin_scoring_version = qoin.scoring_config.effective_version();
     let qoin_scoring_config = qoin.scoring_config.clone();
     let document_candidates_examined = qoin.candidates_examined;
@@ -893,7 +976,10 @@ pub async fn retrieve_session_context(
         if let Some(document) = documents_by_id.remove(&ranked.memory_id) {
             ranked_documents.push(RankedSessionMemoryDocument {
                 document,
-                qkv_attention_score: attention_scores.get(&ranked.memory_id).copied().unwrap_or(0.0),
+                qkv_attention_score: attention_scores
+                    .get(&ranked.memory_id)
+                    .copied()
+                    .unwrap_or(0.0),
                 qoin_score: ranked.score,
                 qoin_reasons: ranked.reasons,
             });
@@ -902,11 +988,12 @@ pub async fn retrieve_session_context(
 
     const DOCUMENT_CONTEXT_BUDGET_BYTES: usize = 256 * 1024;
     let (documents, document_context_bytes_used, documents_truncated) =
-        bounded_session_context(ranked_documents, DOCUMENT_CONTEXT_BUDGET_BYTES)
-            .map_err(|_| error(
+        bounded_session_context(ranked_documents, DOCUMENT_CONTEXT_BUDGET_BYTES).map_err(|_| {
+            error(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Ranked session memory context could not be serialized safely.",
-            ))?;
+            )
+        })?;
 
     Ok(Json(AgentSessionMemoryContext {
         session_id,
@@ -1012,19 +1099,34 @@ mod session_context_tests {
         let other_member_id = Uuid::new_v4();
         let workspace_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
-        state.agents.write().await.insert(agent_id, crate::model::Agent {
-            id: agent_id,
-            workspace_id,
-            created_by_user_id: Some(owner_id),
-            display_name: "Owned agent".into(),
-            provider: "manual".into(),
-            connection_mode: crate::model::ConnectionMode::Manual,
-            created_at: Utc::now(),
-        });
+        state.agents.write().await.insert(
+            agent_id,
+            crate::model::Agent {
+                id: agent_id,
+                workspace_id,
+                created_by_user_id: Some(owner_id),
+                display_name: "Owned agent".into(),
+                provider: "manual".into(),
+                connection_mode: crate::model::ConnectionMode::Manual,
+                created_at: Utc::now(),
+            },
+        );
 
-        assert!(require_agent_owner(&state, owner_id, workspace_id, agent_id).await.is_ok());
-        assert!(require_agent_owner(&state, other_member_id, workspace_id, agent_id).await.is_err());
-        assert!(require_agent_owner(&state, owner_id, Uuid::new_v4(), agent_id).await.is_err());
+        assert!(
+            require_agent_owner(&state, owner_id, workspace_id, agent_id)
+                .await
+                .is_ok()
+        );
+        assert!(
+            require_agent_owner(&state, other_member_id, workspace_id, agent_id)
+                .await
+                .is_err()
+        );
+        assert!(
+            require_agent_owner(&state, owner_id, Uuid::new_v4(), agent_id)
+                .await
+                .is_err()
+        );
     }
 
     #[test]
@@ -1043,8 +1145,8 @@ mod session_context_tests {
     fn context_budget_preserves_all_ranked_documents_that_fit() {
         let first = ranked_document("first");
         let second = ranked_document("second");
-        let budget = serde_json::to_vec(&first).unwrap().len()
-            + serde_json::to_vec(&second).unwrap().len();
+        let budget =
+            serde_json::to_vec(&first).unwrap().len() + serde_json::to_vec(&second).unwrap().len();
         let (selected, used, truncated) =
             bounded_session_context(vec![first, second], budget).unwrap();
         assert_eq!(selected.len(), 2);

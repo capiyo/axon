@@ -1,14 +1,17 @@
 use crate::{
-    memory_outbox::MemoryOutbox,
     audit::AuditEvent,
     chat_memory::ChatMemoryStore,
     memory_architecture::MemoryEpochCoordinator,
-    model::{Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace, WorkspaceMembership},
+    memory_outbox::MemoryOutbox,
+    model::{
+        Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace,
+        WorkspaceMembership,
+    },
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
-use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Row, SqlitePool,
@@ -571,8 +574,6 @@ impl Storage for SqliteStorage {
             .collect()
     }
 
-
-
     async fn issue_agent_credential(
         &self,
         workspace_id: Uuid,
@@ -603,7 +604,8 @@ impl Storage for SqliteStorage {
         let entity: StoredEntity = serde_json::from_str(&payload)?;
         if !matches!(entity, StoredEntity::Agent(ref agent)
             if agent.id == agent_id && agent.workspace_id == workspace_id
-                && agent.created_by_user_id == Some(owner_user_id)) {
+                && agent.created_by_user_id == Some(owner_user_id))
+        {
             return Err(StorageError::ProjectAuthorizationDenied);
         }
 
@@ -636,7 +638,12 @@ impl Storage for SqliteStorage {
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
-        Ok(IssuedAgentCredential { credential_id, token, created_at: now, expires_at })
+        Ok(IssuedAgentCredential {
+            credential_id,
+            token,
+            created_at: now,
+            expires_at,
+        })
     }
 
     async fn rotate_agent_credential(
@@ -670,7 +677,8 @@ impl Storage for SqliteStorage {
         };
         let entity: StoredEntity = serde_json::from_str(&payload)?;
         if !matches!(entity, StoredEntity::Agent(ref agent)
-            if agent.created_by_user_id == Some(owner_user_id)) {
+            if agent.created_by_user_id == Some(owner_user_id))
+        {
             return Err(StorageError::ProjectAuthorizationDenied);
         }
         let now = Utc::now();
@@ -716,7 +724,12 @@ impl Storage for SqliteStorage {
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
-        Ok(Some(IssuedAgentCredential { credential_id: new_id, token, created_at: now, expires_at }))
+        Ok(Some(IssuedAgentCredential {
+            credential_id: new_id,
+            token,
+            created_at: now,
+            expires_at,
+        }))
     }
 
     async fn revoke_agent_credential(
@@ -745,8 +758,10 @@ impl Storage for SqliteStorage {
         let is_owner = agent_payload
             .map(|payload| serde_json::from_str::<StoredEntity>(&payload))
             .transpose()?
-            .is_some_and(|entity| matches!(entity, StoredEntity::Agent(ref agent)
-                if agent.created_by_user_id == Some(owner_user_id)));
+            .is_some_and(|entity| {
+                matches!(entity, StoredEntity::Agent(ref agent)
+                if agent.created_by_user_id == Some(owner_user_id))
+            });
         if owner_is_member.is_none() || !is_owner {
             tx.rollback().await?;
             return Ok(false);
@@ -809,13 +824,20 @@ impl Storage for SqliteStorage {
         let firebase_uid: String = row.try_get("provider_subject")?;
         let firebase_project_id: Option<String> = row.try_get("firebase_project_id")?;
         let personal_workspace_id: Option<String> = row.try_get("personal_workspace_id")?;
-        let agent_id = Uuid::parse_str(&agent_id_text).map_err(|_| StorageError::InvalidStoredIdentifier)?;
-        let workspace_id = Uuid::parse_str(&workspace_id_text).map_err(|_| StorageError::InvalidStoredIdentifier)?;
-        let owner_user_id = Uuid::parse_str(&owner_user_id_text).map_err(|_| StorageError::InvalidStoredIdentifier)?;
-        let firebase_project_id = firebase_project_id.ok_or(StorageError::InvalidStoredIdentifier)?;
+        let agent_id =
+            Uuid::parse_str(&agent_id_text).map_err(|_| StorageError::InvalidStoredIdentifier)?;
+        let workspace_id = Uuid::parse_str(&workspace_id_text)
+            .map_err(|_| StorageError::InvalidStoredIdentifier)?;
+        let owner_user_id = Uuid::parse_str(&owner_user_id_text)
+            .map_err(|_| StorageError::InvalidStoredIdentifier)?;
+        let firebase_project_id =
+            firebase_project_id.ok_or(StorageError::InvalidStoredIdentifier)?;
         let personal_workspace_id = Uuid::parse_str(
-            personal_workspace_id.as_deref().ok_or(StorageError::InvalidStoredIdentifier)?,
-        ).map_err(|_| StorageError::InvalidStoredIdentifier)?;
+            personal_workspace_id
+                .as_deref()
+                .ok_or(StorageError::InvalidStoredIdentifier)?,
+        )
+        .map_err(|_| StorageError::InvalidStoredIdentifier)?;
         let member: Option<i64> = sqlx::query_scalar(
             "SELECT 1 FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
         )
@@ -840,7 +862,8 @@ impl Storage for SqliteStorage {
         };
         let entity: StoredEntity = serde_json::from_str(&payload)?;
         if !matches!(entity, StoredEntity::Agent(ref agent)
-            if agent.created_by_user_id == Some(owner_user_id)) {
+            if agent.created_by_user_id == Some(owner_user_id))
+        {
             tx.rollback().await?;
             return Ok(None);
         }
@@ -1059,20 +1082,25 @@ impl Storage for SqliteStorage {
         .bind(user_id.to_string())
         .fetch_all(&self.pool)
         .await?;
-        rows.into_iter().map(|row| {
-            let id: String = row.try_get("id")?;
-            let workspace: String = row.try_get("workspace_id")?;
-            let creator: String = row.try_get("created_by_user_id")?;
-            let created_at: String = row.try_get("created_at")?;
-            Ok(Project {
-                id: Uuid::parse_str(&id).map_err(|_| StorageError::InvalidStoredIdentifier)?,
-                workspace_id: Uuid::parse_str(&workspace).map_err(|_| StorageError::InvalidStoredIdentifier)?,
-                name: row.try_get("name")?,
-                created_by_user_id: Uuid::parse_str(&creator).map_err(|_| StorageError::InvalidStoredIdentifier)?,
-                created_at: DateTime::parse_from_rfc3339(&created_at)
-                    .map_err(|_| StorageError::InvalidStoredTimestamp)?.with_timezone(&Utc),
+        rows.into_iter()
+            .map(|row| {
+                let id: String = row.try_get("id")?;
+                let workspace: String = row.try_get("workspace_id")?;
+                let creator: String = row.try_get("created_by_user_id")?;
+                let created_at: String = row.try_get("created_at")?;
+                Ok(Project {
+                    id: Uuid::parse_str(&id).map_err(|_| StorageError::InvalidStoredIdentifier)?,
+                    workspace_id: Uuid::parse_str(&workspace)
+                        .map_err(|_| StorageError::InvalidStoredIdentifier)?,
+                    name: row.try_get("name")?,
+                    created_by_user_id: Uuid::parse_str(&creator)
+                        .map_err(|_| StorageError::InvalidStoredIdentifier)?,
+                    created_at: DateTime::parse_from_rfc3339(&created_at)
+                        .map_err(|_| StorageError::InvalidStoredTimestamp)?
+                        .with_timezone(&Utc),
+                })
             })
-        }).collect()
+            .collect()
     }
 
     async fn is_project_member(
@@ -1104,13 +1132,11 @@ impl Storage for SqliteStorage {
         role: ProjectRole,
     ) -> Result<ProjectMembership, StorageError> {
         let mut tx = self.pool.begin().await?;
-        let project = sqlx::query(
-            "SELECT id FROM projects WHERE id = ? AND workspace_id = ?",
-        )
-        .bind(project_id.to_string())
-        .bind(workspace_id.to_string())
-        .fetch_optional(&mut *tx)
-        .await?;
+        let project = sqlx::query("SELECT id FROM projects WHERE id = ? AND workspace_id = ?")
+            .bind(project_id.to_string())
+            .bind(workspace_id.to_string())
+            .fetch_optional(&mut *tx)
+            .await?;
         if project.is_none() {
             return Err(StorageError::ProjectNotFound);
         }
@@ -1203,13 +1229,12 @@ impl Storage for SqliteStorage {
         target_user_id: Uuid,
     ) -> Result<bool, StorageError> {
         let mut tx = self.pool.begin().await?;
-        let project_exists: Option<i64> = sqlx::query_scalar(
-            "SELECT 1 FROM projects WHERE id = ? AND workspace_id = ?",
-        )
-        .bind(project_id.to_string())
-        .bind(workspace_id.to_string())
-        .fetch_optional(&mut *tx)
-        .await?;
+        let project_exists: Option<i64> =
+            sqlx::query_scalar("SELECT 1 FROM projects WHERE id = ? AND workspace_id = ?")
+                .bind(project_id.to_string())
+                .bind(workspace_id.to_string())
+                .fetch_optional(&mut *tx)
+                .await?;
         if project_exists.is_none() {
             return Err(StorageError::ProjectNotFound);
         }

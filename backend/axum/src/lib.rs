@@ -1,22 +1,22 @@
+mod agent_credential_routes;
 pub mod audit;
 pub mod auth_middleware;
-mod agent_credential_routes;
 #[cfg(test)]
 mod auth_middleware_tests;
 pub mod chat_memory;
-pub mod config;
 mod chat_memory_routes;
-mod memory_document_routes;
-mod project_routes;
+pub mod config;
 pub mod firebase_auth;
 pub mod identity;
 pub mod memory_architecture;
+mod memory_document_routes;
 pub mod memory_documents;
-pub mod memory_outbox;
-pub mod memory_vector_provider;
 pub mod memory_intelligence;
+pub mod memory_outbox;
 mod memory_routes;
+pub mod memory_vector_provider;
 mod model;
+mod project_routes;
 pub mod qoin_vectors;
 pub mod robotics;
 mod robotics_routes;

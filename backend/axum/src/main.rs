@@ -34,16 +34,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = BackendConfig::from_env()?;
     let storage = SqliteStorage::connect(&config.database_url).await?;
-    let memory_epochs = storage.memory_epoch_coordinator()
+    let memory_epochs = storage
+        .memory_epoch_coordinator()
         .with_qoin_scoring_version(config.qoin_memory_scoring.effective_version());
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     let epoch_worker = tokio::spawn(memory_epochs.run_hourly_until(shutdown_rx.clone()));
     let memory_outbox = storage.memory_outbox();
 
-    let memory_documents: Option<Arc<dyn MemoryDocumentRepository>> =
-        match config.mongo {
-            Some(settings) => {
-                let repository = MongoMemoryDocumentRepository::connect_with_options(
+    let memory_documents: Option<Arc<dyn MemoryDocumentRepository>> = match config.mongo {
+        Some(settings) => {
+            let repository = MongoMemoryDocumentRepository::connect_with_options(
                     &settings.uri,
                     &settings.database,
                     &settings.collection,
@@ -55,21 +55,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map_err(|_| {
                     "MongoDB memory document connection or health check failed; verify the configured URI, network, and TLS settings"
                 })?;
-                tracing::info!(
-                    database = %settings.database,
-                    collection = %settings.collection,
-                    max_pool_size = settings.max_pool_size,
-                    "MongoDB memory document repository connected"
-                );
-                Some(Arc::new(repository))
-            }
-            None => {
-                tracing::warn!(
-                    "MongoDB memory documents are disabled; SQLite-only mode remains active"
-                );
-                None
-            }
-        };
+            tracing::info!(
+                database = %settings.database,
+                collection = %settings.collection,
+                max_pool_size = settings.max_pool_size,
+                "MongoDB memory document repository connected"
+            );
+            Some(Arc::new(repository))
+        }
+        None => {
+            tracing::warn!(
+                "MongoDB memory documents are disabled; SQLite-only mode remains active"
+            );
+            None
+        }
+    };
 
     let simulator_enabled = env::var("AXON_ENABLE_SIMULATOR")
         .map(|value| value.eq_ignore_ascii_case("true"))

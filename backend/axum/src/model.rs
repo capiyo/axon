@@ -195,7 +195,10 @@ mod agent_ownership_tests {
             created_at: Utc::now(),
         };
         let mut serialized = serde_json::to_value(agent).unwrap();
-        serialized.as_object_mut().unwrap().remove("created_by_user_id");
+        serialized
+            .as_object_mut()
+            .unwrap()
+            .remove("created_by_user_id");
         let legacy: Agent = serde_json::from_value(serialized).unwrap();
         assert_eq!(legacy.created_by_user_id, None);
     }

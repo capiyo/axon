@@ -87,7 +87,10 @@ impl MemoryDocument {
             || self.source_kind.trim().is_empty()
             || self.source_kind.len() > 80
             || self.tags.len() > 64
-            || self.tags.iter().any(|tag| tag.trim().is_empty() || tag.len() > 64)
+            || self
+                .tags
+                .iter()
+                .any(|tag| tag.trim().is_empty() || tag.len() > 64)
             || self.qkv_version.trim().is_empty()
             || self.qkv_version.len() > 80
             || self.updated_at < self.created_at
@@ -95,42 +98,52 @@ impl MemoryDocument {
             return Err(MemoryDocumentError::InvalidDocument);
         }
         let valid_scope = match self.scope.as_str() {
-            "agent_private" => self.owner_id.is_some()
-                && self.task_id.is_none()
-                && self.project_id.is_none(),
-            "task_shared" => self.task_id.is_some()
-                && self.owner_id.is_none()
-                && self.project_id.is_none(),
-            "project_shared" => self.project_id.is_some()
-                && self.owner_id.is_none()
-                && self.task_id.is_none(),
-            "workspace_shared" => self.owner_id.is_none()
-                && self.task_id.is_none()
-                && self.project_id.is_none(),
+            "agent_private" => {
+                self.owner_id.is_some() && self.task_id.is_none() && self.project_id.is_none()
+            }
+            "task_shared" => {
+                self.task_id.is_some() && self.owner_id.is_none() && self.project_id.is_none()
+            }
+            "project_shared" => {
+                self.project_id.is_some() && self.owner_id.is_none() && self.task_id.is_none()
+            }
+            "workspace_shared" => {
+                self.owner_id.is_none() && self.task_id.is_none() && self.project_id.is_none()
+            }
             _ => false,
         };
         if !valid_scope {
             return Err(MemoryDocumentError::InvalidDocument);
         }
-        if !matches!(self.status.as_str(), "proposed" | "ready" | "archived" | "deleted") {
+        if !matches!(
+            self.status.as_str(),
+            "proposed" | "ready" | "archived" | "deleted"
+        ) {
             return Err(MemoryDocumentError::InvalidDocument);
         }
         if self.content_hash != self.calculate_content_hash() {
             return Err(MemoryDocumentError::ContentHashMismatch);
         }
         let stored_key = self.key_metadata.get("qkv_key");
-        let stored_key_version = self.key_metadata.get("qkv_key_version").and_then(Value::as_str);
+        let stored_key_version = self
+            .key_metadata
+            .get("qkv_key_version")
+            .and_then(Value::as_str);
         match (stored_key, stored_key_version) {
             (None, None) => {} // Legacy document; retrieval may construct a deterministic fallback key.
             (Some(value), Some(version)) => {
                 let key: QoinVector = serde_json::from_value(value.clone())
                     .map_err(|_| MemoryDocumentError::InvalidDocument)?;
-                key.validate().map_err(|_| MemoryDocumentError::InvalidDocument)?;
-                let norm = key.values.iter()
+                key.validate()
+                    .map_err(|_| MemoryDocumentError::InvalidDocument)?;
+                let norm = key
+                    .values
+                    .iter()
                     .map(|component| f64::from(*component) * f64::from(*component))
                     .sum::<f64>()
                     .sqrt();
-                let source_hash = self.key_metadata
+                let source_hash = self
+                    .key_metadata
                     .get("qkv_source_hash")
                     .and_then(Value::as_str);
                 let expected_source_hash = self.calculate_qkv_source_hash();
@@ -298,7 +311,7 @@ impl MemoryDocumentRepository for MongoMemoryDocumentRepository {
                     return Err(MemoryDocumentError::VersionConflict);
                 }
                 Err(MemoryDocumentError::Mongo(error))
-            },
+            }
         }
     }
 
@@ -336,10 +349,10 @@ impl MemoryDocumentRepository for MongoMemoryDocumentRepository {
         limit: usize,
     ) -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
         let limit = limit.clamp(1, 5_000);
-        let mut cursor = self.collection.find(
-            doc! { "workspace_id": workspace_id.to_string() },
-            None,
-        ).await?;
+        let mut cursor = self
+            .collection
+            .find(doc! { "workspace_id": workspace_id.to_string() }, None)
+            .await?;
         let mut documents = Vec::with_capacity(limit.min(256));
         while documents.len() < limit {
             match cursor.try_next().await? {
@@ -495,5 +508,4 @@ mod tests {
             Err(MemoryDocumentError::InvalidDocument)
         ));
     }
-
 }

@@ -16,7 +16,9 @@ pub enum ConfigError {
     EmptyValue(&'static str),
     #[error("AXON_MONGODB_URI is required when MongoDB memory documents are required")]
     MissingMongoUri,
-    #[error("AXON_QOIN_MEMORY_SCORING_CONFIG must contain a valid versioned Qoin scoring configuration")]
+    #[error(
+        "AXON_QOIN_MEMORY_SCORING_CONFIG must contain a valid versioned Qoin scoring configuration"
+    )]
     InvalidQoinScoringConfig,
 }
 
@@ -53,8 +55,8 @@ pub struct BackendConfig {
 
 impl BackendConfig {
     pub fn from_env() -> Result<Self, ConfigError> {
-        let database_url = env::var("AXON_DATABASE_URL")
-            .unwrap_or_else(|_| "sqlite://axon.db".to_owned());
+        let database_url =
+            env::var("AXON_DATABASE_URL").unwrap_or_else(|_| "sqlite://axon.db".to_owned());
         if database_url.trim().is_empty() {
             return Err(ConfigError::EmptyValue("AXON_DATABASE_URL"));
         }
@@ -72,8 +74,8 @@ impl BackendConfig {
                 if uri.trim().is_empty() {
                     return Err(ConfigError::EmptyValue("AXON_MONGODB_URI"));
                 }
-                let database = env::var("AXON_MONGODB_DATABASE")
-                    .unwrap_or_else(|_| "axon".to_owned());
+                let database =
+                    env::var("AXON_MONGODB_DATABASE").unwrap_or_else(|_| "axon".to_owned());
                 let collection = env::var("AXON_MONGODB_COLLECTION")
                     .unwrap_or_else(|_| "memory_documents".to_owned());
                 if database.trim().is_empty() {
@@ -86,10 +88,7 @@ impl BackendConfig {
                     uri,
                     database,
                     collection,
-                    connect_timeout: duration_from_env(
-                        "AXON_MONGODB_CONNECT_TIMEOUT_MS",
-                        10_000,
-                    )?,
+                    connect_timeout: duration_from_env("AXON_MONGODB_CONNECT_TIMEOUT_MS", 10_000)?,
                     server_selection_timeout: duration_from_env(
                         "AXON_MONGODB_SERVER_SELECTION_TIMEOUT_MS",
                         5_000,
@@ -122,10 +121,7 @@ fn parse_bool(name: &'static str, value: &str) -> Result<bool, ConfigError> {
     }
 }
 
-fn mongo_is_required(
-    environment: &str,
-    override_value: Option<&str>,
-) -> Result<bool, ConfigError> {
+fn mongo_is_required(environment: &str, override_value: Option<&str>) -> Result<bool, ConfigError> {
     let explicitly_required = override_value
         .map(|value| parse_bool("AXON_MEMORY_DOCUMENTS_REQUIRED", value))
         .transpose()?
@@ -178,9 +174,11 @@ fn parse_duration_ms(name: &'static str, value: &str) -> Result<Duration, Config
 }
 
 fn parse_qoin_scoring_config(serialized: &str) -> Result<QoinScoringConfig, ConfigError> {
-    let policy: QoinScoringConfig = serde_json::from_str(serialized)
+    let policy: QoinScoringConfig =
+        serde_json::from_str(serialized).map_err(|_| ConfigError::InvalidQoinScoringConfig)?;
+    policy
+        .validate()
         .map_err(|_| ConfigError::InvalidQoinScoringConfig)?;
-    policy.validate().map_err(|_| ConfigError::InvalidQoinScoringConfig)?;
     Ok(policy)
 }
 
@@ -192,7 +190,10 @@ mod tests {
     fn boolean_parser_accepts_explicit_values_and_rejects_ambiguity() {
         assert_eq!(parse_bool("FLAG", "true"), Ok(true));
         assert_eq!(parse_bool("FLAG", "NO"), Ok(false));
-        assert_eq!(parse_bool("FLAG", "sometimes"), Err(ConfigError::InvalidBoolean("FLAG")));
+        assert_eq!(
+            parse_bool("FLAG", "sometimes"),
+            Err(ConfigError::InvalidBoolean("FLAG"))
+        );
     }
 
     #[test]
@@ -207,7 +208,10 @@ mod tests {
         assert_eq!(parse_bounded_integer("POOL", "24", 1, 500), Ok(24));
         assert!(parse_bounded_integer("POOL", "0", 1, 500).is_err());
         assert!(parse_bounded_integer("POOL", "501", 1, 500).is_err());
-        assert_eq!(parse_duration_ms("TIMEOUT", "10000"), Ok(Duration::from_secs(10)));
+        assert_eq!(
+            parse_duration_ms("TIMEOUT", "10000"),
+            Ok(Duration::from_secs(10))
+        );
         assert!(parse_duration_ms("TIMEOUT", "99").is_err());
         assert!(parse_duration_ms("TIMEOUT", "120001").is_err());
     }

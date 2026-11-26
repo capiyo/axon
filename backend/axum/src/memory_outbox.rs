@@ -3,14 +3,16 @@
 //! A committed outbox row is recoverable after process restart. The worker uses
 //! leases and immutable (memory_id, version) keys so duplicate delivery is safe.
 
-use crate::memory_documents::{
-    MemoryDocument, MemoryDocumentError, MemoryDocumentRepository,
-};
+use crate::memory_documents::{MemoryDocument, MemoryDocumentError, MemoryDocumentRepository};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
-use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+    time::Duration,
+};
 use thiserror::Error;
 use tokio::{sync::watch, time::sleep};
 use uuid::Uuid;
@@ -48,7 +50,8 @@ pub struct AuthorizedMemoryDocumentVersion {
     pub scope: String,
     pub project_id: Option<Uuid>,
     pub owner_id: Option<Uuid>,
-    pub task_id: Option<Uuid>,}
+    pub task_id: Option<Uuid>,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RecordedMemoryFeedback {
@@ -147,8 +150,10 @@ impl MemoryOutbox {
                 || stored_scope != document.scope
                 || stored_type != document.document_type
                 || stored_hash != document.content_hash
-                || stored_sequence != i64::try_from(document.source_event_sequence)
-                    .map_err(|_| sqlx::Error::Protocol("source sequence exceeds SQLite range".into()))?
+                || stored_sequence
+                    != i64::try_from(document.source_event_sequence).map_err(|_| {
+                        sqlx::Error::Protocol("source sequence exceeds SQLite range".into())
+                    })?
                 || stored_qkv_version != document.qkv_version
                 || stored_qoin_version != document.qoin_vector_version
                 || stored_lifecycle != lifecycle_status
@@ -546,7 +551,10 @@ impl MemoryOutbox {
         }
         let allowed_transition = match action {
             MemoryLifecycleAction::Archive => lifecycle_status == "approved",
-            MemoryLifecycleAction::Delete => matches!(lifecycle_status.as_str(), "proposed" | "approved" | "archived"),
+            MemoryLifecycleAction::Delete => matches!(
+                lifecycle_status.as_str(),
+                "proposed" | "approved" | "archived"
+            ),
             MemoryLifecycleAction::Restore => lifecycle_status == "archived",
         };
         if !allowed_transition {
@@ -635,15 +643,17 @@ impl MemoryOutbox {
             || document.project_id.map(|id| id.to_string()) != project_id
             || document.owner_id.map(|id| id.to_string()) != owner_id
             || document.document_type != document_type
-            || document.source_event_sequence != u64::try_from(source_sequence)
-                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?
+            || document.source_event_sequence
+                != u64::try_from(source_sequence)
+                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?
             || document.qkv_version != qkv_version
             || document.qoin_vector_version != qoin_vector_version
         {
             return Err(MemoryOutboxError::VersionConflict);
         }
 
-        document.version = version.checked_add(1)
+        document.version = version
+            .checked_add(1)
             .ok_or_else(|| sqlx::Error::Protocol("memory version overflow".into()))?;
         document.updated_at = Utc::now();
         document.source_event_sequence = 0;
@@ -651,7 +661,8 @@ impl MemoryOutbox {
             MemoryLifecycleAction::Archive => "archived",
             MemoryLifecycleAction::Restore => "ready",
             MemoryLifecycleAction::Delete => "deleted",
-        }.into();
+        }
+        .into();
         document.content_hash = document.calculate_content_hash();
         self.enqueue(&mut document, actor_user_id).await?;
         Ok(true)
@@ -672,8 +683,14 @@ impl MemoryOutbox {
         evidence: &Value,
     ) -> Result<Option<RecordedMemoryFeedback>, MemoryOutboxError> {
         const ALLOWED_EVENTS: &[&str] = &[
-            "retrieved", "selected", "ignored", "reused",
-            "helpful", "irrelevant", "contradicted", "incorrect",
+            "retrieved",
+            "selected",
+            "ignored",
+            "reused",
+            "helpful",
+            "irrelevant",
+            "contradicted",
+            "incorrect",
         ];
         if !ALLOWED_EVENTS.contains(&event_type) {
             return Err(MemoryOutboxError::VersionConflict);
@@ -711,7 +728,8 @@ impl MemoryOutbox {
         };
         let agent_entity: crate::storage::StoredEntity = serde_json::from_str(&agent_payload)?;
         if !matches!(agent_entity, crate::storage::StoredEntity::Agent(ref agent)
-            if agent.created_by_user_id == Some(actor_user_id)) {
+            if agent.created_by_user_id == Some(actor_user_id))
+        {
             tx.rollback().await?;
             return Ok(None);
         }
@@ -844,7 +862,9 @@ impl MemoryOutbox {
             .map(|(memory_id, version)| {
                 i64::try_from(*version)
                     .map(|version| (memory_id.to_string(), version))
-                    .map_err(|_| sqlx::Error::Protocol("feedback version exceeds SQLite range".into()))
+                    .map_err(|_| {
+                        sqlx::Error::Protocol("feedback version exceeds SQLite range".into())
+                    })
             })
             .collect::<Result<Vec<_>, _>>()?;
         let mut query = QueryBuilder::<Sqlite>::new(
@@ -853,9 +873,12 @@ impl MemoryOutbox {
         );
         query.push_bind(workspace_id.to_string());
         query.push(" AND (memory_id, document_version) IN ");
-        query.push_tuples(normalized_versions.iter(), |mut row, (memory_id, version)| {
-            row.push_bind(memory_id).push_bind(*version);
-        });
+        query.push_tuples(
+            normalized_versions.iter(),
+            |mut row, (memory_id, version)| {
+                row.push_bind(memory_id).push_bind(*version);
+            },
+        );
         query.push(" GROUP BY memory_id, document_version, event_type");
         let rows = query.build().fetch_all(&self.pool).await?;
         let mut counts: HashMap<(Uuid, u64), (u64, u64)> = HashMap::new();
@@ -882,12 +905,15 @@ impl MemoryOutbox {
                 _ => {}
             }
         }
-        Ok(counts.into_iter().map(|(key, (positive, negative))| {
-            let total = (positive + negative) as f32;
-            let positive_signal = (positive as f32 + 1.0) / (total + 2.0);
-            let negative_signal = (negative as f32 + 1.0) / (total + 2.0);
-            (key, (positive_signal, negative_signal))
-        }).collect())
+        Ok(counts
+            .into_iter()
+            .map(|(key, (positive, negative))| {
+                let total = (positive + negative) as f32;
+                let positive_signal = (positive as f32 + 1.0) / (total + 2.0);
+                let negative_signal = (negative as f32 + 1.0) / (total + 2.0);
+                (key, (positive_signal, negative_signal))
+            })
+            .collect())
     }
 
     /// Returns only approved, synchronized versions visible to this
@@ -904,8 +930,9 @@ impl MemoryOutbox {
         before_version: Option<u64>,
         requested_limit: usize,
     ) -> Result<Vec<AuthorizedMemoryDocumentVersion>, MemoryOutboxError> {
-        let limit = i64::try_from(requested_limit.clamp(1, 101))
-            .map_err(|_| sqlx::Error::Protocol("version history limit exceeds SQLite range".into()))?;
+        let limit = i64::try_from(requested_limit.clamp(1, 101)).map_err(|_| {
+            sqlx::Error::Protocol("version history limit exceeds SQLite range".into())
+        })?;
         let before_version = before_version
             .map(i64::try_from)
             .transpose()
@@ -949,11 +976,13 @@ impl MemoryOutbox {
                 qkv_version: row.try_get("qkv_version")?,
                 qoin_vector_version: row.try_get("qoin_vector_version")?,
                 scope: row.try_get("scope")?,
-                project_id: row.try_get::<Option<String>, _>("project_id")?
+                project_id: row
+                    .try_get::<Option<String>, _>("project_id")?
                     .map(|value| Uuid::parse_str(&value))
                     .transpose()
                     .map_err(|error| sqlx::Error::Protocol(error.to_string()))?,
-                owner_id: row.try_get::<Option<String>, _>("owner_id")?
+                owner_id: row
+                    .try_get::<Option<String>, _>("owner_id")?
                     .map(|value| Uuid::parse_str(&value))
                     .transpose()
                     .map_err(|error| sqlx::Error::Protocol(error.to_string()))?,
@@ -975,8 +1004,9 @@ impl MemoryOutbox {
         requested_limit: usize,
     ) -> Result<MemoryReconciliationReport, MemoryOutboxError> {
         let limit = requested_limit.clamp(1, 5_000);
-        let limit_sql = i64::try_from(limit)
-            .map_err(|_| sqlx::Error::Protocol("reconciliation limit exceeds SQLite range".into()))?;
+        let limit_sql = i64::try_from(limit).map_err(|_| {
+            sqlx::Error::Protocol("reconciliation limit exceeds SQLite range".into())
+        })?;
         let rows = sqlx::query(
             "SELECT memory_id, version, scope, content_hash, source_event_sequence, qkv_version, qoin_vector_version, sync_status \
              FROM memory_document_versions WHERE workspace_id = ? ORDER BY memory_id ASC, version ASC LIMIT ?",
@@ -985,7 +1015,9 @@ impl MemoryOutbox {
         .bind(limit_sql)
         .fetch_all(&self.pool)
         .await?;
-        let documents = repository.list_workspace_documents(workspace_id, limit).await?;
+        let documents = repository
+            .list_workspace_documents(workspace_id, limit)
+            .await?;
         let mut mongo_by_key = HashMap::new();
         let mut issues = Vec::new();
 
@@ -1032,7 +1064,8 @@ impl MemoryOutbox {
                         "pending" => "mongo_document_pending_delivery",
                         "failed" => "mongo_document_missing_after_failure",
                         _ => "sqlite_version_missing_in_mongo",
-                    }.into(),
+                    }
+                    .into(),
                 });
                 continue;
             };
@@ -1064,7 +1097,11 @@ impl MemoryOutbox {
             if document.qoin_vector_version != qoin_version {
                 add_issue("qoin_vector_version_mismatch");
             }
-            match document.key_metadata.get("qkv_key_version").and_then(serde_json::Value::as_str) {
+            match document
+                .key_metadata
+                .get("qkv_key_version")
+                .and_then(serde_json::Value::as_str)
+            {
                 Some(key_version) if key_version == document.qkv_version => {}
                 Some(_) => add_issue("qkv_key_version_mismatch"),
                 None => add_issue("persisted_qkv_key_missing"),
@@ -1095,8 +1132,8 @@ impl MemoryOutbox {
         for row in status_rows {
             let status: String = row.try_get("status")?;
             let count: i64 = row.try_get("count")?;
-            let count = u64::try_from(count)
-                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            let count =
+                u64::try_from(count).map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
             match status.as_str() {
                 "pending" => pending = count,
                 "processing" => processing = count,
@@ -1349,8 +1386,7 @@ impl MemoryOutbox {
             "workspace_shared" => true,
             "agent_private" => owner_id.as_deref() == Some(requester_agent_id_text.as_str()),
             "task_shared" => {
-                task_id.is_some()
-                    && stored_task_id.as_deref() == requester_task_id_text.as_deref()
+                task_id.is_some() && stored_task_id.as_deref() == requester_task_id_text.as_deref()
             }
             "project_shared" => {
                 if let Some(project_id) = stored_project_id.as_deref() {
@@ -1370,7 +1406,7 @@ impl MemoryOutbox {
                 } else {
                     false
                 }
-            },
+            }
             _ => false,
         };
         if !visible {
@@ -1387,8 +1423,9 @@ impl MemoryOutbox {
             || document.content_hash != expected_hash
             || document.scope != scope
             || document.document_type != stored_document_type
-            || document.source_event_sequence != u64::try_from(stored_source_sequence)
-                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?
+            || document.source_event_sequence
+                != u64::try_from(stored_source_sequence)
+                    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?
             || document.qkv_version != stored_qkv_version
             || document.qoin_vector_version != stored_qoin_version
             || document.project_id.map(|id| id.to_string()) != stored_project_id
@@ -1417,19 +1454,19 @@ impl MemoryOutbox {
         task_id: Option<Uuid>,
         limit: usize,
     ) -> Result<Option<Vec<MemoryDocument>>, MemoryOutboxError> {
-        let epoch_exists: Option<i64> = sqlx::query_scalar(
-            "SELECT 1 FROM memory_epochs WHERE id = ? AND workspace_id = ?",
-        )
-        .bind(epoch_id.to_string())
-        .bind(workspace_id.to_string())
-        .fetch_optional(&self.pool)
-        .await?;
+        let epoch_exists: Option<i64> =
+            sqlx::query_scalar("SELECT 1 FROM memory_epochs WHERE id = ? AND workspace_id = ?")
+                .bind(epoch_id.to_string())
+                .bind(workspace_id.to_string())
+                .fetch_optional(&self.pool)
+                .await?;
         if epoch_exists.is_none() {
             return Ok(None);
         }
 
-        let limit = i64::try_from(limit.clamp(1, 100))
-            .map_err(|_| sqlx::Error::Protocol("epoch document limit exceeds SQLite range".into()))?;
+        let limit = i64::try_from(limit.clamp(1, 100)).map_err(|_| {
+            sqlx::Error::Protocol("epoch document limit exceeds SQLite range".into())
+        })?;
         let rows = sqlx::query(
             "SELECT e.memory_id, e.document_version, e.content_hash, e.scope, e.project_id, e.task_id, e.owner_id, \
                     e.source_event_sequence, e.qkv_version, e.qoin_vector_version \
@@ -1471,8 +1508,10 @@ impl MemoryOutbox {
             let visible = match scope.as_str() {
                 "workspace_shared" => true,
                 "agent_private" => owner_id.as_deref() == Some(requester_agent_id_text.as_str()),
-                "task_shared" => task_id.is_some()
-                    && stored_task_id.as_deref() == requester_task_id_text.as_deref(),
+                "task_shared" => {
+                    task_id.is_some()
+                        && stored_task_id.as_deref() == requester_task_id_text.as_deref()
+                }
                 "project_shared" => {
                     if let Some(project_id) = project_id.as_deref() {
                         let membership: Option<i64> = sqlx::query_scalar(
@@ -1491,7 +1530,7 @@ impl MemoryOutbox {
                     } else {
                         false
                     }
-                },
+                }
                 _ => false,
             };
             if !visible {
@@ -1514,7 +1553,9 @@ impl MemoryOutbox {
             };
             let current_hash: String = metadata.try_get("content_hash")?;
             let sync_status: String = metadata.try_get("sync_status")?;
-            if current_hash != expected_hash || !matches!(sync_status.as_str(), "stored" | "indexed") {
+            if current_hash != expected_hash
+                || !matches!(sync_status.as_str(), "stored" | "indexed")
+            {
                 return Err(MemoryOutboxError::VersionConflict);
             }
 
@@ -1552,7 +1593,8 @@ impl MemoryOutbox {
         requester_agent_id: Uuid,
         requester_user_id: Uuid,
         limit: usize,
-    ) -> Result<Option<(Uuid, Option<Uuid>, Option<String>, Vec<MemoryDocument>)>, MemoryOutboxError> {
+    ) -> Result<Option<(Uuid, Option<Uuid>, Option<String>, Vec<MemoryDocument>)>, MemoryOutboxError>
+    {
         let session = sqlx::query(
             "SELECT s.memory_epoch_id, s.task_id, \
              (SELECT d.qoin_scoring_version FROM memory_document_epoch_items d \
@@ -1702,7 +1744,6 @@ impl MemoryOutbox {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1783,7 +1824,10 @@ mod tests {
         .fetch_one(&outbox.pool)
         .await
         .unwrap();
-        assert_eq!(u64::try_from(stored_sequence).unwrap(), first_source_sequence);
+        assert_eq!(
+            u64::try_from(stored_sequence).unwrap(),
+            first_source_sequence
+        );
 
         sqlx::query(
             "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
@@ -1798,7 +1842,14 @@ mod tests {
             .await
             .unwrap();
         let hidden = outbox
-            .list_authorized_document_refs(workspace_id, Uuid::new_v4(), Uuid::nil(), None, None, 20)
+            .list_authorized_document_refs(
+                workspace_id,
+                Uuid::new_v4(),
+                Uuid::nil(),
+                None,
+                None,
+                20,
+            )
             .await
             .unwrap();
         assert_eq!(visible, vec![(document.memory_id, 1)]);
@@ -1821,9 +1872,15 @@ mod tests {
         let pinned_qoin: String = pinned.try_get("qoin_scoring_version").unwrap();
         assert_eq!(pinned_version, 1);
         assert_eq!(pinned_hash, document.content_hash);
-        assert_eq!(u64::try_from(pinned_sequence).unwrap(), first_source_sequence);
+        assert_eq!(
+            u64::try_from(pinned_sequence).unwrap(),
+            first_source_sequence
+        );
         assert_eq!(pinned_qkv, "axon-lexical-qkv-v1");
-        assert_eq!(pinned_qoin, crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION);
+        assert_eq!(
+            pinned_qoin,
+            crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION
+        );
         let update_result = sqlx::query(
             "UPDATE memory_document_epoch_items SET content_hash = 'tampered' WHERE memory_id = ?",
         )
@@ -1831,16 +1888,14 @@ mod tests {
         .execute(&outbox.pool)
         .await;
         assert!(update_result.is_err());
-        let delete_result = sqlx::query(
-            "DELETE FROM memory_document_epoch_items WHERE memory_id = ?",
-        )
-        .bind(document.memory_id.to_string())
-        .execute(&outbox.pool)
-        .await;
+        let delete_result =
+            sqlx::query("DELETE FROM memory_document_epoch_items WHERE memory_id = ?")
+                .bind(document.memory_id.to_string())
+                .execute(&outbox.pool)
+                .await;
         assert!(delete_result.is_err());
     }
 }
-
 
 #[cfg(test)]
 mod epoch_document_tests {
@@ -1869,7 +1924,8 @@ mod epoch_document_tests {
             memory_id: Uuid,
             version: u64,
         ) -> Result<Option<MemoryDocument>, MemoryDocumentError> {
-            Ok(self.documents
+            Ok(self
+                .documents
                 .lock()
                 .map_err(|_| MemoryDocumentError::InvalidDocument)?
                 .get(&(memory_id, version))
@@ -1880,7 +1936,8 @@ mod epoch_document_tests {
             &self,
             memory_id: Uuid,
         ) -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
-            let mut versions = self.documents
+            let mut versions = self
+                .documents
                 .lock()
                 .map_err(|_| MemoryDocumentError::InvalidDocument)?
                 .values()
@@ -1896,7 +1953,8 @@ mod epoch_document_tests {
             workspace_id: Uuid,
             limit: usize,
         ) -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
-            let mut documents = self.documents
+            let mut documents = self
+                .documents
                 .lock()
                 .map_err(|_| MemoryDocumentError::InvalidDocument)?
                 .values()
@@ -1904,7 +1962,9 @@ mod epoch_document_tests {
                 .cloned()
                 .collect::<Vec<_>>();
             documents.sort_by(|left, right| {
-                left.memory_id.as_bytes().cmp(right.memory_id.as_bytes())
+                left.memory_id
+                    .as_bytes()
+                    .cmp(right.memory_id.as_bytes())
                     .then_with(|| left.version.cmp(&right.version))
             });
             documents.truncate(limit.clamp(1, 5_000));
@@ -1917,7 +1977,9 @@ mod epoch_document_tests {
             version: u64,
             expected_hash: &str,
         ) -> Result<bool, MemoryDocumentError> {
-            Ok(self.get_version(memory_id, version).await?
+            Ok(self
+                .get_version(memory_id, version)
+                .await?
                 .is_some_and(|document| document.content_hash == expected_hash))
         }
 
@@ -1927,15 +1989,35 @@ mod epoch_document_tests {
     }
 
     #[tokio::test]
-    async fn project_scoped_memory_requires_active_project_membership_for_search_and_direct_reads() {
+    async fn project_scoped_memory_requires_active_project_membership_for_search_and_direct_reads()
+    {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
-        let owner = storage.ensure_firebase_user("axon-test", "project-memory-owner").await.unwrap();
-        let member = storage.ensure_firebase_user("axon-test", "project-memory-member").await.unwrap();
-        storage.add_workspace_member(owner.workspace.id, owner.user_id, member.user_id).await.unwrap();
-        let project = storage.create_project_for_user(owner.workspace.id, owner.user_id, "Project memory".into()).await.unwrap();
-        storage.set_project_member(
-            owner.workspace.id, project.id, owner.user_id, member.user_id, crate::model::ProjectRole::Member,
-        ).await.unwrap();
+        let owner = storage
+            .ensure_firebase_user("axon-test", "project-memory-owner")
+            .await
+            .unwrap();
+        let member = storage
+            .ensure_firebase_user("axon-test", "project-memory-member")
+            .await
+            .unwrap();
+        storage
+            .add_workspace_member(owner.workspace.id, owner.user_id, member.user_id)
+            .await
+            .unwrap();
+        let project = storage
+            .create_project_for_user(owner.workspace.id, owner.user_id, "Project memory".into())
+            .await
+            .unwrap();
+        storage
+            .set_project_member(
+                owner.workspace.id,
+                project.id,
+                owner.user_id,
+                member.user_id,
+                crate::model::ProjectRole::Member,
+            )
+            .await
+            .unwrap();
 
         let outbox = storage.memory_outbox();
         let repository = FakeDocumentRepository::default();
@@ -1947,7 +2029,10 @@ mod epoch_document_tests {
         document.status = "proposed".into();
         outbox.enqueue(&mut document, owner.user_id).await.unwrap();
         repository.put_version(document.clone()).await.unwrap();
-        assert!(outbox.approve(owner.workspace.id, document.memory_id, 1, owner.user_id).await.unwrap());
+        assert!(outbox
+            .approve(owner.workspace.id, document.memory_id, 1, owner.user_id)
+            .await
+            .unwrap());
         sqlx::query(
             "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
         )
@@ -1956,36 +2041,87 @@ mod epoch_document_tests {
         .await
         .unwrap();
 
-        let visible = outbox.list_authorized_document_refs(
-            owner.workspace.id, agent_id, member.user_id, None, Some(project.id), 20,
-        ).await.unwrap();
+        let visible = outbox
+            .list_authorized_document_refs(
+                owner.workspace.id,
+                agent_id,
+                member.user_id,
+                None,
+                Some(project.id),
+                20,
+            )
+            .await
+            .unwrap();
         assert_eq!(visible, vec![(document.memory_id, 1)]);
-        let without_project = outbox.list_authorized_document_refs(
-            owner.workspace.id, agent_id, member.user_id, None, None, 20,
-        ).await.unwrap();
+        let without_project = outbox
+            .list_authorized_document_refs(
+                owner.workspace.id,
+                agent_id,
+                member.user_id,
+                None,
+                None,
+                20,
+            )
+            .await
+            .unwrap();
         assert!(without_project.is_empty());
-        let outsider = outbox.list_authorized_document_refs(
-            owner.workspace.id, agent_id, Uuid::new_v4(), None, Some(project.id), 20,
-        ).await.unwrap();
+        let outsider = outbox
+            .list_authorized_document_refs(
+                owner.workspace.id,
+                agent_id,
+                Uuid::new_v4(),
+                None,
+                Some(project.id),
+                20,
+            )
+            .await
+            .unwrap();
         assert!(outsider.is_empty());
 
-        let direct = outbox.get_authorized_document(
-            &repository, owner.workspace.id, document.memory_id, 1, agent_id, member.user_id, None,
-        ).await.unwrap();
+        let direct = outbox
+            .get_authorized_document(
+                &repository,
+                owner.workspace.id,
+                document.memory_id,
+                1,
+                agent_id,
+                member.user_id,
+                None,
+            )
+            .await
+            .unwrap();
         assert!(direct.is_some());
-        assert!(storage.revoke_project_member(
-            owner.workspace.id, project.id, owner.user_id, member.user_id,
-        ).await.unwrap());
-        let revoked = outbox.get_authorized_document(
-            &repository, owner.workspace.id, document.memory_id, 1, agent_id, member.user_id, None,
-        ).await.unwrap();
+        assert!(storage
+            .revoke_project_member(
+                owner.workspace.id,
+                project.id,
+                owner.user_id,
+                member.user_id,
+            )
+            .await
+            .unwrap());
+        let revoked = outbox
+            .get_authorized_document(
+                &repository,
+                owner.workspace.id,
+                document.memory_id,
+                1,
+                agent_id,
+                member.user_id,
+                None,
+            )
+            .await
+            .unwrap();
         assert!(revoked.is_none());
     }
 
     #[tokio::test]
     async fn retrieval_feedback_is_session_pinned_authorized_and_audited() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
-        let account = storage.ensure_firebase_user("axon-test", "feedback-owner").await.unwrap();
+        let account = storage
+            .ensure_firebase_user("axon-test", "feedback-owner")
+            .await
+            .unwrap();
         let agent = crate::model::Agent {
             id: Uuid::new_v4(),
             workspace_id: account.workspace.id,
@@ -1995,18 +2131,21 @@ mod epoch_document_tests {
             connection_mode: crate::model::ConnectionMode::Manual,
             created_at: Utc::now(),
         };
-        storage.apply(crate::storage::StorageMutation {
-            entity: crate::storage::StoredEntity::Agent(agent.clone()),
-            related_entities: Vec::new(),
-            audit: crate::audit::AuditEvent::attributed(
-                format!("human:{}", account.user_id),
-                Some(account.workspace.id),
-                "agent.registered",
-                "agent",
-                agent.id.to_string(),
-                serde_json::json!({}),
-            ),
-        }).await.unwrap();
+        storage
+            .apply(crate::storage::StorageMutation {
+                entity: crate::storage::StoredEntity::Agent(agent.clone()),
+                related_entities: Vec::new(),
+                audit: crate::audit::AuditEvent::attributed(
+                    format!("human:{}", account.user_id),
+                    Some(account.workspace.id),
+                    "agent.registered",
+                    "agent",
+                    agent.id.to_string(),
+                    serde_json::json!({}),
+                ),
+            })
+            .await
+            .unwrap();
 
         let outbox = storage.memory_outbox();
         let repository = FakeDocumentRepository::default();
@@ -2014,9 +2153,15 @@ mod epoch_document_tests {
         document.scope = "workspace_shared".into();
         document.owner_id = None;
         document.status = "proposed".into();
-        outbox.enqueue(&mut document, account.user_id).await.unwrap();
+        outbox
+            .enqueue(&mut document, account.user_id)
+            .await
+            .unwrap();
         repository.put_version(document.clone()).await.unwrap();
-        assert!(outbox.approve(account.workspace.id, document.memory_id, 1, account.user_id).await.unwrap());
+        assert!(outbox
+            .approve(account.workspace.id, document.memory_id, 1, account.user_id)
+            .await
+            .unwrap());
         sqlx::query(
             "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
         )
@@ -2024,7 +2169,14 @@ mod epoch_document_tests {
         .execute(&outbox.pool)
         .await
         .unwrap();
-        assert_eq!(storage.memory_epoch_coordinator().publish_due_epochs().await.unwrap(), 1);
+        assert_eq!(
+            storage
+                .memory_epoch_coordinator()
+                .publish_due_epochs()
+                .await
+                .unwrap(),
+            1
+        );
         let epoch_id: String = sqlx::query_scalar(
             "SELECT id FROM memory_epochs WHERE workspace_id = ? ORDER BY epoch_number DESC LIMIT 1",
         )
@@ -2045,16 +2197,20 @@ mod epoch_document_tests {
         .await
         .unwrap();
 
-        let recorded = outbox.record_retrieval_feedback(
-            account.workspace.id,
-            session_id,
-            agent.id,
-            account.user_id,
-            document.memory_id,
-            1,
-            "helpful",
-            &serde_json::json!({"reason": "resolved the task"}),
-        ).await.unwrap().unwrap();
+        let recorded = outbox
+            .record_retrieval_feedback(
+                account.workspace.id,
+                session_id,
+                agent.id,
+                account.user_id,
+                document.memory_id,
+                1,
+                "helpful",
+                &serde_json::json!({"reason": "resolved the task"}),
+            )
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(recorded.event_type, "helpful");
         let count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM memory_retrieval_feedback WHERE session_id = ? AND memory_id = ? AND document_version = 1",
@@ -2073,22 +2229,42 @@ mod epoch_document_tests {
         assert!((positive - (2.0 / 3.0)).abs() < 1e-6);
         assert!((negative - (1.0 / 3.0)).abs() < 1e-6);
 
-        let invalid = outbox.record_retrieval_feedback(
-            account.workspace.id, session_id, agent.id, account.user_id,
-            document.memory_id, 1, "made_up_event", &serde_json::json!({}),
-        ).await;
+        let invalid = outbox
+            .record_retrieval_feedback(
+                account.workspace.id,
+                session_id,
+                agent.id,
+                account.user_id,
+                document.memory_id,
+                1,
+                "made_up_event",
+                &serde_json::json!({}),
+            )
+            .await;
         assert!(matches!(invalid, Err(MemoryOutboxError::VersionConflict)));
-        let unpinned = outbox.record_retrieval_feedback(
-            account.workspace.id, session_id, agent.id, account.user_id,
-            Uuid::new_v4(), 1, "helpful", &serde_json::json!({}),
-        ).await.unwrap();
+        let unpinned = outbox
+            .record_retrieval_feedback(
+                account.workspace.id,
+                session_id,
+                agent.id,
+                account.user_id,
+                Uuid::new_v4(),
+                1,
+                "helpful",
+                &serde_json::json!({}),
+            )
+            .await
+            .unwrap();
         assert!(unpinned.is_none());
     }
 
     #[tokio::test]
     async fn archive_restore_and_delete_create_new_versions_and_control_current_retrieval() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
-        let account = storage.ensure_firebase_user("axon-test", "lifecycle-user").await.unwrap();
+        let account = storage
+            .ensure_firebase_user("axon-test", "lifecycle-user")
+            .await
+            .unwrap();
         let outbox = storage.memory_outbox();
         let repository = FakeDocumentRepository::default();
         let mut document = super::tests::document(account.workspace.id, Uuid::new_v4());
@@ -2096,9 +2272,15 @@ mod epoch_document_tests {
         document.owner_id = None;
         document.status = "proposed".into();
         document.validate().unwrap();
-        outbox.enqueue(&mut document, account.user_id).await.unwrap();
+        outbox
+            .enqueue(&mut document, account.user_id)
+            .await
+            .unwrap();
         repository.put_version(document.clone()).await.unwrap();
-        assert!(outbox.approve(account.workspace.id, document.memory_id, 1, account.user_id).await.unwrap());
+        assert!(outbox
+            .approve(account.workspace.id, document.memory_id, 1, account.user_id)
+            .await
+            .unwrap());
         sqlx::query(
             "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
         )
@@ -2107,10 +2289,17 @@ mod epoch_document_tests {
         .await
         .unwrap();
 
-        assert!(outbox.transition_lifecycle(
-            &repository, account.workspace.id, document.memory_id, 1, account.user_id,
-            MemoryLifecycleAction::Archive,
-        ).await.unwrap());
+        assert!(outbox
+            .transition_lifecycle(
+                &repository,
+                account.workspace.id,
+                document.memory_id,
+                1,
+                account.user_id,
+                MemoryLifecycleAction::Archive,
+            )
+            .await
+            .unwrap());
         let archived_payload: String = sqlx::query_scalar(
             "SELECT payload_json FROM memory_document_outbox WHERE memory_id = ? AND version = 2",
         )
@@ -2127,9 +2316,17 @@ mod epoch_document_tests {
         .execute(&outbox.pool)
         .await
         .unwrap();
-        let hidden = outbox.list_authorized_document_refs(
-            account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
-        ).await.unwrap();
+        let hidden = outbox
+            .list_authorized_document_refs(
+                account.workspace.id,
+                Uuid::nil(),
+                account.user_id,
+                None,
+                None,
+                20,
+            )
+            .await
+            .unwrap();
         assert!(hidden.is_empty());
         let coordinator = storage.memory_epoch_coordinator();
         assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
@@ -2141,15 +2338,31 @@ mod epoch_document_tests {
         .await
         .unwrap();
         assert_eq!(archived_epoch_count, 0);
-        let direct_archived = outbox.get_authorized_document(
-            &repository, account.workspace.id, document.memory_id, 1, Uuid::nil(), account.user_id, None,
-        ).await.unwrap();
+        let direct_archived = outbox
+            .get_authorized_document(
+                &repository,
+                account.workspace.id,
+                document.memory_id,
+                1,
+                Uuid::nil(),
+                account.user_id,
+                None,
+            )
+            .await
+            .unwrap();
         assert!(direct_archived.is_none());
 
-        assert!(outbox.transition_lifecycle(
-            &repository, account.workspace.id, document.memory_id, 2, account.user_id,
-            MemoryLifecycleAction::Restore,
-        ).await.unwrap());
+        assert!(outbox
+            .transition_lifecycle(
+                &repository,
+                account.workspace.id,
+                document.memory_id,
+                2,
+                account.user_id,
+                MemoryLifecycleAction::Restore,
+            )
+            .await
+            .unwrap());
         let restored_payload: String = sqlx::query_scalar(
             "SELECT payload_json FROM memory_document_outbox WHERE memory_id = ? AND version = 3",
         )
@@ -2167,9 +2380,17 @@ mod epoch_document_tests {
         .execute(&outbox.pool)
         .await
         .unwrap();
-        let visible = outbox.list_authorized_document_refs(
-            account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
-        ).await.unwrap();
+        let visible = outbox
+            .list_authorized_document_refs(
+                account.workspace.id,
+                Uuid::nil(),
+                account.user_id,
+                None,
+                None,
+                20,
+            )
+            .await
+            .unwrap();
         assert_eq!(visible, vec![(document.memory_id, 3)]);
         assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
         let restored_epoch_version: i64 = sqlx::query_scalar(
@@ -2184,15 +2405,31 @@ mod epoch_document_tests {
         .await
         .unwrap();
         assert_eq!(restored_epoch_version, 3);
-        let direct_restored = outbox.get_authorized_document(
-            &repository, account.workspace.id, document.memory_id, 3, Uuid::nil(), account.user_id, None,
-        ).await.unwrap();
+        let direct_restored = outbox
+            .get_authorized_document(
+                &repository,
+                account.workspace.id,
+                document.memory_id,
+                3,
+                Uuid::nil(),
+                account.user_id,
+                None,
+            )
+            .await
+            .unwrap();
         assert!(direct_restored.is_some());
 
-        assert!(outbox.transition_lifecycle(
-            &repository, account.workspace.id, document.memory_id, 3, account.user_id,
-            MemoryLifecycleAction::Delete,
-        ).await.unwrap());
+        assert!(outbox
+            .transition_lifecycle(
+                &repository,
+                account.workspace.id,
+                document.memory_id,
+                3,
+                account.user_id,
+                MemoryLifecycleAction::Delete,
+            )
+            .await
+            .unwrap());
         let deleted_status: String = sqlx::query_scalar(
             "SELECT lifecycle_status FROM memory_document_versions WHERE memory_id = ? AND version = 4",
         )
@@ -2231,13 +2468,30 @@ mod epoch_document_tests {
         .await
         .unwrap();
         assert_eq!(latest_epoch_items, 0);
-        let hidden_after_delete = outbox.list_authorized_document_refs(
-            account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
-        ).await.unwrap();
+        let hidden_after_delete = outbox
+            .list_authorized_document_refs(
+                account.workspace.id,
+                Uuid::nil(),
+                account.user_id,
+                None,
+                None,
+                20,
+            )
+            .await
+            .unwrap();
         assert!(hidden_after_delete.is_empty());
-        let direct_deleted = outbox.get_authorized_document(
-            &repository, account.workspace.id, document.memory_id, 3, Uuid::nil(), account.user_id, None,
-        ).await.unwrap();
+        let direct_deleted = outbox
+            .get_authorized_document(
+                &repository,
+                account.workspace.id,
+                document.memory_id,
+                3,
+                Uuid::nil(),
+                account.user_id,
+                None,
+            )
+            .await
+            .unwrap();
         assert!(direct_deleted.is_none());
     }
 
@@ -2252,7 +2506,10 @@ mod epoch_document_tests {
 
         let repository = FakeDocumentRepository::default();
         repository.put_version(document.clone()).await.unwrap();
-        assert!(outbox.approve(workspace_id, document.memory_id, 1, Uuid::new_v4()).await.unwrap());
+        assert!(outbox
+            .approve(workspace_id, document.memory_id, 1, Uuid::new_v4())
+            .await
+            .unwrap());
         sqlx::query(
             "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
         )
@@ -2282,18 +2539,38 @@ mod epoch_document_tests {
         .unwrap();
         assert_eq!(pinned_scoring_version, "test-qoin-memory-v2");
 
-        let visible = outbox.list_epoch_authorized_documents(
-            &repository, workspace_id, epoch_id, agent_id, Uuid::nil(), None, 20,
-        ).await.unwrap().unwrap();
+        let visible = outbox
+            .list_epoch_authorized_documents(
+                &repository,
+                workspace_id,
+                epoch_id,
+                agent_id,
+                Uuid::nil(),
+                None,
+                20,
+            )
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(visible.len(), 1);
         assert_eq!(visible[0].memory_id, document.memory_id);
         assert_eq!(visible[0].version, 1);
         assert_eq!(visible[0].content_hash, document.content_hash);
         assert_eq!(visible[0].status, "ready");
 
-        let hidden = outbox.list_epoch_authorized_documents(
-            &repository, workspace_id, epoch_id, Uuid::new_v4(), Uuid::nil(), None, 20,
-        ).await.unwrap().unwrap();
+        let hidden = outbox
+            .list_epoch_authorized_documents(
+                &repository,
+                workspace_id,
+                epoch_id,
+                Uuid::new_v4(),
+                Uuid::nil(),
+                None,
+                20,
+            )
+            .await
+            .unwrap()
+            .unwrap();
         assert!(hidden.is_empty());
 
         let session_id = Uuid::new_v4();
@@ -2308,23 +2585,49 @@ mod epoch_document_tests {
         .execute(&outbox.pool)
         .await
         .unwrap();
-        let session_documents = outbox.list_session_authorized_documents(
-            &repository, workspace_id, session_id, agent_id, Uuid::nil(), 20,
-        ).await.unwrap().unwrap();
+        let session_documents = outbox
+            .list_session_authorized_documents(
+                &repository,
+                workspace_id,
+                session_id,
+                agent_id,
+                Uuid::nil(),
+                20,
+            )
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(session_documents.0, epoch_id);
         assert!(session_documents.1.is_none());
         assert_eq!(session_documents.2.as_deref(), Some("test-qoin-memory-v2"));
         assert_eq!(session_documents.3.len(), 1);
         assert_eq!(session_documents.3[0].memory_id, document.memory_id);
 
-        let denied_session = outbox.list_session_authorized_documents(
-            &repository, workspace_id, session_id, Uuid::new_v4(), Uuid::nil(), 20,
-        ).await.unwrap();
+        let denied_session = outbox
+            .list_session_authorized_documents(
+                &repository,
+                workspace_id,
+                session_id,
+                Uuid::new_v4(),
+                Uuid::nil(),
+                20,
+            )
+            .await
+            .unwrap();
         assert!(denied_session.is_none());
 
-        let missing = outbox.list_epoch_authorized_documents(
-            &repository, workspace_id, Uuid::new_v4(), agent_id, Uuid::nil(), None, 20,
-        ).await.unwrap();
+        let missing = outbox
+            .list_epoch_authorized_documents(
+                &repository,
+                workspace_id,
+                Uuid::new_v4(),
+                agent_id,
+                Uuid::nil(),
+                None,
+                20,
+            )
+            .await
+            .unwrap();
         assert!(missing.is_none());
     }
 }
@@ -2359,9 +2662,10 @@ mod outbox_recovery_tests {
         .await
         .unwrap();
 
-        assert!(outbox.retry_dead_letter(
-            workspace_id, document.memory_id, 1, actor_id,
-        ).await.unwrap());
+        assert!(outbox
+            .retry_dead_letter(workspace_id, document.memory_id, 1, actor_id,)
+            .await
+            .unwrap());
 
         let status: String = sqlx::query_scalar(
             "SELECT status FROM memory_document_outbox WHERE memory_id = ? AND version = 1",
@@ -2422,9 +2726,10 @@ mod outbox_recovery_tests {
         .await
         .unwrap();
 
-        assert!(!outbox.retry_dead_letter(
-            workspace_id, document.memory_id, 1, Uuid::new_v4(),
-        ).await.unwrap());
+        assert!(!outbox
+            .retry_dead_letter(workspace_id, document.memory_id, 1, Uuid::new_v4(),)
+            .await
+            .unwrap());
     }
 }
 
@@ -2443,42 +2748,80 @@ mod reconciliation_tests {
     impl MemoryDocumentRepository for Repository {
         async fn put_version(&self, document: MemoryDocument) -> Result<(), MemoryDocumentError> {
             document.validate()?;
-            self.documents.lock().map_err(|_| MemoryDocumentError::InvalidDocument)?
+            self.documents
+                .lock()
+                .map_err(|_| MemoryDocumentError::InvalidDocument)?
                 .insert((document.memory_id, document.version), document);
             Ok(())
         }
 
-        async fn get_version(&self, memory_id: Uuid, version: u64)
-            -> Result<Option<MemoryDocument>, MemoryDocumentError> {
-            Ok(self.documents.lock().map_err(|_| MemoryDocumentError::InvalidDocument)?
-                .get(&(memory_id, version)).cloned())
+        async fn get_version(
+            &self,
+            memory_id: Uuid,
+            version: u64,
+        ) -> Result<Option<MemoryDocument>, MemoryDocumentError> {
+            Ok(self
+                .documents
+                .lock()
+                .map_err(|_| MemoryDocumentError::InvalidDocument)?
+                .get(&(memory_id, version))
+                .cloned())
         }
 
-        async fn list_versions(&self, memory_id: Uuid)
-            -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
-            let mut values = self.documents.lock().map_err(|_| MemoryDocumentError::InvalidDocument)?
-                .values().filter(|item| item.memory_id == memory_id).cloned().collect::<Vec<_>>();
+        async fn list_versions(
+            &self,
+            memory_id: Uuid,
+        ) -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
+            let mut values = self
+                .documents
+                .lock()
+                .map_err(|_| MemoryDocumentError::InvalidDocument)?
+                .values()
+                .filter(|item| item.memory_id == memory_id)
+                .cloned()
+                .collect::<Vec<_>>();
             values.sort_by_key(|item| item.version);
             Ok(values)
         }
 
-        async fn list_workspace_documents(&self, workspace_id: Uuid, limit: usize)
-            -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
-            let mut values = self.documents.lock().map_err(|_| MemoryDocumentError::InvalidDocument)?
-                .values().filter(|item| item.workspace_id == workspace_id).cloned().collect::<Vec<_>>();
-            values.sort_by(|left, right| left.memory_id.as_bytes().cmp(right.memory_id.as_bytes())
-                .then_with(|| left.version.cmp(&right.version)));
+        async fn list_workspace_documents(
+            &self,
+            workspace_id: Uuid,
+            limit: usize,
+        ) -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
+            let mut values = self
+                .documents
+                .lock()
+                .map_err(|_| MemoryDocumentError::InvalidDocument)?
+                .values()
+                .filter(|item| item.workspace_id == workspace_id)
+                .cloned()
+                .collect::<Vec<_>>();
+            values.sort_by(|left, right| {
+                left.memory_id
+                    .as_bytes()
+                    .cmp(right.memory_id.as_bytes())
+                    .then_with(|| left.version.cmp(&right.version))
+            });
             values.truncate(limit.clamp(1, 5_000));
             Ok(values)
         }
 
-        async fn verify_version(&self, memory_id: Uuid, version: u64, expected_hash: &str)
-            -> Result<bool, MemoryDocumentError> {
-            Ok(self.get_version(memory_id, version).await?
+        async fn verify_version(
+            &self,
+            memory_id: Uuid,
+            version: u64,
+            expected_hash: &str,
+        ) -> Result<bool, MemoryDocumentError> {
+            Ok(self
+                .get_version(memory_id, version)
+                .await?
                 .is_some_and(|item| item.content_hash == expected_hash))
         }
 
-        async fn ping(&self) -> Result<(), MemoryDocumentError> { Ok(()) }
+        async fn ping(&self) -> Result<(), MemoryDocumentError> {
+            Ok(())
+        }
     }
 
     #[tokio::test]
@@ -2491,18 +2834,28 @@ mod reconciliation_tests {
         outbox.enqueue(&mut document, Uuid::new_v4()).await.unwrap();
 
         let repository = Repository::default();
-        let pending = outbox.reconcile_workspace(&repository, workspace_id, 100).await.unwrap();
+        let pending = outbox
+            .reconcile_workspace(&repository, workspace_id, 100)
+            .await
+            .unwrap();
         assert_eq!(pending.pending_outbox_events, 1);
-        assert!(pending.issues.iter().any(|issue|
-            issue.kind == "mongo_document_pending_delivery"));
+        assert!(pending
+            .issues
+            .iter()
+            .any(|issue| issue.kind == "mongo_document_pending_delivery"));
 
         let mut conflicting = document.clone();
         conflicting.scope = "workspace_shared".into();
         conflicting.owner_id = None;
         repository.put_version(conflicting).await.unwrap();
-        let mismatch = outbox.reconcile_workspace(&repository, workspace_id, 100).await.unwrap();
-        assert!(mismatch.issues.iter().any(|issue|
-            issue.kind == "scope_mismatch"));
+        let mismatch = outbox
+            .reconcile_workspace(&repository, workspace_id, 100)
+            .await
+            .unwrap();
+        assert!(mismatch
+            .issues
+            .iter()
+            .any(|issue| issue.kind == "scope_mismatch"));
     }
 }
 
@@ -2520,7 +2873,10 @@ mod latest_version_search_tests {
         let actor_id = Uuid::new_v4();
         let mut first = super::tests::document(workspace_id, agent_id);
         outbox.enqueue(&mut first, actor_id).await.unwrap();
-        assert!(outbox.approve(workspace_id, first.memory_id, 1, actor_id).await.unwrap());
+        assert!(outbox
+            .approve(workspace_id, first.memory_id, 1, actor_id)
+            .await
+            .unwrap());
         sqlx::query(
             "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
         )
@@ -2537,7 +2893,10 @@ mod latest_version_search_tests {
         second.updated_at = Utc::now();
         second.content_hash = second.calculate_content_hash();
         outbox.enqueue(&mut second, actor_id).await.unwrap();
-        assert!(outbox.approve(workspace_id, second.memory_id, 2, actor_id).await.unwrap());
+        assert!(outbox
+            .approve(workspace_id, second.memory_id, 2, actor_id)
+            .await
+            .unwrap());
         sqlx::query(
             "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 2",
         )
@@ -2546,23 +2905,65 @@ mod latest_version_search_tests {
         .await
         .unwrap();
 
-        let refs = outbox.list_authorized_document_refs(
-            workspace_id, agent_id, Uuid::nil(), None, None, 200,
-        ).await.unwrap();
+        let refs = outbox
+            .list_authorized_document_refs(workspace_id, agent_id, Uuid::nil(), None, None, 200)
+            .await
+            .unwrap();
         assert_eq!(refs, vec![(first.memory_id, 2)]);
 
-        let first_history_page = outbox.list_authorized_document_versions(
-            workspace_id, first.memory_id, agent_id, Uuid::nil(), None, None, None, 1,
-        ).await.unwrap();
-        assert_eq!(first_history_page.iter().map(|item| item.version).collect::<Vec<_>>(), vec![2]);
-        let second_history_page = outbox.list_authorized_document_versions(
-            workspace_id, first.memory_id, agent_id, Uuid::nil(), None, None,
-            first_history_page.last().map(|item| item.version), 1,
-        ).await.unwrap();
-        assert_eq!(second_history_page.iter().map(|item| item.version).collect::<Vec<_>>(), vec![1]);
-        let denied_history = outbox.list_authorized_document_versions(
-            workspace_id, first.memory_id, Uuid::new_v4(), Uuid::nil(), None, None, None, 100,
-        ).await.unwrap();
+        let first_history_page = outbox
+            .list_authorized_document_versions(
+                workspace_id,
+                first.memory_id,
+                agent_id,
+                Uuid::nil(),
+                None,
+                None,
+                None,
+                1,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            first_history_page
+                .iter()
+                .map(|item| item.version)
+                .collect::<Vec<_>>(),
+            vec![2]
+        );
+        let second_history_page = outbox
+            .list_authorized_document_versions(
+                workspace_id,
+                first.memory_id,
+                agent_id,
+                Uuid::nil(),
+                None,
+                None,
+                first_history_page.last().map(|item| item.version),
+                1,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            second_history_page
+                .iter()
+                .map(|item| item.version)
+                .collect::<Vec<_>>(),
+            vec![1]
+        );
+        let denied_history = outbox
+            .list_authorized_document_versions(
+                workspace_id,
+                first.memory_id,
+                Uuid::new_v4(),
+                Uuid::nil(),
+                None,
+                None,
+                None,
+                100,
+            )
+            .await
+            .unwrap();
         assert!(denied_history.is_empty());
 
         let coordinator = storage.memory_epoch_coordinator();

@@ -45,16 +45,30 @@ impl Default for QoinScoringWeights {
 
 impl QoinScoringWeights {
     fn total(&self) -> f64 {
-        self.semantic + self.context + self.dependency + self.outcome
-            + self.failure + self.evidence + self.recency + self.tags
+        self.semantic
+            + self.context
+            + self.dependency
+            + self.outcome
+            + self.failure
+            + self.evidence
+            + self.recency
+            + self.tags
     }
 
     fn validate(&self) -> bool {
         let values = [
-            self.semantic, self.context, self.dependency, self.outcome,
-            self.failure, self.evidence, self.recency, self.tags,
+            self.semantic,
+            self.context,
+            self.dependency,
+            self.outcome,
+            self.failure,
+            self.evidence,
+            self.recency,
+            self.tags,
         ];
-        values.iter().all(|value| value.is_finite() && *value >= 0.0)
+        values
+            .iter()
+            .all(|value| value.is_finite() && *value >= 0.0)
             && self.total().is_finite()
             && self.total() > 0.0
     }
@@ -135,7 +149,9 @@ impl QoinScoringConfig {
         if self.version.trim().is_empty()
             || self.version.len() > 80
             || !self.weights.validate()
-            || thresholds.iter().any(|value| !value.is_finite() || !(0.0..=1.0).contains(value))
+            || thresholds
+                .iter()
+                .any(|value| !value.is_finite() || !(0.0..=1.0).contains(value))
             || self.conditional_threshold > self.relevant_threshold
             || !self.recency_half_life_days.is_finite()
             || self.recency_half_life_days <= 0.0
@@ -388,16 +404,15 @@ fn score_memory(
     let recency = (1.0 / (1.0 + age_days / config.recency_half_life_days)).clamp(0.0, 1.0);
     let tags = overlap(&query.tags, &memory.tags);
     let weights = &config.weights;
-    let total = (
-        weights.semantic * semantic
-            + weights.context * context
-            + weights.dependency * dependency
-            + weights.outcome * outcome
-            + weights.failure * failure
-            + weights.evidence * evidence
-            + weights.recency * recency
-            + weights.tags * tags
-    ) / weights.total();
+    let total = (weights.semantic * semantic
+        + weights.context * context
+        + weights.dependency * dependency
+        + weights.outcome * outcome
+        + weights.failure * failure
+        + weights.evidence * evidence
+        + weights.recency * recency
+        + weights.tags * tags)
+        / weights.total();
     ScoreBreakdown {
         semantic,
         context,
@@ -542,15 +557,24 @@ mod scoring_config_tests {
 
         let mut changed_weight = baseline.clone();
         changed_weight.weights.semantic += 0.01;
-        assert_ne!(baseline.effective_version(), changed_weight.effective_version());
+        assert_ne!(
+            baseline.effective_version(),
+            changed_weight.effective_version()
+        );
 
         let mut changed_threshold = baseline.clone();
         changed_threshold.relevant_threshold += 0.01;
-        assert_ne!(baseline.effective_version(), changed_threshold.effective_version());
+        assert_ne!(
+            baseline.effective_version(),
+            changed_threshold.effective_version()
+        );
 
         let mut changed_feedback_weight = baseline.clone();
         changed_feedback_weight.feedback_weight = 0.75;
-        assert_ne!(baseline.effective_version(), changed_feedback_weight.effective_version());
+        assert_ne!(
+            baseline.effective_version(),
+            changed_feedback_weight.effective_version()
+        );
     }
 
     #[test]
@@ -698,25 +722,41 @@ mod tests {
         let mut semantic_policy = QoinScoringConfig::default();
         semantic_policy.version = "semantic-only-test-v1".into();
         semantic_policy.weights = QoinScoringWeights {
-            semantic: 1.0, context: 0.0, dependency: 0.0, outcome: 0.0,
-            failure: 0.0, evidence: 0.0, recency: 0.0, tags: 0.0,
+            semantic: 1.0,
+            context: 0.0,
+            dependency: 0.0,
+            outcome: 0.0,
+            failure: 0.0,
+            evidence: 0.0,
+            recency: 0.0,
+            tags: 0.0,
         };
         let mut context_policy = semantic_policy.clone();
         context_policy.version = "context-only-test-v1".into();
         context_policy.weights = QoinScoringWeights {
-            semantic: 0.0, context: 1.0, dependency: 0.0, outcome: 0.0,
-            failure: 0.0, evidence: 0.0, recency: 0.0, tags: 0.0,
+            semantic: 0.0,
+            context: 1.0,
+            dependency: 0.0,
+            outcome: 0.0,
+            failure: 0.0,
+            evidence: 0.0,
+            recency: 0.0,
+            tags: 0.0,
         };
 
-        let semantic_result = retrieve_memories_with_config(
-            &request, &[item.clone()], &semantic_policy,
-        ).unwrap();
-        let context_result = retrieve_memories_with_config(
-            &request, &[item], &context_policy,
-        ).unwrap();
+        let semantic_result =
+            retrieve_memories_with_config(&request, &[item.clone()], &semantic_policy).unwrap();
+        let context_result =
+            retrieve_memories_with_config(&request, &[item], &context_policy).unwrap();
 
-        assert_eq!(semantic_result.scoring_config.version, "semantic-only-test-v1");
-        assert_eq!(context_result.scoring_config.version, "context-only-test-v1");
+        assert_eq!(
+            semantic_result.scoring_config.version,
+            "semantic-only-test-v1"
+        );
+        assert_eq!(
+            context_result.scoring_config.version,
+            "context-only-test-v1"
+        );
         assert!(semantic_result.ranked[0].score.total > context_result.ranked[0].score.total);
     }
 

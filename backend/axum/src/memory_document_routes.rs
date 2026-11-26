@@ -2,11 +2,14 @@ use crate::{
     auth_middleware::AuthenticatedUser,
     memory_architecture::{qkv_attention, AttentionMemory, AttentionQuery, QoinVector},
     memory_documents::MemoryDocument,
-    memory_outbox::{MemoryLifecycleAction, MemoryReconciliationReport},
-    memory_vector_provider::{validate_memory_key, LexicalMemoryVectorProvider, MemoryVectorProvider, MemoryVectorProviderError, LEXICAL_MEMORY_VECTOR_VERSION},
     memory_intelligence::{
         retrieve_memories_with_config, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
         MemoryVisibility, QoinScoringConfig, ScoreBreakdown,
+    },
+    memory_outbox::{MemoryLifecycleAction, MemoryReconciliationReport},
+    memory_vector_provider::{
+        validate_memory_key, LexicalMemoryVectorProvider, MemoryVectorProvider,
+        MemoryVectorProviderError, LEXICAL_MEMORY_VECTOR_VERSION,
     },
     AppState,
 };
@@ -18,7 +21,10 @@ use axum::{
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::{collections::{BTreeSet, HashMap}, sync::Arc};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -83,12 +89,20 @@ async fn require_agent_owner(
     if state.is_agent_owner(user_id, workspace_id, agent_id).await {
         Ok(())
     } else {
-        Err(api_error(StatusCode::NOT_FOUND, "Agent not found for this user in the workspace."))
+        Err(api_error(
+            StatusCode::NOT_FOUND,
+            "Agent not found for this user in the workspace.",
+        ))
     }
 }
 
 fn api_error(status: StatusCode, message: &str) -> (StatusCode, Json<ApiError>) {
-    (status, Json(ApiError { error: message.into() }))
+    (
+        status,
+        Json(ApiError {
+            error: message.into(),
+        }),
+    )
 }
 
 pub async fn create_memory_document(
@@ -100,7 +114,12 @@ pub async fn create_memory_document(
     let member = state
         .is_workspace_member(user.user_id, workspace_id)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Workspace access could not be verified.",
+            )
+        })?;
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
@@ -110,60 +129,110 @@ pub async fn create_memory_document(
         || input.title.trim().is_empty()
         || input.title.len() > 300
         || input.tags.len() > 64
-        || input.tags.iter().any(|tag| tag.trim().is_empty() || tag.len() > 64)
+        || input
+            .tags
+            .iter()
+            .any(|tag| tag.trim().is_empty() || tag.len() > 64)
         || input.document_type.trim().is_empty()
         || input.document_type.len() > 80
     {
-        return Err(api_error(StatusCode::BAD_REQUEST, "Memory document fields exceed their validation limits."));
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "Memory document fields exceed their validation limits.",
+        ));
     }
 
     match input.scope.as_str() {
         "workspace_shared" => {
-            if input.task_id.is_some() || input.project_id.is_some() || input.owner_agent_id.is_some() {
-                return Err(api_error(StatusCode::BAD_REQUEST, "Workspace-shared memory cannot carry narrower scope identifiers."));
+            if input.task_id.is_some()
+                || input.project_id.is_some()
+                || input.owner_agent_id.is_some()
+            {
+                return Err(api_error(
+                    StatusCode::BAD_REQUEST,
+                    "Workspace-shared memory cannot carry narrower scope identifiers.",
+                ));
             }
         }
         "task_shared" => {
             let Some(task_id) = input.task_id else {
-                return Err(api_error(StatusCode::BAD_REQUEST, "Task-shared memory requires task_id."));
+                return Err(api_error(
+                    StatusCode::BAD_REQUEST,
+                    "Task-shared memory requires task_id.",
+                ));
             };
-            let task_matches = state.tasks.read().await.get(&task_id)
+            let task_matches = state
+                .tasks
+                .read()
+                .await
+                .get(&task_id)
                 .is_some_and(|task| task.workspace_id == workspace_id);
             if !task_matches || input.project_id.is_some() || input.owner_agent_id.is_some() {
-                return Err(api_error(StatusCode::NOT_FOUND, "Task scope was not found in this workspace."));
+                return Err(api_error(
+                    StatusCode::NOT_FOUND,
+                    "Task scope was not found in this workspace.",
+                ));
             }
         }
         "agent_private" => {
             let Some(agent_id) = input.owner_agent_id else {
-                return Err(api_error(StatusCode::BAD_REQUEST, "Agent-private memory requires owner_agent_id."));
+                return Err(api_error(
+                    StatusCode::BAD_REQUEST,
+                    "Agent-private memory requires owner_agent_id.",
+                ));
             };
             let agent_matches = state
                 .is_agent_owner(user.user_id, workspace_id, agent_id)
                 .await;
             if !agent_matches || input.task_id.is_some() || input.project_id.is_some() {
-                return Err(api_error(StatusCode::NOT_FOUND, "Private-memory agent was not found in this workspace."));
+                return Err(api_error(
+                    StatusCode::NOT_FOUND,
+                    "Private-memory agent was not found in this workspace.",
+                ));
             }
         }
         "project_shared" => {
             let Some(project_id) = input.project_id else {
-                return Err(api_error(StatusCode::BAD_REQUEST, "Project-shared memory requires project_id."));
+                return Err(api_error(
+                    StatusCode::BAD_REQUEST,
+                    "Project-shared memory requires project_id.",
+                ));
             };
             if input.task_id.is_some() || input.owner_agent_id.is_some() {
-                return Err(api_error(StatusCode::BAD_REQUEST, "Project-shared memory cannot carry task or private-agent identifiers."));
+                return Err(api_error(
+                    StatusCode::BAD_REQUEST,
+                    "Project-shared memory cannot carry task or private-agent identifiers.",
+                ));
             }
             let project_member = state
                 .is_project_member(workspace_id, project_id, user.user_id)
                 .await
-                .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Project membership could not be checked."))?;
+                .map_err(|_| {
+                    api_error(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Project membership could not be checked.",
+                    )
+                })?;
             if !project_member {
-                return Err(api_error(StatusCode::NOT_FOUND, "Project was not found in this workspace."));
+                return Err(api_error(
+                    StatusCode::NOT_FOUND,
+                    "Project was not found in this workspace.",
+                ));
             }
         }
-        _ => return Err(api_error(StatusCode::BAD_REQUEST, "Unsupported memory scope.")),
+        _ => {
+            return Err(api_error(
+                StatusCode::BAD_REQUEST,
+                "Unsupported memory scope.",
+            ))
+        }
     }
 
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document persistence is unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Memory document persistence is unavailable.",
+        )
     })?;
     let mut key_text = input.title.clone();
     key_text.push(' ');
@@ -181,22 +250,38 @@ pub async fn create_memory_document(
         .key_for_text(&key_text)
         .await
         .map_err(|provider_error| match provider_error {
-            MemoryVectorProviderError::EmptyQuery => {
-                api_error(StatusCode::BAD_REQUEST, "Memory document contains no searchable terms.")
-            }
-            _ => api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
+            MemoryVectorProviderError::EmptyQuery => api_error(
+                StatusCode::BAD_REQUEST,
+                "Memory document contains no searchable terms.",
+            ),
+            _ => api_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Memory embedding provider is unavailable.",
+            ),
         })?;
-    validate_memory_key(&qkv_key, vector_provider.model_version())
-        .map_err(|_| api_error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an invalid or incompatible key."))?;
+    validate_memory_key(&qkv_key, vector_provider.model_version()).map_err(|_| {
+        api_error(
+            StatusCode::BAD_GATEWAY,
+            "Memory embedding provider returned an invalid or incompatible key.",
+        )
+    })?;
     let mut key_metadata = match input.key_metadata {
         Value::Object(metadata) => metadata,
         Value::Null => Map::new(),
-        _ => return Err(api_error(StatusCode::BAD_REQUEST, "key_metadata must be a JSON object.")),
+        _ => {
+            return Err(api_error(
+                StatusCode::BAD_REQUEST,
+                "key_metadata must be a JSON object.",
+            ))
+        }
     };
     let serialized_key = serde_json::to_value(&qkv_key)
         .map_err(|_| api_error(StatusCode::BAD_REQUEST, "QKV key could not be serialized."))?;
     key_metadata.insert("qkv_key".into(), serialized_key);
-    key_metadata.insert("qkv_key_version".into(), Value::String(qkv_key.model_version.clone()));
+    key_metadata.insert(
+        "qkv_key_version".into(),
+        Value::String(qkv_key.model_version.clone()),
+    );
 
     let now = Utc::now();
     let mut document = MemoryDocument {
@@ -230,11 +315,19 @@ pub async fn create_memory_document(
     if let Value::Object(metadata) = &mut document.key_metadata {
         metadata.insert("qkv_source_hash".into(), Value::String(qkv_source_hash));
     }
-    document.validate().map_err(|_| api_error(StatusCode::BAD_REQUEST, "Memory document is invalid."))?;
-    outbox.enqueue(&mut document, user.user_id).await.map_err(|error| {
-        tracing::error!(error = %error, "memory document could not be queued");
-        api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document could not be persisted.")
-    })?;
+    document
+        .validate()
+        .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Memory document is invalid."))?;
+    outbox
+        .enqueue(&mut document, user.user_id)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "memory document could not be queued");
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Memory document could not be persisted.",
+            )
+        })?;
     let response = CreateMemoryDocumentResponse {
         memory_id: document.memory_id,
         version: document.version,
@@ -248,7 +341,6 @@ pub async fn create_memory_document(
     // asynchronous and must not be represented as complete in this response.
     Ok((StatusCode::ACCEPTED, Json(response)))
 }
-
 
 #[derive(Debug, Deserialize)]
 pub struct MemoryDocumentTaskQuery {
@@ -270,22 +362,36 @@ pub async fn approve_memory_document(
     let member = state
         .is_workspace_member(user.user_id, workspace_id)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Workspace access could not be verified.",
+            )
+        })?;
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document storage is unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Memory document storage is unavailable.",
+        )
     })?;
     let approved = outbox
         .approve(workspace_id, memory_id, version, user.user_id)
         .await
         .map_err(|error| {
             tracing::error!(error = %error, "memory document approval failed");
-            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document approval failed.")
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Memory document approval failed.",
+            )
         })?;
     if !approved {
-        return Err(api_error(StatusCode::NOT_FOUND, "Proposed memory document was not found."));
+        return Err(api_error(
+            StatusCode::NOT_FOUND,
+            "Proposed memory document was not found.",
+        ));
     }
     Ok(Json(MemoryDocumentApprovalResponse {
         memory_id,
@@ -313,15 +419,26 @@ async fn transition_memory_document(
     let member = state
         .is_workspace_member(user_id, workspace_id)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Workspace access could not be verified.",
+            )
+        })?;
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document metadata is unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Memory document metadata is unavailable.",
+        )
     })?;
     let repository = state.memory_documents.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "MongoDB memory documents are unavailable.",
+        )
     })?;
     let transitioned = outbox
         .transition_lifecycle(
@@ -336,14 +453,21 @@ async fn transition_memory_document(
         .map_err(|failure| {
             tracing::error!(error = %failure, "memory lifecycle transition failed");
             match failure {
-                crate::memory_outbox::MemoryOutboxError::VersionConflict => {
-                    api_error(StatusCode::CONFLICT, "Memory version changed or failed integrity validation.")
-                }
-                _ => api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory lifecycle transition failed."),
+                crate::memory_outbox::MemoryOutboxError::VersionConflict => api_error(
+                    StatusCode::CONFLICT,
+                    "Memory version changed or failed integrity validation.",
+                ),
+                _ => api_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Memory lifecycle transition failed.",
+                ),
             }
         })?;
     if !transitioned {
-        return Err(api_error(StatusCode::NOT_FOUND, "Authorized current memory version was not found."));
+        return Err(api_error(
+            StatusCode::NOT_FOUND,
+            "Authorized current memory version was not found.",
+        ));
     }
     let lifecycle_status = match action {
         MemoryLifecycleAction::Archive => "archived",
@@ -363,7 +487,15 @@ pub async fn archive_memory_document(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, memory_id, version)): Path<(Uuid, Uuid, u64)>,
 ) -> Result<Json<MemoryDocumentLifecycleResponse>, (StatusCode, Json<ApiError>)> {
-    transition_memory_document(state, user.user_id, workspace_id, memory_id, version, MemoryLifecycleAction::Archive).await
+    transition_memory_document(
+        state,
+        user.user_id,
+        workspace_id,
+        memory_id,
+        version,
+        MemoryLifecycleAction::Archive,
+    )
+    .await
 }
 
 pub async fn restore_memory_document(
@@ -371,7 +503,15 @@ pub async fn restore_memory_document(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, memory_id, version)): Path<(Uuid, Uuid, u64)>,
 ) -> Result<Json<MemoryDocumentLifecycleResponse>, (StatusCode, Json<ApiError>)> {
-    transition_memory_document(state, user.user_id, workspace_id, memory_id, version, MemoryLifecycleAction::Restore).await
+    transition_memory_document(
+        state,
+        user.user_id,
+        workspace_id,
+        memory_id,
+        version,
+        MemoryLifecycleAction::Restore,
+    )
+    .await
 }
 
 pub async fn delete_memory_document(
@@ -379,7 +519,15 @@ pub async fn delete_memory_document(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, memory_id, version)): Path<(Uuid, Uuid, u64)>,
 ) -> Result<Json<MemoryDocumentLifecycleResponse>, (StatusCode, Json<ApiError>)> {
-    transition_memory_document(state, user.user_id, workspace_id, memory_id, version, MemoryLifecycleAction::Delete).await
+    transition_memory_document(
+        state,
+        user.user_id,
+        workspace_id,
+        memory_id,
+        version,
+        MemoryLifecycleAction::Delete,
+    )
+    .await
 }
 
 #[derive(Debug, Serialize)]
@@ -408,22 +556,36 @@ pub async fn reconcile_memory_documents(
     let member = state
         .is_workspace_member(user.user_id, workspace_id)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Workspace access could not be verified.",
+            )
+        })?;
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory reconciliation is unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Memory reconciliation is unavailable.",
+        )
     })?;
     let repository = state.memory_documents.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "MongoDB memory documents are unavailable.",
+        )
     })?;
     let report = outbox
         .reconcile_workspace(repository.as_ref(), workspace_id, query.limit)
         .await
         .map_err(|error| {
             tracing::error!(error = %error, "memory reconciliation failed");
-            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory reconciliation failed.")
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Memory reconciliation failed.",
+            )
         })?;
     Ok(Json(report))
 }
@@ -436,22 +598,36 @@ pub async fn retry_memory_document_sync(
     let member = state
         .is_workspace_member(user.user_id, workspace_id)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Workspace access could not be verified.",
+            )
+        })?;
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document outbox is unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Memory document outbox is unavailable.",
+        )
     })?;
     let requeued = outbox
         .retry_dead_letter(workspace_id, memory_id, version, user.user_id)
         .await
         .map_err(|error| {
             tracing::error!(error = %error, "memory outbox recovery failed");
-            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory synchronization recovery failed.")
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Memory synchronization recovery failed.",
+            )
         })?;
     if !requeued {
-        return Err(api_error(StatusCode::NOT_FOUND, "Recoverable dead-letter event was not found."));
+        return Err(api_error(
+            StatusCode::NOT_FOUND,
+            "Recoverable dead-letter event was not found.",
+        ));
     }
     Ok(Json(MemoryDocumentRetryResponse {
         memory_id,
@@ -504,33 +680,56 @@ pub async fn get_agent_memory_document_versions(
     let member = state
         .is_workspace_member(user.user_id, workspace_id)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Workspace access could not be verified.",
+            )
+        })?;
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
     require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
     if let Some(task_id) = query.task_id {
-        let task_matches = state.tasks.read().await.get(&task_id)
-            .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
+        let task_matches = state.tasks.read().await.get(&task_id).is_some_and(|task| {
+            task.workspace_id == workspace_id && task.assignee_agent_id == agent_id
+        });
         if !task_matches || query.project_id.is_some() {
-            return Err(api_error(StatusCode::NOT_FOUND, "Task not found for this agent in the workspace."));
+            return Err(api_error(
+                StatusCode::NOT_FOUND,
+                "Task not found for this agent in the workspace.",
+            ));
         }
     }
     if let Some(project_id) = query.project_id {
         let project_member = state
             .is_project_member(workspace_id, project_id, user.user_id)
             .await
-            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Project membership could not be checked."))?;
+            .map_err(|_| {
+                api_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Project membership could not be checked.",
+                )
+            })?;
         if !project_member {
-            return Err(api_error(StatusCode::NOT_FOUND, "Project not found in this workspace."));
+            return Err(api_error(
+                StatusCode::NOT_FOUND,
+                "Project not found in this workspace.",
+            ));
         }
     }
 
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document metadata is unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Memory document metadata is unavailable.",
+        )
     })?;
     let repository = state.memory_documents.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "MongoDB memory documents are unavailable.",
+        )
     })?;
     let limit = query.limit.clamp(1, 100);
     let mut references = outbox
@@ -547,7 +746,10 @@ pub async fn get_agent_memory_document_versions(
         .await
         .map_err(|error| {
             tracing::error!(error = %error, "memory version history lookup failed");
-            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory version history could not be retrieved.")
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Memory version history could not be retrieved.",
+            )
         })?;
     let has_more = references.len() > limit;
     references.truncate(limit);
@@ -557,8 +759,18 @@ pub async fn get_agent_memory_document_versions(
         let document = repository
             .get_version(memory_id, reference.version)
             .await
-            .map_err(|_| api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory document retrieval failed."))?
-            .ok_or_else(|| api_error(StatusCode::CONFLICT, "An authorized memory version is missing from MongoDB."))?;
+            .map_err(|_| {
+                api_error(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "MongoDB memory document retrieval failed.",
+                )
+            })?
+            .ok_or_else(|| {
+                api_error(
+                    StatusCode::CONFLICT,
+                    "An authorized memory version is missing from MongoDB.",
+                )
+            })?;
         if document.validate().is_err()
             || document.workspace_id != workspace_id
             || document.memory_id != memory_id
@@ -572,7 +784,10 @@ pub async fn get_agent_memory_document_versions(
             || document.qoin_vector_version != reference.qoin_vector_version
             || document.task_id != reference.task_id
         {
-            return Err(api_error(StatusCode::CONFLICT, "Memory version metadata does not match its SQLite authority."));
+            return Err(api_error(
+                StatusCode::CONFLICT,
+                "Memory version metadata does not match its SQLite authority.",
+            ));
         }
         versions.push(MemoryDocumentVersionSummary {
             memory_id,
@@ -609,24 +824,39 @@ pub async fn get_agent_memory_document(
     let member = state
         .is_workspace_member(user.user_id, workspace_id)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Workspace access could not be verified.",
+            )
+        })?;
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
     require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
     if let Some(task_id) = query.task_id {
-        let task_matches = state.tasks.read().await.get(&task_id)
-            .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
+        let task_matches = state.tasks.read().await.get(&task_id).is_some_and(|task| {
+            task.workspace_id == workspace_id && task.assignee_agent_id == agent_id
+        });
         if !task_matches {
-            return Err(api_error(StatusCode::NOT_FOUND, "Task not found for this agent."));
+            return Err(api_error(
+                StatusCode::NOT_FOUND,
+                "Task not found for this agent.",
+            ));
         }
     }
 
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document metadata is unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Memory document metadata is unavailable.",
+        )
     })?;
     let repository = state.memory_documents.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "MongoDB memory documents are unavailable.",
+        )
     })?;
     let document = outbox
         .get_authorized_document(
@@ -641,13 +871,15 @@ pub async fn get_agent_memory_document(
         .await
         .map_err(|error| {
             tracing::error!(error = %error, "memory document retrieval failed");
-            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document could not be retrieved.")
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Memory document could not be retrieved.",
+            )
         })?;
     document
         .map(Json)
         .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "Memory document not found."))
 }
-
 
 #[derive(Debug, Deserialize)]
 pub struct MemoryDocumentSearchRequest {
@@ -768,7 +1000,12 @@ pub async fn search_agent_memory_documents(
     let member = state
         .is_workspace_member(user.user_id, workspace_id)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Workspace access could not be verified.",
+            )
+        })?;
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
@@ -778,70 +1015,119 @@ pub async fn search_agent_memory_documents(
         || input.tags.len() > 64
         || input.dependency_ids.len() > 64
     {
-        return Err(api_error(StatusCode::BAD_REQUEST, "Query, tags, or dependencies exceed retrieval limits."));
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "Query, tags, or dependencies exceed retrieval limits.",
+        ));
     }
     for score in [input.context, input.outcome, input.failure, input.evidence] {
         if !score.is_finite() || !(0.0..=1.0).contains(&score) {
-            return Err(api_error(StatusCode::BAD_REQUEST, "Qoin query features must be normalized to [0, 1]."));
+            return Err(api_error(
+                StatusCode::BAD_REQUEST,
+                "Qoin query features must be normalized to [0, 1].",
+            ));
         }
     }
     if let Some(task_id) = input.task_id {
-        let task_matches = state.tasks.read().await.get(&task_id)
-            .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
+        let task_matches = state.tasks.read().await.get(&task_id).is_some_and(|task| {
+            task.workspace_id == workspace_id && task.assignee_agent_id == agent_id
+        });
         if !task_matches || input.project_id.is_some() {
-            return Err(api_error(StatusCode::NOT_FOUND, "Task not found for this agent."));
+            return Err(api_error(
+                StatusCode::NOT_FOUND,
+                "Task not found for this agent.",
+            ));
         }
     }
     if let Some(project_id) = input.project_id {
         let project_member = state
             .is_project_member(workspace_id, project_id, user.user_id)
             .await
-            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Project membership could not be checked."))?;
+            .map_err(|_| {
+                api_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Project membership could not be checked.",
+                )
+            })?;
         if !project_member {
-            return Err(api_error(StatusCode::NOT_FOUND, "Project not found in this workspace."));
+            return Err(api_error(
+                StatusCode::NOT_FOUND,
+                "Project not found in this workspace.",
+            ));
         }
     }
 
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document metadata is unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Memory document metadata is unavailable.",
+        )
     })?;
     let repository = state.memory_documents.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "MongoDB memory documents are unavailable.",
+        )
     })?;
     let refs = outbox
-        .list_authorized_document_refs(workspace_id, agent_id, user.user_id, input.task_id, input.project_id, 200)
+        .list_authorized_document_refs(
+            workspace_id,
+            agent_id,
+            user.user_id,
+            input.task_id,
+            input.project_id,
+            200,
+        )
         .await
         .map_err(|error| {
             tracing::error!(error = %error, "memory document candidate lookup failed");
-            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document search failed.")
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Memory document search failed.",
+            )
         })?;
     let feedback_signals = outbox
         .feedback_signals(workspace_id, &refs)
         .await
         .map_err(|error| {
             tracing::error!(error = %error, "memory retrieval feedback lookup failed");
-            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory feedback could not be loaded.")
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Memory feedback could not be loaded.",
+            )
         })?;
 
     if input.query.trim().is_empty() || input.query.len() > 4096 {
-        return Err(api_error(StatusCode::BAD_REQUEST, "query must contain 1–4096 bytes."));
+        return Err(api_error(
+            StatusCode::BAD_REQUEST,
+            "query must contain 1–4096 bytes.",
+        ));
     }
     let fallback_provider = LexicalMemoryVectorProvider;
     let vector_provider: &dyn MemoryVectorProvider = state
         .memory_vector_provider
         .as_deref()
         .unwrap_or(&fallback_provider);
-    let query_vector = vector_provider
-        .key_for_text(&input.query)
-        .await
-        .map_err(|provider_error| match provider_error {
-            MemoryVectorProviderError::EmptyQuery => {
-                api_error(StatusCode::BAD_REQUEST, "The query contains no searchable terms.")
-            }
-            _ => api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
-        })?;
-    validate_memory_key(&query_vector, vector_provider.model_version())
-        .map_err(|_| api_error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an invalid or incompatible query key."))?;
+    let query_vector =
+        vector_provider
+            .key_for_text(&input.query)
+            .await
+            .map_err(|provider_error| match provider_error {
+                MemoryVectorProviderError::EmptyQuery => api_error(
+                    StatusCode::BAD_REQUEST,
+                    "The query contains no searchable terms.",
+                ),
+                _ => api_error(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Memory embedding provider is unavailable.",
+                ),
+            })?;
+    validate_memory_key(&query_vector, vector_provider.model_version()).map_err(|_| {
+        api_error(
+            StatusCode::BAD_GATEWAY,
+            "Memory embedding provider returned an invalid or incompatible query key.",
+        )
+    })?;
     let qkv_model_version = query_vector.model_version.clone();
     let query_values = query_vector.values.clone();
 
@@ -876,15 +1162,30 @@ pub async fn search_agent_memory_documents(
             key_text.push_str(tag);
         }
         let key = if let Some(stored_key) = document.key_metadata.get("qkv_key") {
-            let stored_key: QoinVector = serde_json::from_value(stored_key.clone())
-                .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Stored QKV key is invalid."))?;
-            stored_key.validate()
-                .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Stored QKV key failed validation."))?;
+            let stored_key: QoinVector =
+                serde_json::from_value(stored_key.clone()).map_err(|_| {
+                    api_error(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Stored QKV key is invalid.",
+                    )
+                })?;
+            stored_key.validate().map_err(|_| {
+                api_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Stored QKV key failed validation.",
+                )
+            })?;
             if document.qkv_version != stored_key.model_version
-                || document.key_metadata.get("qkv_key_version").and_then(Value::as_str)
+                || document
+                    .key_metadata
+                    .get("qkv_key_version")
+                    .and_then(Value::as_str)
                     != Some(stored_key.model_version.as_str())
             {
-                return Err(api_error(StatusCode::INTERNAL_SERVER_ERROR, "Stored QKV key version does not match its document."));
+                return Err(api_error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Stored QKV key version does not match its document.",
+                ));
             }
             stored_key
         } else {
@@ -894,13 +1195,21 @@ pub async fn search_agent_memory_documents(
                 .key_for_text(&key_text)
                 .await
                 .map_err(|provider_error| match provider_error {
-                    MemoryVectorProviderError::EmptyQuery => {
-                        api_error(StatusCode::BAD_REQUEST, "A memory document has no searchable terms.")
-                    }
-                    _ => api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
+                    MemoryVectorProviderError::EmptyQuery => api_error(
+                        StatusCode::BAD_REQUEST,
+                        "A memory document has no searchable terms.",
+                    ),
+                    _ => api_error(
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        "Memory embedding provider is unavailable.",
+                    ),
                 })?;
-            validate_memory_key(&key, vector_provider.model_version())
-                .map_err(|_| api_error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an invalid or incompatible key."))?;
+            validate_memory_key(&key, vector_provider.model_version()).map_err(|_| {
+                api_error(
+                    StatusCode::BAD_GATEWAY,
+                    "Memory embedding provider returned an invalid or incompatible key.",
+                )
+            })?;
             key
         };
         if document.qkv_version != key.model_version {
@@ -912,7 +1221,9 @@ pub async fn search_agent_memory_documents(
         let mut outcome = normalized_metadata_score(&document, "outcome");
         let mut failure = normalized_metadata_score(&document, "failure");
         let evidence = normalized_metadata_score(&document, "evidence");
-        if let Some((positive_signal, negative_signal)) = feedback_signals.get(&(memory_id, version)) {
+        if let Some((positive_signal, negative_signal)) =
+            feedback_signals.get(&(memory_id, version))
+        {
             let feedback_weight = state.qoin_memory_scoring.feedback_weight as f32;
             outcome = outcome * (1.0 - feedback_weight) + *positive_signal * feedback_weight;
             failure = failure * (1.0 - feedback_weight) + *negative_signal * feedback_weight;
@@ -998,7 +1309,12 @@ pub async fn search_agent_memory_documents(
         &indexed_memories,
         &state.qoin_memory_scoring,
     )
-    .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Qoin memory ranking could not be evaluated."))?;
+    .map_err(|_| {
+        api_error(
+            StatusCode::BAD_REQUEST,
+            "Qoin memory ranking could not be evaluated.",
+        )
+    })?;
     let qoin_scoring_version = qoin.scoring_config.effective_version();
     let qoin_scoring_config = qoin.scoring_config.clone();
 
@@ -1017,14 +1333,21 @@ pub async fn search_agent_memory_documents(
             source: document.source,
             source_kind: document.source_kind,
             source_event_sequence: document.source_event_sequence,
-            qkv_attention_score: attention_scores.get(&ranked.memory_id).copied().unwrap_or(0.0),
+            qkv_attention_score: attention_scores
+                .get(&ranked.memory_id)
+                .copied()
+                .unwrap_or(0.0),
             qoin_score: ranked.score,
             qoin_reasons: ranked.reasons,
         });
     }
     let (results, context_bytes_used, results_truncated) =
-        bounded_ranked_memory_documents(candidates, MAX_CONTEXT_BYTES)
-            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory search results could not be serialized."))?;
+        bounded_ranked_memory_documents(candidates, MAX_CONTEXT_BYTES).map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Memory search results could not be serialized.",
+            )
+        })?;
 
     let retrieval_mode = if qkv_model_version == LEXICAL_MEMORY_VECTOR_VERSION {
         "deterministic_lexical_qkv_v1".to_owned()
@@ -1043,9 +1366,6 @@ pub async fn search_agent_memory_documents(
     }))
 }
 
-
-
-
 #[derive(Debug, Serialize)]
 pub struct MemoryEpochDocumentResponse {
     pub session_id: Uuid,
@@ -1063,17 +1383,28 @@ pub async fn get_agent_session_documents(
     let member = state
         .is_workspace_member(user.user_id, workspace_id)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Workspace access could not be verified.",
+            )
+        })?;
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
     require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
 
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory epoch metadata is unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Memory epoch metadata is unavailable.",
+        )
     })?;
     let repository = state.memory_documents.as_ref().ok_or_else(|| {
-        api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "MongoDB memory documents are unavailable.",
+        )
     })?;
     let (epoch_id, task_id, _epoch_qoin_scoring_version, documents) = outbox
         .list_session_authorized_documents(
@@ -1087,18 +1418,34 @@ pub async fn get_agent_session_documents(
         .await
         .map_err(|error| {
             tracing::error!(error = %error, "pinned session memory hydration failed");
-            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Pinned session memory documents could not be retrieved.")
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Pinned session memory documents could not be retrieved.",
+            )
         })?
-        .ok_or_else(|| api_error(StatusCode::NOT_FOUND, "Memory session not found for this agent."))?;
+        .ok_or_else(|| {
+            api_error(
+                StatusCode::NOT_FOUND,
+                "Memory session not found for this agent.",
+            )
+        })?;
 
     if let Some(task_id) = task_id {
-        let task_matches = state.tasks.read().await.get(&task_id)
-            .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
+        let task_matches = state.tasks.read().await.get(&task_id).is_some_and(|task| {
+            task.workspace_id == workspace_id && task.assignee_agent_id == agent_id
+        });
         if !task_matches {
-            return Err(api_error(StatusCode::NOT_FOUND, "Session task is no longer assigned to this agent."));
+            return Err(api_error(
+                StatusCode::NOT_FOUND,
+                "Session task is no longer assigned to this agent.",
+            ));
         }
     }
-    Ok(Json(MemoryEpochDocumentResponse { session_id, epoch_id, documents }))
+    Ok(Json(MemoryEpochDocumentResponse {
+        session_id,
+        epoch_id,
+        documents,
+    }))
 }
 
 #[cfg(test)]

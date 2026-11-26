@@ -61,10 +61,9 @@ pub async fn authenticate(
         if !allowed_agent_endpoint {
             return response(StatusCode::FORBIDDEN);
         }
-        let (Ok(request_workspace_id), Ok(request_agent_id)) = (
-            Uuid::parse_str(workspace_text),
-            Uuid::parse_str(agent_text),
-        ) else {
+        let (Ok(request_workspace_id), Ok(request_agent_id)) =
+            (Uuid::parse_str(workspace_text), Uuid::parse_str(agent_text))
+        else {
             return response(StatusCode::NOT_FOUND);
         };
         let credential = match state.authenticate_agent_credential(token).await {
@@ -72,7 +71,9 @@ pub async fn authenticate(
             Ok(None) => return response(StatusCode::UNAUTHORIZED),
             Err(_) => return response(StatusCode::INTERNAL_SERVER_ERROR),
         };
-        if credential.workspace_id != request_workspace_id || credential.agent_id != request_agent_id {
+        if credential.workspace_id != request_workspace_id
+            || credential.agent_id != request_agent_id
+        {
             return response(StatusCode::FORBIDDEN);
         }
         let user = Arc::new(AuthenticatedUser {
@@ -82,12 +83,14 @@ pub async fn authenticate(
             personal_workspace_id: credential.personal_workspace_id,
         });
         request.extensions_mut().insert(user);
-        request.extensions_mut().insert(Arc::new(AuthenticatedAgent {
-            credential_id: credential.credential_id,
-            agent_id: credential.agent_id,
-            workspace_id: credential.workspace_id,
-            owner_user_id: credential.owner_user_id,
-        }));
+        request
+            .extensions_mut()
+            .insert(Arc::new(AuthenticatedAgent {
+                credential_id: credential.credential_id,
+                agent_id: credential.agent_id,
+                workspace_id: credential.workspace_id,
+                owner_user_id: credential.owner_user_id,
+            }));
         return next.run(request).await;
     }
 
@@ -166,9 +169,7 @@ fn response(status: StatusCode) -> Response<Body> {
     let body = match status {
         StatusCode::UNAUTHORIZED => r#"{\"error\":\"Authentication required.\"}"#,
         StatusCode::NOT_FOUND => r#"{\"error\":\"Resource not found.\"}"#,
-        StatusCode::SERVICE_UNAVAILABLE => {
-            r#"{\"error\":\"Authentication is not configured.\"}"#
-        }
+        StatusCode::SERVICE_UNAVAILABLE => r#"{\"error\":\"Authentication is not configured.\"}"#,
         _ => r#"{\"error\":\"The request could not be completed.\"}"#,
     };
     let mut response = Response::new(Body::from(body));

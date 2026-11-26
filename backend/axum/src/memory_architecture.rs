@@ -518,10 +518,7 @@ impl MemoryEpochCoordinator {
         self.run_hourly_until(shutdown_rx).await;
     }
 
-    pub async fn run_hourly_until(
-        self,
-        mut shutdown: tokio::sync::watch::Receiver<bool>,
-    ) {
+    pub async fn run_hourly_until(self, mut shutdown: tokio::sync::watch::Receiver<bool>) {
         let mut interval = tokio::time::interval(Duration::from_secs(60));
         loop {
             if *shutdown.borrow() {

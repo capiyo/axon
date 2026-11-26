@@ -42,7 +42,9 @@ pub fn validate_memory_key(
     {
         return Err(MemoryVectorProviderError::InvalidVector);
     }
-    let norm = key.values.iter()
+    let norm = key
+        .values
+        .iter()
         .map(|value| (*value as f64).powi(2))
         .sum::<f64>()
         .sqrt();
@@ -104,8 +106,14 @@ mod tests {
     #[tokio::test]
     async fn lexical_keys_are_stable_and_normalized() {
         let provider = LexicalMemoryVectorProvider;
-        let first = provider.key_for_text("Axon memory QKV retrieval").await.unwrap();
-        let second = provider.key_for_text("Axon memory QKV retrieval").await.unwrap();
+        let first = provider
+            .key_for_text("Axon memory QKV retrieval")
+            .await
+            .unwrap();
+        let second = provider
+            .key_for_text("Axon memory QKV retrieval")
+            .await
+            .unwrap();
         assert_eq!(first.values, second.values);
         assert_eq!(first.values.len(), DIMENSION);
         assert_eq!(first.model_version, LEXICAL_MEMORY_VECTOR_VERSION);
@@ -151,8 +159,14 @@ mod tests {
     #[tokio::test]
     async fn unrelated_text_produces_different_keys() {
         let provider = LexicalMemoryVectorProvider;
-        let memory = provider.key_for_text("workspace memory document retrieval").await.unwrap();
-        let market = provider.key_for_text("volatility liquidity orderbook futures").await.unwrap();
+        let memory = provider
+            .key_for_text("workspace memory document retrieval")
+            .await
+            .unwrap();
+        let market = provider
+            .key_for_text("volatility liquidity orderbook futures")
+            .await
+            .unwrap();
         assert_ne!(memory.values, market.values);
     }
 }

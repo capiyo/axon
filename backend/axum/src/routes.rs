@@ -55,9 +55,7 @@ pub struct Readiness {
     pub mongodb_ready: bool,
 }
 
-pub async fn readiness(
-    State(state): State<AppState>,
-) -> (StatusCode, Json<Readiness>) {
+pub async fn readiness(State(state): State<AppState>) -> (StatusCode, Json<Readiness>) {
     let sqlite_ready = state.storage_is_ready().await;
     let mongodb_configured = state.memory_documents.is_some();
     let mongodb_ready = match state.memory_documents.as_ref() {

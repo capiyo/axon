@@ -4,13 +4,19 @@ use crate::{
     firebase_auth::FirebaseVerifier,
     memory_architecture::MemoryEpochCoordinator,
     memory_documents::MemoryDocumentRepository,
-    memory_outbox::MemoryOutbox,
-    model::{Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace, WorkspaceMembership},
-    qoin_vectors::QoinVectorClient,
     memory_intelligence::QoinScoringConfig,
+    memory_outbox::MemoryOutbox,
     memory_vector_provider::MemoryVectorProvider,
+    model::{
+        Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace,
+        WorkspaceMembership,
+    },
+    qoin_vectors::QoinVectorClient,
     robotics::TelemetryEvent,
-    storage::{AgentCredentialIdentity, EntityKind, IssuedAgentCredential, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
+    storage::{
+        AgentCredentialIdentity, EntityKind, IssuedAgentCredential, Storage, StorageError,
+        StorageMutation, StoredEntity, UserWorkspace,
+    },
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -143,14 +149,10 @@ impl AppState {
         self
     }
 
-    pub fn with_qoin_memory_scoring_config(
-        mut self,
-        config: QoinScoringConfig,
-    ) -> Self {
+    pub fn with_qoin_memory_scoring_config(mut self, config: QoinScoringConfig) -> Self {
         if let Some(coordinator) = self.memory_epochs.take() {
-            self.memory_epochs = Some(
-                coordinator.with_qoin_scoring_version(config.effective_version()),
-            );
+            self.memory_epochs =
+                Some(coordinator.with_qoin_scoring_version(config.effective_version()));
         }
         self.qoin_memory_scoring = config;
         self
@@ -185,15 +187,14 @@ impl AppState {
         }
     }
 
-    pub async fn is_agent_owner(
-        &self,
-        user_id: Uuid,
-        workspace_id: Uuid,
-        agent_id: Uuid,
-    ) -> bool {
-        self.agents.read().await.get(&agent_id).is_some_and(|agent| {
-            agent.workspace_id == workspace_id && agent.created_by_user_id == Some(user_id)
-        })
+    pub async fn is_agent_owner(&self, user_id: Uuid, workspace_id: Uuid, agent_id: Uuid) -> bool {
+        self.agents
+            .read()
+            .await
+            .get(&agent_id)
+            .is_some_and(|agent| {
+                agent.workspace_id == workspace_id && agent.created_by_user_id == Some(user_id)
+            })
     }
 
     pub async fn is_workspace_member(
@@ -233,7 +234,6 @@ impl AppState {
         }
     }
 
-
     pub async fn issue_agent_credential(
         &self,
         workspace_id: Uuid,
@@ -241,7 +241,11 @@ impl AppState {
         owner_user_id: Uuid,
     ) -> Result<IssuedAgentCredential, StorageError> {
         match &self.storage {
-            Some(storage) => storage.issue_agent_credential(workspace_id, agent_id, owner_user_id).await,
+            Some(storage) => {
+                storage
+                    .issue_agent_credential(workspace_id, agent_id, owner_user_id)
+                    .await
+            }
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }
@@ -254,7 +258,11 @@ impl AppState {
         owner_user_id: Uuid,
     ) -> Result<Option<IssuedAgentCredential>, StorageError> {
         match &self.storage {
-            Some(storage) => storage.rotate_agent_credential(workspace_id, agent_id, credential_id, owner_user_id).await,
+            Some(storage) => {
+                storage
+                    .rotate_agent_credential(workspace_id, agent_id, credential_id, owner_user_id)
+                    .await
+            }
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }
@@ -267,7 +275,11 @@ impl AppState {
         owner_user_id: Uuid,
     ) -> Result<bool, StorageError> {
         match &self.storage {
-            Some(storage) => storage.revoke_agent_credential(workspace_id, agent_id, credential_id, owner_user_id).await,
+            Some(storage) => {
+                storage
+                    .revoke_agent_credential(workspace_id, agent_id, credential_id, owner_user_id)
+                    .await
+            }
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }
@@ -289,7 +301,11 @@ impl AppState {
         target_user_id: Uuid,
     ) -> Result<WorkspaceMembership, StorageError> {
         match &self.storage {
-            Some(storage) => storage.add_workspace_member(workspace_id, actor_user_id, target_user_id).await,
+            Some(storage) => {
+                storage
+                    .add_workspace_member(workspace_id, actor_user_id, target_user_id)
+                    .await
+            }
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }
@@ -301,7 +317,11 @@ impl AppState {
         target_user_id: Uuid,
     ) -> Result<bool, StorageError> {
         match &self.storage {
-            Some(storage) => storage.revoke_workspace_member(workspace_id, actor_user_id, target_user_id).await,
+            Some(storage) => {
+                storage
+                    .revoke_workspace_member(workspace_id, actor_user_id, target_user_id)
+                    .await
+            }
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }
@@ -313,7 +333,11 @@ impl AppState {
         name: String,
     ) -> Result<Project, StorageError> {
         match &self.storage {
-            Some(storage) => storage.create_project_for_user(workspace_id, user_id, name).await,
+            Some(storage) => {
+                storage
+                    .create_project_for_user(workspace_id, user_id, name)
+                    .await
+            }
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }
@@ -336,7 +360,11 @@ impl AppState {
         user_id: Uuid,
     ) -> Result<bool, StorageError> {
         match &self.storage {
-            Some(storage) => storage.is_project_member(workspace_id, project_id, user_id).await,
+            Some(storage) => {
+                storage
+                    .is_project_member(workspace_id, project_id, user_id)
+                    .await
+            }
             None => Ok(false),
         }
     }
@@ -350,9 +378,17 @@ impl AppState {
         role: ProjectRole,
     ) -> Result<ProjectMembership, StorageError> {
         match &self.storage {
-            Some(storage) => storage.set_project_member(
-                workspace_id, project_id, actor_user_id, target_user_id, role,
-            ).await,
+            Some(storage) => {
+                storage
+                    .set_project_member(
+                        workspace_id,
+                        project_id,
+                        actor_user_id,
+                        target_user_id,
+                        role,
+                    )
+                    .await
+            }
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }
@@ -365,9 +401,11 @@ impl AppState {
         target_user_id: Uuid,
     ) -> Result<bool, StorageError> {
         match &self.storage {
-            Some(storage) => storage.revoke_project_member(
-                workspace_id, project_id, actor_user_id, target_user_id,
-            ).await,
+            Some(storage) => {
+                storage
+                    .revoke_project_member(workspace_id, project_id, actor_user_id, target_user_id)
+                    .await
+            }
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }
