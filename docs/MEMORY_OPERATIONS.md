@@ -82,6 +82,6 @@ The issue/rotation response contains the bearer token once. Deliver it to the ag
 
 ## Session retrieval feedback
 
-`POST /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-sessions/{session_id}/feedback` records one of: `retrieved`, `selected`, `ignored`, `reused`, `helpful`, `irrelevant`, `contradicted`, or `incorrect`. The exact memory ID/version must be pinned in the session's immutable epoch. Evidence JSON is limited to 4 KiB. Feedback is attributed to the authenticated owner and agent session and written to SQLite with an audit event.
+`POST /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-sessions/{session_id}/feedback` records one of: `retrieved`, `selected`, `ignored`, `reused`, `helpful`, `irrelevant`, `contradicted`, or `incorrect`. The exact memory ID/version must be pinned in the session's immutable epoch. Evidence JSON is limited to 4 KiB. Feedback is attributed to the authenticated human owner and agent session and written to SQLite with an audit event; agent bearer credentials are not accepted for quality feedback.
 
 Qoin scoring v2 uses a configurable `feedback_weight` to blend smoothed positive (helpful/selected/reused) and negative (irrelevant/contradicted/incorrect) feedback signals into outcome/failure dimensions. The effective policy fingerprint includes this weight. Sessions pinned to the legacy v1 default do not apply the v2 feedback weighting.
