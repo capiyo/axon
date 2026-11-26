@@ -398,6 +398,67 @@ impl MemoryOutbox {
         Ok(true)
     }
 
+    /// Requeues a valid dead-letter event without changing the immutable
+    /// document version. The operation and its audit event are atomic in SQLite.
+    pub async fn retry_dead_letter(
+        &self,
+        workspace_id: Uuid,
+        memory_id: Uuid,
+        version: u64,
+        actor_user_id: Uuid,
+    ) -> Result<bool, MemoryOutboxError> {
+        let version = i64::try_from(version)
+            .map_err(|_| sqlx::Error::Protocol("memory version exceeds SQLite range".into()))?;
+        let now = Utc::now().to_rfc3339();
+        let mut transaction = self.pool.begin().await?;
+        let updated = sqlx::query(
+            "UPDATE memory_document_outbox SET status = 'pending', attempts = 0, available_at = ?, \
+             lease_owner = NULL, lease_until = NULL, last_error = NULL, updated_at = ? \
+             WHERE memory_id = ? AND version = ? AND status = 'dead_letter' AND payload_json IS NOT NULL",
+        )
+        .bind(&now)
+        .bind(&now)
+        .bind(memory_id.to_string())
+        .bind(version)
+        .execute(&mut *transaction)
+        .await?;
+        if updated.rows_affected() != 1 {
+            transaction.rollback().await?;
+            return Ok(false);
+        }
+
+        let metadata = sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'pending', updated_at = ? \
+             WHERE workspace_id = ? AND memory_id = ? AND version = ? AND sync_status = 'failed'",
+        )
+        .bind(&now)
+        .bind(workspace_id.to_string())
+        .bind(memory_id.to_string())
+        .bind(version)
+        .execute(&mut *transaction)
+        .await?;
+        if metadata.rows_affected() != 1 {
+            return Err(MemoryOutboxError::VersionConflict);
+        }
+
+        sqlx::query(
+            "INSERT INTO audit_events \
+             (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) \
+             VALUES (?, ?, ?, 'memory_document.outbox_requeued', 'memory_document', ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(workspace_id.to_string())
+        .bind(format!("human:{actor_user_id}"))
+        .bind(memory_id.to_string())
+        .bind(&now)
+        .bind(serde_json::json!({"memory_id": memory_id, "version": version}).to_string())
+        .execute(&mut *transaction)
+        .await?;
+
+        transaction.commit().await?;
+        Ok(true)
+    }
+
     /// Lists only approved, synchronized document versions visible to an
     /// agent/task pair. Project-scoped documents remain excluded until project
     /// membership authorization is available.
