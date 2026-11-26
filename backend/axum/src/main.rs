@@ -91,6 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_memory_document_repository(memory_documents)
         .with_memory_outbox(Some(memory_outbox))
         .with_qoin_vector_client(qoin_vectors)
+        .with_qoin_memory_scoring_config(config.qoin_memory_scoring)
         .with_firebase_verifier(verifier, simulator_enabled);
 
     let listener = TcpListener::bind(address).await?;
