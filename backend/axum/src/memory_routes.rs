@@ -671,6 +671,18 @@ pub async fn retrieve_session_context(
         }
     }
 
+    let feedback_versions: Vec<(Uuid, u64)> = pinned_documents
+        .iter()
+        .map(|document| (document.memory_id, document.version))
+        .collect();
+    let feedback_signals = outbox
+        .feedback_signals(workspace_id, &feedback_versions)
+        .await
+        .map_err(|_| error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Pinned session feedback could not be loaded.",
+        ))?;
+
     if !pinned_documents.is_empty() {
         let epoch_qoin_scoring_version = epoch_qoin_scoring_version.ok_or_else(|| error(
             StatusCode::CONFLICT,
@@ -773,10 +785,16 @@ pub async fn retrieve_session_context(
             ));
         }
 
-        let outcome = session_memory_metadata_score(&document, "outcome");
+        let mut outcome = session_memory_metadata_score(&document, "outcome");
         let evidence = session_memory_metadata_score(&document, "evidence");
         let context = session_memory_metadata_score(&document, "context");
-        let failure = session_memory_metadata_score(&document, "failure");
+        let mut failure = session_memory_metadata_score(&document, "failure");
+        if let Some((positive_signal, negative_signal)) =
+            feedback_signals.get(&(document.memory_id, document.version))
+        {
+            outcome = (outcome + *positive_signal) / 2.0;
+            failure = (failure + *negative_signal) / 2.0;
+        }
         let dependencies = session_memory_dependencies(&document);
         let visibility = session_memory_visibility(&document.scope)
             .ok_or_else(|| error(StatusCode::UNPROCESSABLE_ENTITY, "A pinned memory document has an unsupported scope."))?;
