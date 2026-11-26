@@ -43,12 +43,11 @@ The current create endpoint enables workspace-shared, task-shared, and agent-pri
 ## Production gates
 
 Before claiming end-to-end multi-agent memory completion, implement and test:
-- Neural embedding-provider integration and QKV index versioning for MongoDB documents.
-- A separately searchable vector index, reconciliation, and safe index rebuild.
-- Project membership authorization.
-- Agent/client consumers must call the combined session-context endpoint; no provider-backed agent execution runtime exists yet.
-- Real MongoDB restart/security tests.
-- Cryptographic agent-principal authentication before treating agent-private scope as a cross-member security boundary.
-- Safe index rebuild and automated repair workflows (the current reconciliation endpoint is read-only).
-- Project membership authorization.
-- End-to-end restart and cross-scope security tests.
+- A neural embedding-provider implementation behind the existing `MemoryVectorProvider` abstraction, with model/version compatibility checks.
+- A separately searchable precomputed vector index and safe index rebuild.
+- Explicit, audited repair workflows based on the new read-only reconciliation report.
+- Persisted project-membership authorization.
+- Cryptographic agent-principal authentication; path-selected agent IDs are not a trusted identity.
+- Agent/client consumers that use the combined session-context endpoint; no provider-backed agent execution runtime exists yet.
+- Real MongoDB outage, restart, and cross-scope security tests.
+- Backup/restore drills, worker health metrics, and measured retrieval/indexing performance.
