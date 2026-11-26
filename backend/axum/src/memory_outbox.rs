@@ -437,7 +437,9 @@ impl MemoryOutbox {
         workspace_id: Uuid,
         memory_id: Uuid,
         requester_agent_id: Uuid,
+        requester_user_id: Uuid,
         task_id: Option<Uuid>,
+        project_id: Option<Uuid>,
         before_version: Option<u64>,
         requested_limit: usize,
     ) -> Result<Vec<AuthorizedMemoryDocumentVersion>, MemoryOutboxError> {
@@ -453,13 +455,20 @@ impl MemoryOutbox {
              WHERE workspace_id = ? AND memory_id = ? AND lifecycle_status = 'approved' \
              AND sync_status IN ('stored', 'indexed') \
              AND (scope = 'workspace_shared' OR (scope = 'agent_private' AND owner_id = ?) \
-                  OR (scope = 'task_shared' AND task_id = ?)) \
+                  OR (scope = 'task_shared' AND task_id = ?) \
+                  OR (scope = 'project_shared' AND project_id = ? AND EXISTS (\
+                      SELECT 1 FROM project_memberships pm JOIN projects p ON p.id = pm.project_id \
+                      JOIN workspace_memberships wm ON wm.workspace_id = p.workspace_id AND wm.user_id = pm.user_id \
+                      WHERE pm.project_id = memory_document_versions.project_id AND pm.user_id = ? \
+                      AND pm.revoked_at IS NULL AND p.workspace_id = memory_document_versions.workspace_id))) \
              AND (? IS NULL OR version < ?) ORDER BY version DESC LIMIT ?",
         )
         .bind(workspace_id.to_string())
         .bind(memory_id.to_string())
         .bind(requester_agent_id.to_string())
         .bind(task_id.map(|value| value.to_string()))
+        .bind(project_id.map(|value| value.to_string()))
+        .bind(requester_user_id.to_string())
         .bind(before_version)
         .bind(before_version)
         .bind(limit)
