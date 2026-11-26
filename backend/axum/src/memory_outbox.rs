@@ -961,6 +961,7 @@ impl MemoryOutbox {
 
         let mut documents = Vec::with_capacity(rows.len());
         let requester_agent_id_text = requester_agent_id.to_string();
+        let requester_user_id_text = requester_user_id.to_string();
         let requester_task_id_text = task_id.map(|id| id.to_string());
         for row in rows {
             let memory_id_text: String = row.try_get("memory_id")?;
