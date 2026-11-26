@@ -1395,3 +1395,81 @@ mod outbox_recovery_tests {
         ).await.unwrap());
     }
 }
+
+#[cfg(test)]
+mod reconciliation_tests {
+    use super::*;
+    use crate::storage::SqliteStorage;
+    use std::{collections::HashMap, sync::Mutex};
+
+    #[derive(Default)]
+    struct Repository {
+        documents: Mutex<HashMap<(Uuid, u64), MemoryDocument>>,
+    }
+
+    #[async_trait::async_trait]
+    impl MemoryDocumentRepository for Repository {
+        async fn put_version(&self, document: MemoryDocument) -> Result<(), MemoryDocumentError> {
+            document.validate()?;
+            self.documents.lock().map_err(|_| MemoryDocumentError::InvalidDocument)?
+                .insert((document.memory_id, document.version), document);
+            Ok(())
+        }
+
+        async fn get_version(&self, memory_id: Uuid, version: u64)
+            -> Result<Option<MemoryDocument>, MemoryDocumentError> {
+            Ok(self.documents.lock().map_err(|_| MemoryDocumentError::InvalidDocument)?
+                .get(&(memory_id, version)).cloned())
+        }
+
+        async fn list_versions(&self, memory_id: Uuid)
+            -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
+            let mut values = self.documents.lock().map_err(|_| MemoryDocumentError::InvalidDocument)?
+                .values().filter(|item| item.memory_id == memory_id).cloned().collect::<Vec<_>>();
+            values.sort_by_key(|item| item.version);
+            Ok(values)
+        }
+
+        async fn list_workspace_documents(&self, workspace_id: Uuid, limit: usize)
+            -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
+            let mut values = self.documents.lock().map_err(|_| MemoryDocumentError::InvalidDocument)?
+                .values().filter(|item| item.workspace_id == workspace_id).cloned().collect::<Vec<_>>();
+            values.sort_by(|left, right| left.memory_id.as_bytes().cmp(right.memory_id.as_bytes())
+                .then_with(|| left.version.cmp(&right.version)));
+            values.truncate(limit.clamp(1, 5_000));
+            Ok(values)
+        }
+
+        async fn verify_version(&self, memory_id: Uuid, version: u64, expected_hash: &str)
+            -> Result<bool, MemoryDocumentError> {
+            Ok(self.get_version(memory_id, version).await?
+                .is_some_and(|item| item.content_hash == expected_hash))
+        }
+
+        async fn ping(&self) -> Result<(), MemoryDocumentError> { Ok(()) }
+    }
+
+    #[tokio::test]
+    async fn reconciliation_detects_pending_missing_and_metadata_mismatch() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let outbox = storage.memory_outbox();
+        let workspace_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+        let mut document = super::tests::document(workspace_id, agent_id);
+        outbox.enqueue(&mut document, Uuid::new_v4()).await.unwrap();
+
+        let repository = Repository::default();
+        let pending = outbox.reconcile_workspace(&repository, workspace_id, 100).await.unwrap();
+        assert_eq!(pending.pending_outbox_events, 1);
+        assert!(pending.issues.iter().any(|issue|
+            issue.kind == "mongo_document_pending_delivery"));
+
+        let mut conflicting = document.clone();
+        conflicting.scope = "workspace_shared".into();
+        conflicting.owner_id = None;
+        repository.put_version(conflicting).await.unwrap();
+        let mismatch = outbox.reconcile_workspace(&repository, workspace_id, 100).await.unwrap();
+        assert!(mismatch.issues.iter().any(|issue|
+            issue.kind == "sqlite_mongo_metadata_mismatch"));
+    }
+}
