@@ -1373,8 +1373,8 @@ mod epoch_document_tests {
         ).await.unwrap().unwrap();
         assert_eq!(session_documents.0, epoch_id);
         assert!(session_documents.1.is_none());
-        assert_eq!(session_documents.2.len(), 1);
-        assert_eq!(session_documents.2[0].memory_id, document.memory_id);
+        assert_eq!(session_documents.3.len(), 1);
+        assert_eq!(session_documents.3[0].memory_id, document.memory_id);
 
         let denied_session = outbox.list_session_authorized_documents(
             &repository, workspace_id, session_id, Uuid::new_v4(), 20,
