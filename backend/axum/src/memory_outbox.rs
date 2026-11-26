@@ -397,6 +397,41 @@ impl MemoryOutbox {
             .map_err(|_| sqlx::Error::Protocol("memory version exceeds SQLite range".into()))?;
         let now = Utc::now().to_rfc3339();
         let mut transaction = self.pool.begin().await?;
+        let scope_row = sqlx::query(
+            "SELECT scope, project_id FROM memory_document_versions WHERE workspace_id = ? AND memory_id = ? AND version = ? AND lifecycle_status = 'proposed'",
+        )
+        .bind(workspace_id.to_string())
+        .bind(memory_id.to_string())
+        .bind(version)
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let Some(scope_row) = scope_row else {
+            transaction.rollback().await?;
+            return Ok(false);
+        };
+        let scope: String = scope_row.try_get("scope")?;
+        let project_id: Option<String> = scope_row.try_get("project_id")?;
+        if scope == "project_shared" {
+            let Some(project_id) = project_id else {
+                return Err(MemoryOutboxError::VersionConflict);
+            };
+            let authorized: Option<i64> = sqlx::query_scalar(
+                "SELECT 1 FROM project_memberships pm
+                 JOIN projects p ON p.id = pm.project_id
+                 JOIN workspace_memberships wm ON wm.workspace_id = p.workspace_id AND wm.user_id = pm.user_id
+                 WHERE pm.project_id = ? AND pm.user_id = ?
+                   AND pm.revoked_at IS NULL AND p.workspace_id = ?",
+            )
+            .bind(project_id)
+            .bind(actor_user_id.to_string())
+            .bind(workspace_id.to_string())
+            .fetch_optional(&mut *transaction)
+            .await?;
+            if authorized.is_none() {
+                transaction.rollback().await?;
+                return Ok(false);
+            }
+        }
         let changed = sqlx::query(
             "UPDATE memory_document_versions SET lifecycle_status = 'approved', updated_at = ? \
              WHERE workspace_id = ? AND memory_id = ? AND version = ? AND lifecycle_status = 'proposed'",
