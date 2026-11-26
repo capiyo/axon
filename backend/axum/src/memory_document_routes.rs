@@ -80,10 +80,7 @@ async fn require_agent_owner(
     workspace_id: Uuid,
     agent_id: Uuid,
 ) -> Result<(), (StatusCode, Json<ApiError>)> {
-    let agents = state.agents.read().await;
-    if agents.get(&agent_id).is_some_and(|agent| {
-        agent.workspace_id == workspace_id && agent.created_by_user_id == Some(user_id)
-    }) {
+    if state.is_agent_owner(user_id, workspace_id, agent_id).await {
         Ok(())
     } else {
         Err(api_error(StatusCode::NOT_FOUND, "Agent not found for this user in the workspace."))
@@ -140,11 +137,9 @@ pub async fn create_memory_document(
             let Some(agent_id) = input.owner_agent_id else {
                 return Err(api_error(StatusCode::BAD_REQUEST, "Agent-private memory requires owner_agent_id."));
             };
-            let agent_matches = state.agents.read().await.get(&agent_id)
-                .is_some_and(|agent| {
-                    agent.workspace_id == workspace_id
-                        && agent.created_by_user_id == Some(user.user_id)
-                });
+            let agent_matches = state
+                .is_agent_owner(user.user_id, workspace_id, agent_id)
+                .await;
             if !agent_matches || input.task_id.is_some() || input.project_id.is_some() {
                 return Err(api_error(StatusCode::NOT_FOUND, "Private-memory agent was not found in this workspace."));
             }
