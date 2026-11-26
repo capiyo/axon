@@ -107,7 +107,24 @@ Added archive, restore, and logical deletion as new document versions:
 
 The delete operation is logical only. MongoDB historical content is retained; permanent purge, retention scheduling, and legal-hold handling are not implemented.
 
-## 7. Verification status
+
+## 7. Agent principal credential implementation pass (2026-11-26)
+
+Added migration `0014_agent_credentials.sql` and storage/API support for:
+- High-entropy agent bearer credentials stored only as SHA-256 hashes.
+- 90-day credential expiry.
+- Atomic credential rotation (revoke old + issue replacement).
+- Explicit revocation and audit events.
+- Authentication that verifies current agent ownership and workspace membership.
+- Middleware binding to one workspace and one agent.
+- Agent credentials accepted only on the matching agent's memory-document, memory-session, and memory-context routes; non-agent routes, other agents, and credential-management routes reject them.
+- Human Firebase authentication remains required to issue, rotate, and revoke credentials.
+
+Added tests for hash-only storage, authentication, rotation, revocation, cross-agent rejection, and non-agent route rejection. These Rust tests have not been executed in this environment.
+
+The credential currently represents a fixed memory-route capability boundary. The broader capability-grant model in `identity.rs` is not yet persisted or enforced for all Axon resource families.
+
+## 8. Verification status
 
 The GitHub connector in this session can read and commit repository files but does not provide a Rust build/test runtime. No `cargo fmt`, `cargo check`, `cargo test`, or `cargo clippy` pass is claimed.
 
