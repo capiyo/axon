@@ -9,10 +9,10 @@ MongoDB is a separate document repository. SQLite remains authoritative for Axon
 | `AXON_MONGODB_URI` | MongoDB connection URI | unset |
 | `AXON_MONGODB_DATABASE` | Database name | `axon` |
 | `AXON_MONGODB_COLLECTION` | Memory document collection | `memory_documents` |
-| `AXON_MEMORY_DOCUMENTS_REQUIRED` | Require MongoDB at startup | inferred from `AXON_ENV=production` |
+| `AXON_MEMORY_DOCUMENTS_REQUIRED` | Require MongoDB outside production | `false`; production always requires MongoDB |\n| `AXON_MONGODB_CONNECT_TIMEOUT_MS` | Driver connection timeout | `10000` (100–120000) |\n| `AXON_MONGODB_SERVER_SELECTION_TIMEOUT_MS` | Server selection/ping timeout | `5000` (100–120000) |\n| `AXON_MONGODB_MAX_POOL_SIZE` | Maximum pooled connections | `20` (1–500) |\n| `AXON_QOIN_MEMORY_SCORING_CONFIG` | Optional JSON versioned Qoin memory scoring policy | built-in `axon-qoin-memory-v1` policy |
 | `AXON_ENV` | Runtime environment | unset |
 
-Local SQLite-only mode remains available when MongoDB is not configured. Production mode must configure MongoDB or explicitly set the required flag.
+Local SQLite-only mode remains available when MongoDB is not configured. Production mode always requires MongoDB; `AXON_MEMORY_DOCUMENTS_REQUIRED=false` cannot disable that requirement. Non-production and test environments can use SQLite-only mode.
 
 ## Startup behavior
 
@@ -20,7 +20,7 @@ The API creates one MongoDB client, pings the selected database, and creates:
 - A unique compound index on `memory_id + version`.
 - A workspace/scope/status lookup index.
 
-The MongoDB URI is never intentionally logged. Configure credentials through the deployment secret manager, not source control.
+The MongoDB URI is never intentionally logged. Connection timeout and pool size are bounded and configurable. Startup errors intentionally avoid echoing the URI. Configure credentials through the deployment secret manager, not source control.
 
 ## Document version rules
 
@@ -43,4 +43,4 @@ Then run `cargo run -p axon-api`.
 
 ## Current implementation boundary
 
-MongoDB connection lifecycle, immutable document writes, hash verification, and the SQLite outbox worker are implemented in this branch. Direct retrieval by memory ID/version is implemented after explicit SQLite approval and scope verification. Query-based search is available through deterministic lexical QKV attention followed by Qoin memory ranking. New immutable document versions include the precomputed lexical QKV key, its version, and a source-text SHA-256 integrity hash in `key_metadata`. Neural embedding-provider integration, reconciliation tooling, index rebuild, and session retrieval hydrated from the pinned MongoDB epoch version are not yet complete. SQLite epoch snapshots pin the exact document version and content hash.
+MongoDB connection lifecycle, immutable document writes, hash verification, and the SQLite outbox worker are implemented in this branch. Direct retrieval by memory ID/version is implemented after explicit SQLite approval and scope verification. Query-based search is available through deterministic lexical QKV attention followed by Qoin memory ranking. New immutable document versions include the precomputed lexical QKV key, its version, and a source-text SHA-256 integrity hash in `key_metadata`. The combined session-context endpoint returns progressive SQLite retrieval plus exact MongoDB versions pinned to the same agent session epoch. Neural embedding-provider implementation, persisted vector index/rebuild, reconciliation, and MongoDB outage integration tests remain outstanding.
