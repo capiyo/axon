@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod auth_middleware;
+mod agent_credential_routes;
 #[cfg(test)]
 mod auth_middleware_tests;
 pub mod chat_memory;
@@ -106,6 +107,18 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/v1/workspaces/:workspace_id/memory/documents/:memory_id/:version/retry-sync",
             post(memory_document_routes::retry_memory_document_sync),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/agents/:agent_id/credentials",
+            post(agent_credential_routes::issue_agent_credential),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/agents/:agent_id/credentials/:credential_id",
+            delete(agent_credential_routes::revoke_agent_credential),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/agents/:agent_id/credentials/:credential_id/rotate",
+            post(agent_credential_routes::rotate_agent_credential),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-documents/:memory_id/:version",
