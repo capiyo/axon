@@ -8,7 +8,7 @@ use crate::memory_documents::{
 };
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Row, SqlitePool};
+use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::{sync::watch, time::sleep};
@@ -823,6 +823,56 @@ impl MemoryOutbox {
             event_type: event_type.to_owned(),
             created_at: now,
         }))
+    }
+
+    /// Computes smoothed positive/negative feedback signals for exact
+    /// document versions. Unrated versions are omitted so their existing
+    /// metadata scores remain unchanged.
+    pub async fn feedback_signals(
+        &self,
+        workspace_id: Uuid,
+        versions: &[(Uuid, u64)],
+    ) -> Result<HashMap<(Uuid, u64), (f32, f32)>, MemoryOutboxError> {
+        if versions.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let mut query = QueryBuilder::<Sqlite>::new(
+            "SELECT memory_id, document_version, event_type, COUNT(*) AS event_count
+             FROM memory_retrieval_feedback WHERE workspace_id = ",
+        );
+        query.push_bind(workspace_id.to_string());
+        query.push(" AND (memory_id, document_version) IN ");
+        query.push_tuples(versions.iter(), |mut row, (memory_id, version)| {
+            row.push_bind(memory_id.to_string())
+                .push_bind(i64::try_from(*version).unwrap_or(i64::MAX));
+        });
+        query.push(" GROUP BY memory_id, document_version, event_type");
+        let rows = query.build().fetch_all(&self.pool).await?;
+        let mut counts: HashMap<(Uuid, u64), (u64, u64)> = HashMap::new();
+        for row in rows {
+            let memory_id_text: String = row.try_get("memory_id")?;
+            let memory_id = Uuid::parse_str(&memory_id_text)
+                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            let version_raw: i64 = row.try_get("document_version")?;
+            let version = u64::try_from(version_raw)
+                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            let event_type: String = row.try_get("event_type")?;
+            let count_raw: i64 = row.try_get("event_count")?;
+            let count = u64::try_from(count_raw)
+                .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+            let entry = counts.entry((memory_id, version)).or_default();
+            match event_type.as_str() {
+                "helpful" | "selected" | "reused" => entry.0 = entry.0.saturating_add(count),
+                "irrelevant" | "contradicted" | "incorrect" => entry.1 = entry.1.saturating_add(count),
+                _ => {}
+            }
+        }
+        Ok(counts.into_iter().map(|(key, (positive, negative))| {
+            let total = (positive + negative) as f32;
+            let positive_signal = (positive as f32 + 1.0) / (total + 2.0);
+            let negative_signal = (negative as f32 + 1.0) / (total + 2.0);
+            (key, (positive_signal, negative_signal))
+        }).collect())
     }
 
     /// Returns only approved, synchronized versions visible to this
