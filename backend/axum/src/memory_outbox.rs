@@ -2309,13 +2309,6 @@ mod epoch_document_tests {
         .unwrap();
         let archived: MemoryDocument = serde_json::from_str(&archived_payload).unwrap();
         repository.put_version(archived).await.unwrap();
-        sqlx::query(
-            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 2",
-        )
-        .bind(document.memory_id.to_string())
-        .execute(&outbox.pool)
-        .await
-        .unwrap();
         let hidden = outbox
             .list_authorized_document_refs(
                 account.workspace.id,
@@ -2338,6 +2331,13 @@ mod epoch_document_tests {
         .await
         .unwrap();
         assert_eq!(archived_epoch_count, 0);
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 2",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
         let direct_archived = outbox
             .get_authorized_document(
                 &repository,
