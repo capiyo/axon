@@ -561,6 +561,71 @@ pub struct AgentSessionMemoryContext {
 
 /// Retrieves progressive SQLite memories and ranks the exact MongoDB document
 /// versions pinned to the same session epoch through QKV and Qoin.
+#[derive(Debug, Deserialize)]
+pub struct AgentSessionFeedbackRequest {
+    pub memory_id: Uuid,
+    pub document_version: u64,
+    pub event_type: String,
+    #[serde(default = "empty_feedback_evidence")]
+    pub evidence: serde_json::Value,
+}
+
+fn empty_feedback_evidence() -> serde_json::Value {
+    serde_json::json!({})
+}
+
+#[derive(Debug, Serialize)]
+pub struct AgentSessionFeedbackResponse {
+    pub feedback_id: Uuid,
+    pub memory_id: Uuid,
+    pub document_version: u64,
+    pub event_type: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+pub async fn record_session_feedback(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, agent_id, session_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(input): Json<AgentSessionFeedbackRequest>,
+) -> ApiResult<Json<AgentSessionFeedbackResponse>> {
+    require_member(&state, user.user_id, workspace_id).await?;
+    require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
+    let outbox = state.memory_outbox.as_ref().ok_or_else(|| error(
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Memory feedback storage is unavailable.",
+    ))?;
+    let feedback = outbox
+        .record_retrieval_feedback(
+            workspace_id,
+            session_id,
+            agent_id,
+            user.user_id,
+            input.memory_id,
+            input.document_version,
+            &input.event_type,
+            &input.evidence,
+        )
+        .await
+        .map_err(|failure| {
+            tracing::error!(error = %failure, "memory retrieval feedback failed");
+            match failure {
+                crate::memory_outbox::MemoryOutboxError::VersionConflict => {
+                    error(StatusCode::BAD_REQUEST, "Feedback event, version, or evidence is invalid.")
+                }
+                _ => error(StatusCode::INTERNAL_SERVER_ERROR, "Memory feedback could not be recorded."),
+            }
+        })?
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Session or pinned memory version not found for this agent."))?;
+    Ok(Json(AgentSessionFeedbackResponse {
+        feedback_id: feedback.feedback_id,
+        memory_id: feedback.memory_id,
+        document_version: feedback.document_version,
+        event_type: feedback.event_type,
+        created_at: feedback.created_at,
+    }))
+}
+
 pub async fn retrieve_session_context(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,
