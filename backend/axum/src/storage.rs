@@ -634,6 +634,16 @@ impl Storage for SqliteStorage {
         if role != ProjectRole::Member && role != ProjectRole::Viewer && actor_role != "owner" {
             return Err(StorageError::ProjectAuthorizationDenied);
         }
+        let target_role: Option<String> = sqlx::query_scalar(
+            "SELECT role FROM project_memberships WHERE project_id = ? AND user_id = ? AND revoked_at IS NULL",
+        )
+        .bind(project_id.to_string())
+        .bind(target_user_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?;
+        if target_role.as_deref() == Some("owner") && role != ProjectRole::Owner {
+            return Err(StorageError::ProjectAuthorizationDenied);
+        }
         let target_is_workspace_member: Option<i64> = sqlx::query_scalar(
             "SELECT 1 FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
         )
