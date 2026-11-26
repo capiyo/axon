@@ -616,6 +616,39 @@ mod tests {
     }
 
     #[test]
+    fn custom_scoring_weights_change_rank_score_and_report_policy_version() {
+        let workspace = Uuid::new_v4();
+        let mut item = memory(workspace, vec![1.0], MemoryStatus::Approved);
+        item.vector.context = 0.0;
+        let mut request = query(workspace, vec![1.0]);
+        request.context = 1.0;
+
+        let mut semantic_policy = QoinScoringConfig::default();
+        semantic_policy.version = "semantic-only-test-v1".into();
+        semantic_policy.weights = QoinScoringWeights {
+            semantic: 1.0, context: 0.0, dependency: 0.0, outcome: 0.0,
+            failure: 0.0, evidence: 0.0, recency: 0.0, tags: 0.0,
+        };
+        let mut context_policy = semantic_policy.clone();
+        context_policy.version = "context-only-test-v1".into();
+        context_policy.weights = QoinScoringWeights {
+            semantic: 0.0, context: 1.0, dependency: 0.0, outcome: 0.0,
+            failure: 0.0, evidence: 0.0, recency: 0.0, tags: 0.0,
+        };
+
+        let semantic_result = retrieve_memories_with_config(
+            &request, &[item.clone()], &semantic_policy,
+        ).unwrap();
+        let context_result = retrieve_memories_with_config(
+            &request, &[item], &context_policy,
+        ).unwrap();
+
+        assert_eq!(semantic_result.scoring_config.version, "semantic-only-test-v1");
+        assert_eq!(context_result.scoring_config.version, "context-only-test-v1");
+        assert!(semantic_result.ranked[0].score.total > context_result.ranked[0].score.total);
+    }
+
+    #[test]
     fn vector_validation_rejects_invalid_values_and_dimensions() {
         let workspace = Uuid::new_v4();
         let mut item = memory(workspace, vec![1.0, 0.0], MemoryStatus::Approved);
