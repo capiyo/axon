@@ -110,6 +110,75 @@ mod tests {
     use chrono::Utc;
 
     #[tokio::test]
+    async fn agent_tokens_are_limited_to_their_agent_memory_routes() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let state = AppState::with_storage(storage.clone().shared()).await.unwrap();
+        let account = storage.ensure_firebase_user("axon-test", "agent-route-owner").await.unwrap();
+        let agent = Agent {
+            id: Uuid::new_v4(),
+            workspace_id: account.workspace.id,
+            created_by_user_id: Some(account.user_id),
+            display_name: "Route-bound agent".into(),
+            provider: "test".into(),
+            connection_mode: crate::model::ConnectionMode::Manual,
+            created_at: Utc::now(),
+        };
+        storage.apply(crate::storage::StorageMutation {
+            entity: crate::storage::StoredEntity::Agent(agent.clone()),
+            related_entities: Vec::new(),
+            audit: crate::audit::AuditEvent::attributed(
+                format!("human:{}", account.user_id),
+                Some(account.workspace.id),
+                "agent.registered",
+                "agent",
+                agent.id.to_string(),
+                serde_json::json!({}),
+            ),
+        }).await.unwrap();
+        state.agents.write().await.insert(agent.id, agent.clone());
+        let credential = state.issue_agent_credential(account.workspace.id, agent.id, account.user_id).await.unwrap();
+        let app = crate::app(state);
+        let agent_path = format!(
+            "/api/v1/workspaces/{}/agents/{}/memory-documents/{}/1",
+            account.workspace.id, agent.id, Uuid::new_v4()
+        );
+        let accepted = app.clone().oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri(&agent_path)
+                .header(axum::http::header::AUTHORIZATION, format!("Bearer {}", credential.token))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        ).await.unwrap();
+        assert_eq!(accepted.status(), axum::http::StatusCode::SERVICE_UNAVAILABLE);
+
+        let wrong_agent_path = format!(
+            "/api/v1/workspaces/{}/agents/{}/memory-documents/{}/1",
+            account.workspace.id, Uuid::new_v4(), Uuid::new_v4()
+        );
+        let denied = app.clone().oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri(&wrong_agent_path)
+                .header(axum::http::header::AUTHORIZATION, format!("Bearer {}", credential.token))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        ).await.unwrap();
+        assert_eq!(denied.status(), axum::http::StatusCode::FORBIDDEN);
+
+        let non_agent_path = format!("/api/v1/workspaces/{}/audit", account.workspace.id);
+        let denied = app.oneshot(
+            axum::http::Request::builder()
+                .method("GET")
+                .uri(&non_agent_path)
+                .header(axum::http::header::AUTHORIZATION, format!("Bearer {}", credential.token))
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        ).await.unwrap();
+        assert_eq!(denied.status(), axum::http::StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
     async fn credentials_are_hashed_scoped_rotatable_and_revocable() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let account = storage.ensure_firebase_user("axon-test", "agent-credential-owner").await.unwrap();
