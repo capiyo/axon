@@ -147,6 +147,11 @@ impl AppState {
         mut self,
         config: QoinScoringConfig,
     ) -> Self {
+        if let Some(coordinator) = self.memory_epochs.take() {
+            self.memory_epochs = Some(
+                coordinator.with_qoin_scoring_version(config.version.clone()),
+            );
+        }
         self.qoin_memory_scoring = config;
         self
     }
