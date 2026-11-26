@@ -2131,6 +2131,16 @@ mod epoch_document_tests {
             account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
         ).await.unwrap();
         assert!(hidden.is_empty());
+        let coordinator = storage.memory_epoch_coordinator();
+        assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
+        let archived_epoch_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM memory_document_epoch_items WHERE workspace_id = ?",
+        )
+        .bind(account.workspace.id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(archived_epoch_count, 0);
         let direct_archived = outbox.get_authorized_document(
             &repository, account.workspace.id, document.memory_id, 1, Uuid::nil(), account.user_id, None,
         ).await.unwrap();
@@ -2161,6 +2171,16 @@ mod epoch_document_tests {
             account.workspace.id, Uuid::nil(), account.user_id, None, None, 20,
         ).await.unwrap();
         assert_eq!(visible, vec![(document.memory_id, 3)]);
+        assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
+        let restored_epoch_version: i64 = sqlx::query_scalar(
+            "SELECT document_version FROM memory_document_epoch_items WHERE workspace_id = ? AND memory_id = ? ORDER BY rowid DESC LIMIT 1",
+        )
+        .bind(account.workspace.id.to_string())
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(restored_epoch_version, 3);
         let direct_restored = outbox.get_authorized_document(
             &repository, account.workspace.id, document.memory_id, 3, Uuid::nil(), account.user_id, None,
         ).await.unwrap();
