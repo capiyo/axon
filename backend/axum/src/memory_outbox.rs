@@ -1241,7 +1241,10 @@ mod epoch_document_tests {
         .await
         .unwrap();
 
-        assert_eq!(storage.memory_epoch_coordinator().publish_due_epochs().await.unwrap(), 1);
+        let coordinator = storage
+            .memory_epoch_coordinator()
+            .with_qoin_scoring_version("test-qoin-memory-v2".into());
+        assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
         let epoch_id_text: String = sqlx::query_scalar(
             "SELECT id FROM memory_epochs WHERE workspace_id = ? ORDER BY epoch_number DESC LIMIT 1",
         )
@@ -1250,6 +1253,14 @@ mod epoch_document_tests {
         .await
         .unwrap();
         let epoch_id = Uuid::parse_str(&epoch_id_text).unwrap();
+        let pinned_scoring_version: String = sqlx::query_scalar(
+            "SELECT qoin_scoring_version FROM memory_document_epoch_items WHERE epoch_id = ? LIMIT 1",
+        )
+        .bind(epoch_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(pinned_scoring_version, "test-qoin-memory-v2");
 
         let visible = outbox.list_epoch_authorized_documents(
             &repository, workspace_id, epoch_id, agent_id, None, 20,
