@@ -125,3 +125,10 @@ Tombstones suppress older approved versions from normal search and from newly pu
 ## Agent credentials
 
 Migration `0014_agent_credentials.sql` adds credential metadata scoped to one workspace and one agent. Only a SHA-256 hash of the high-entropy secret is stored. Credential records include owner, creation/expiry, revocation, and last-used timestamps. Secrets expire after 90 days. Rotation revokes the old credential and inserts the replacement in one SQLite transaction. Middleware accepts the credential only on the matching agent's memory routes; general workspace/resource capabilities are not yet backed by persisted grants.
+
+
+## Retrieval feedback
+
+Migration `0015_memory_retrieval_feedback.sql` adds feedback rows bound to a workspace, authenticated agent session, agent, memory identity, exact document version, actor, event type, timestamp, and bounded evidence JSON. Feedback is accepted only when that exact version is pinned in the session's immutable epoch and the actor is authorized for the agent and scope. Events are auditable and do not mutate memory documents or epoch items.
+
+Qoin scoring v2 includes a configurable `feedback_weight` in its effective policy fingerprint. Helpful/selected/reused events contribute a smoothed positive outcome signal; irrelevant/contradicted/incorrect events contribute a smoothed negative/failure signal. Historical epochs pinned to the v1 default do not apply v2 feedback weighting.
