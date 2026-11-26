@@ -4,6 +4,8 @@
 use std::{env, fmt, time::Duration};
 use thiserror::Error;
 
+use crate::memory_intelligence::QoinScoringConfig;
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ConfigError {
     #[error("{0} must be a valid boolean (true or false)")]
@@ -14,6 +16,8 @@ pub enum ConfigError {
     EmptyValue(&'static str),
     #[error("AXON_MONGODB_URI is required when MongoDB memory documents are required")]
     MissingMongoUri,
+    #[error("AXON_QOIN_MEMORY_SCORING_CONFIG must contain a valid versioned Qoin scoring configuration")]
+    InvalidQoinScoringConfig,
 }
 
 #[derive(Clone)]
@@ -44,6 +48,7 @@ impl fmt::Debug for MongoSettings {
 pub struct BackendConfig {
     pub database_url: String,
     pub mongo: Option<MongoSettings>,
+    pub qoin_memory_scoring: QoinScoringConfig,
 }
 
 impl BackendConfig {
@@ -94,7 +99,21 @@ impl BackendConfig {
             None => None,
         };
 
-        Ok(Self { database_url, mongo })
+        let qoin_memory_scoring = match env::var("AXON_QOIN_MEMORY_SCORING_CONFIG") {
+            Ok(serialized) => {
+                let policy: QoinScoringConfig = serde_json::from_str(&serialized)
+                    .map_err(|_| ConfigError::InvalidQoinScoringConfig)?;
+                policy.validate().map_err(|_| ConfigError::InvalidQoinScoringConfig)?;
+                policy
+            }
+            Err(_) => QoinScoringConfig::default(),
+        };
+
+        Ok(Self {
+            database_url,
+            mongo,
+            qoin_memory_scoring,
+        })
     }
 }
 
