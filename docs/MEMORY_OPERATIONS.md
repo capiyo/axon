@@ -43,3 +43,8 @@ The API signals the memory outbox worker during graceful shutdown and waits up t
 - `GET /health` is the liveness probe; it does not prove database readiness.
 - `GET /ready` checks SQLite and, when configured, MongoDB ping readiness. In explicit local SQLite-only mode, MongoDB is reported as not configured while overall readiness may still be true.
 - `GET /api/v1/workspaces/{workspace_id}/memory/reconciliation?limit=1000` returns a bounded, workspace-scoped, read-only comparison of SQLite authority and MongoDB versions. It reports missing, orphaned, invalid, and metadata-mismatched records plus outbox queue counts. It never repairs records or returns document content. Review the report and use an explicit audited repair procedure; automatic repair is not implemented.
+
+
+## Version history
+
+`GET /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-documents/{memory_id}/versions?limit=20&before_version=...` returns a bounded page of approved, synchronized version metadata. For task-shared memories, supply `task_id`; the API rechecks task workspace and agent assignment. It verifies each exact MongoDB version against SQLite before returning title/hash/provenance metadata, and does not return document content.
