@@ -453,6 +453,7 @@ pub struct MemoryDocumentSearchResponse {
     pub qoin_scoring_config: QoinScoringConfig,
     pub candidates_examined: usize,
     pub context_bytes_used: usize,
+    pub results_truncated: bool,
     pub results: Vec<RankedMemoryDocument>,
 }
 
@@ -711,16 +712,13 @@ pub async fn search_agent_memory_documents(
 
     const MAX_CONTEXT_BYTES: usize = 64 * 1024;
     let mut context_bytes_used = 0_usize;
+    let mut results_truncated = false;
     let mut results = Vec::with_capacity(qoin.ranked.len());
     for ranked in qoin.ranked {
         let Some(document) = documents.remove(&ranked.memory_id) else {
             continue;
         };
-        if document.content.len() > MAX_CONTEXT_BYTES.saturating_sub(context_bytes_used) {
-            continue;
-        }
-        context_bytes_used += document.content.len();
-        results.push(RankedMemoryDocument {
+        let result = RankedMemoryDocument {
             memory_id: document.memory_id,
             version: document.version,
             title: document.title,
@@ -732,7 +730,16 @@ pub async fn search_agent_memory_documents(
             qkv_attention_score: attention_scores.get(&ranked.memory_id).copied().unwrap_or(0.0),
             qoin_score: ranked.score,
             qoin_reasons: ranked.reasons,
-        });
+        };
+        let result_bytes = serde_json::to_vec(&result)
+            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory search result could not be serialized."))?
+            .len();
+        if result_bytes > MAX_CONTEXT_BYTES.saturating_sub(context_bytes_used) {
+            results_truncated = true;
+            continue;
+        }
+        context_bytes_used += result_bytes;
+        results.push(result);
     }
 
     let retrieval_mode = if qkv_model_version == LEXICAL_MEMORY_VECTOR_VERSION {
@@ -747,6 +754,7 @@ pub async fn search_agent_memory_documents(
         qoin_scoring_config,
         candidates_examined: indexed_memories.len(),
         context_bytes_used,
+        results_truncated,
         results,
     }))
 }
