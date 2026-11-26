@@ -901,7 +901,6 @@ impl MemoryOutbox {
         }
 
         let requester_agent_id_text = requester_agent_id.to_string();
-        let requester_user_id_text = requester_user_id.to_string();
         let requester_task_id_text = task_id.map(|id| id.to_string());
         let visible = match scope.as_str() {
             "workspace_shared" => true,
