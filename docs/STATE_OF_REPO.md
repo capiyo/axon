@@ -62,7 +62,8 @@
 - [ ] Neural embedding-provider integration remains outstanding; newly created MongoDB memory documents now persist versioned deterministic lexical QKV keys and source-text integrity hashes.
 - [x] An authenticated session-bound endpoint resolves the session's immutable epoch and hydrates exact MongoDB document versions with scope, source sequence, QKV version, and SHA-256 verification.
 - [ ] Project-shared memory is disabled until persisted project-membership authorization exists.
-- [x] Added audited dead-letter recovery for valid retained outbox payloads.\n- [x] Added bounded, workspace-scoped read-only SQLite/MongoDB reconciliation reports.
+- [x] Added audited dead-letter recovery for valid retained outbox payloads.
+- [x] Added bounded, workspace-scoped read-only SQLite/MongoDB reconciliation reports.
 - [ ] Automatic reconciliation repair, searchable vector index rebuild, neural embeddings, project-membership authorization, cryptographic agent-principal authentication, and full MongoDB integration/security tests remain outstanding.
 
 ### Frontend and design
@@ -106,13 +107,7 @@
 
 ## Verification
 
-GitHub Actions run [44988959132](https://github.com/capiyo/Qapten-/actions/runs/44988959132) passed all four jobs on Phase A source commit `09be25463e3f787d186105d59e65de8cd242718d`:
-- Rust formatting, Clippy with warnings denied, and Rust tests.
-- React web production build.
-- React Native TypeScript validation.
-- Python connector Ruff and pytest.
-
-The Rust suite includes offline locally signed Firebase tokens, wrong-key rejection, local JWKS rotation, per-route missing/expired-token checks, cross-user not-found checks, simulator gating and concurrent first-login provisioning. No physical Android/iOS build, hardware integration, production deployment, live Firebase project validation or external-provider sign-in has been performed.
+The historical Phase A CI run referenced in earlier repository notes belongs to the former `capiyo/Qapten-` repository and is not evidence for the current `capiyo/axon` branch. Current-branch Rust formatting, compilation, tests, Clippy, and MongoDB integration status must be taken from checks run against the current branch. They have not been executed from this editing environment.
 
 ## Architecture direction
 
@@ -125,4 +120,4 @@ The Rust suite includes offline locally signed Firebase tokens, wrong-key reject
 
 ## Dual-database memory implementation note
 
-The current implementation includes dual-database persistence, a recoverable SQLite outbox, deterministic lexical QKV/Qoin retrieval, immutable document-version epoch pins, and a combined session-context endpoint that returns both progressive SQLite memories and session-pinned MongoDB documents with a bounded document payload. No autonomous provider-backed agent execution runtime exists yet. It remains a foundation rather than a completed production memory system; neural embeddings, project membership, reconciliation, and live MongoDB verification remain outstanding. See [Memory Architecture](MEMORY_ARCHITECTURE.md), [MongoDB Setup](MONGODB_SETUP.md), [QKV Retrieval](QKV_RETRIEVAL.md), [Qoin Memory Intelligence](QOIN_MEMORY_INTELLIGENCE.md), and [Memory Testing](MEMORY_TESTING.md). Rust compilation and integration tests must pass in CI before production use.
+The current implementation includes SQLite-authoritative metadata, immutable versioned MongoDB documents, a recoverable transactional outbox with audited dead-letter retry, deterministic lexical QKV retrieval, configurable versioned Qoin ranking, immutable document-version epoch pins, combined session-context retrieval, bounded read-only reconciliation, and separate database readiness probes. It is not a completed production memory system: neural embeddings, searchable vector indexing/rebuild, automatic repair, project-membership authorization, cryptographic agent-principal authentication, provider-backed agent execution, live MongoDB failure/restart tests, and performance/restore drills remain outstanding. See [Memory Architecture](MEMORY_ARCHITECTURE.md), [MongoDB Setup](MONGODB_SETUP.md), [QKV Retrieval](QKV_RETRIEVAL.md), [Qoin Memory Intelligence](QOIN_MEMORY_INTELLIGENCE.md), and [Memory Testing](MEMORY_TESTING.md). Current-branch Rust compilation and integration tests must pass before production use.
