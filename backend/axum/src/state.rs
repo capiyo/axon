@@ -220,4 +220,11 @@ impl AppState {
     pub fn storage_is_durable(&self) -> bool {
         self.storage.is_some()
     }
+
+    pub async fn storage_is_ready(&self) -> bool {
+        match &self.storage {
+            Some(storage) => storage.ping().await.is_ok(),
+            None => false,
+        }
+    }
 }
