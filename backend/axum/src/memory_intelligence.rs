@@ -525,6 +525,17 @@ mod scoring_config_tests {
     }
 
     #[test]
+    fn effective_policy_version_changes_when_any_scoring_parameter_changes() {
+        let baseline = QoinScoringConfig::default();
+        let same = QoinScoringConfig::default();
+        assert_eq!(baseline.effective_version(), same.effective_version());
+
+        let mut changed = baseline.clone();
+        changed.weights.semantic += 0.01;
+        assert_ne!(baseline.effective_version(), changed.effective_version());
+    }
+
+    #[test]
     fn invalid_weights_and_thresholds_are_rejected() {
         let mut policy = QoinScoringConfig::default();
         policy.weights.semantic = f64::NAN;
