@@ -1847,6 +1847,102 @@ mod epoch_document_tests {
     }
 
     #[tokio::test]
+    async fn retrieval_feedback_is_session_pinned_authorized_and_audited() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let account = storage.ensure_firebase_user("axon-test", "feedback-owner").await.unwrap();
+        let agent = crate::model::Agent {
+            id: Uuid::new_v4(),
+            workspace_id: account.workspace.id,
+            created_by_user_id: Some(account.user_id),
+            display_name: "Feedback agent".into(),
+            provider: "test".into(),
+            connection_mode: crate::model::ConnectionMode::Manual,
+            created_at: Utc::now(),
+        };
+        storage.apply(crate::storage::StorageMutation {
+            entity: crate::storage::StoredEntity::Agent(agent.clone()),
+            related_entities: Vec::new(),
+            audit: crate::audit::AuditEvent::attributed(
+                format!("human:{}", account.user_id),
+                Some(account.workspace.id),
+                "agent.registered",
+                "agent",
+                agent.id.to_string(),
+                serde_json::json!({}),
+            ),
+        }).await.unwrap();
+
+        let outbox = storage.memory_outbox();
+        let repository = FakeDocumentRepository::default();
+        let mut document = super::tests::document(account.workspace.id, agent.id);
+        document.scope = "workspace_shared".into();
+        document.owner_id = None;
+        document.status = "proposed".into();
+        outbox.enqueue(&mut document, account.user_id).await.unwrap();
+        repository.put_version(document.clone()).await.unwrap();
+        assert!(outbox.approve(account.workspace.id, document.memory_id, 1, account.user_id).await.unwrap());
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
+        )
+        .bind(document.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(storage.memory_epoch_coordinator().publish_due_epochs().await.unwrap(), 1);
+        let epoch_id: String = sqlx::query_scalar(
+            "SELECT id FROM memory_epochs WHERE workspace_id = ? ORDER BY epoch_number DESC LIMIT 1",
+        )
+        .bind(account.workspace.id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        let session_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO agent_memory_sessions (session_id, workspace_id, agent_id, task_id, memory_epoch_id, initial_memory_ids_json, retrieved_memory_ids_json, created_at, project_id) VALUES (?, ?, ?, NULL, ?, '[]', '[]', ?, NULL)",
+        )
+        .bind(session_id.to_string())
+        .bind(account.workspace.id.to_string())
+        .bind(agent.id.to_string())
+        .bind(epoch_id)
+        .bind(Utc::now().to_rfc3339())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+
+        let recorded = outbox.record_retrieval_feedback(
+            account.workspace.id,
+            session_id,
+            agent.id,
+            account.user_id,
+            document.memory_id,
+            1,
+            "helpful",
+            &serde_json::json!({"reason": "resolved the task"}),
+        ).await.unwrap().unwrap();
+        assert_eq!(recorded.event_type, "helpful");
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM memory_retrieval_feedback WHERE session_id = ? AND memory_id = ? AND document_version = 1",
+        )
+        .bind(session_id.to_string())
+        .bind(document.memory_id.to_string())
+        .fetch_one(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(count, 1);
+
+        let invalid = outbox.record_retrieval_feedback(
+            account.workspace.id, session_id, agent.id, account.user_id,
+            document.memory_id, 1, "made_up_event", &serde_json::json!({}),
+        ).await;
+        assert!(matches!(invalid, Err(MemoryOutboxError::VersionConflict)));
+        let unpinned = outbox.record_retrieval_feedback(
+            account.workspace.id, session_id, agent.id, account.user_id,
+            Uuid::new_v4(), 1, "helpful", &serde_json::json!({}),
+        ).await.unwrap();
+        assert!(unpinned.is_none());
+    }
+
+    #[tokio::test]
     async fn archive_restore_and_delete_create_new_versions_and_control_current_retrieval() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let account = storage.ensure_firebase_user("axon-test", "lifecycle-user").await.unwrap();
