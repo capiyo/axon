@@ -13,7 +13,7 @@ pub const QOIN_MEMORY_SCORING_VERSION: &str = "axon-qoin-memory-v2";
 pub const LEGACY_QOIN_MEMORY_SCORING_VERSION: &str = "axon-qoin-memory-v1";
 
 fn default_feedback_weight() -> f64 {
-    0.5
+    0.25
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
