@@ -77,7 +77,7 @@ The current provider is `LexicalMemoryVectorProvider`:
 - Normalization: L2.
 - No network model or training call is made.
 
-It is explicitly a lexical fallback, not a neural embedding. The `MemoryVectorProvider` trait is the extension point for a future embedding provider.
+It is explicitly a lexical fallback, not a neural embedding. The asynchronous `MemoryVectorProvider` trait is injected through application state and is the extension point for remote or local embedding providers. The configured default in this branch is still lexical; no neural provider is shipped.
 
 ## Qoin ranking
 
