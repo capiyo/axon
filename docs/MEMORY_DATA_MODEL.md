@@ -81,7 +81,7 @@ It is explicitly a lexical fallback, not a neural embedding. The `MemoryVectorPr
 
 ## Qoin ranking
 
-Memory scoring version: `axon-qoin-memory-v1`.
+Memory scoring default version: `axon-qoin-memory-v1`. The full scoring policy (weights, thresholds, recency half-life, and explanation thresholds) is validated at startup and returned in document-search responses. `AXON_QOIN_MEMORY_SCORING_CONFIG` may override the default with a versioned JSON policy.
 
 The existing memory-intelligence scorer receives the same lexical vector used by QKV plus context, outcome, failure, evidence, tags, and dependency metadata. The response includes the component score breakdown and QKV attention score.
 
