@@ -33,9 +33,6 @@ pub async fn authenticate(
         return next.run(request).await;
     }
 
-    let Some(verifier) = state.firebase_verifier.as_ref() else {
-        return response(StatusCode::SERVICE_UNAVAILABLE);
-    };
     let Some(value) = request
         .headers()
         .get(AUTHORIZATION)
@@ -90,6 +87,9 @@ pub async fn authenticate(
         return next.run(request).await;
     }
 
+    let Some(verifier) = state.firebase_verifier.as_ref() else {
+        return response(StatusCode::SERVICE_UNAVAILABLE);
+    };
     let identity = match verifier.verify(token).await {
         Ok(identity) => identity,
         Err(_) => return response(StatusCode::UNAUTHORIZED),
