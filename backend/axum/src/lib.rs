@@ -86,6 +86,10 @@ pub fn app(state: AppState) -> Router {
             post(memory_document_routes::approve_memory_document),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/memory/documents/:memory_id/:version/retry-sync",
+            post(memory_document_routes::retry_memory_document_sync),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/agents/:agent_id/memory-documents/:memory_id/:version",
             get(memory_document_routes::get_agent_memory_document),
         )
