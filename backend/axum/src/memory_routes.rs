@@ -24,7 +24,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -862,26 +862,45 @@ mod session_context_tests {
         }
     }
 
+    fn ranked_document(content: &str) -> RankedSessionMemoryDocument {
+        RankedSessionMemoryDocument {
+            document: document(content),
+            qkv_attention_score: 0.5,
+            qoin_score: ScoreBreakdown {
+                semantic: 0.5,
+                context: 0.5,
+                dependency: 0.0,
+                outcome: 0.5,
+                failure: 0.5,
+                evidence: 0.5,
+                recency: 0.5,
+                tags: 0.0,
+                total: 0.5,
+            },
+            qoin_reasons: Vec::new(),
+        }
+    }
+
     #[test]
-    fn context_budget_omits_whole_documents_and_reports_truncation() {
-        let first = document("short");
-        let second = document(&"x".repeat(1024));
+    fn context_budget_omits_whole_ranked_documents_and_reports_truncation() {
+        let first = ranked_document("short");
+        let second = ranked_document(&"x".repeat(1024));
         let first_size = serde_json::to_vec(&first).unwrap().len();
         let (selected, used, truncated) =
-            bounded_memory_documents(vec![first, second], first_size).unwrap();
+            bounded_session_context(vec![first, second], first_size).unwrap();
         assert_eq!(selected.len(), 1);
         assert_eq!(used, first_size);
         assert!(truncated);
     }
 
     #[test]
-    fn context_budget_preserves_all_documents_that_fit() {
-        let first = document("first");
-        let second = document("second");
+    fn context_budget_preserves_all_ranked_documents_that_fit() {
+        let first = ranked_document("first");
+        let second = ranked_document("second");
         let budget = serde_json::to_vec(&first).unwrap().len()
             + serde_json::to_vec(&second).unwrap().len();
         let (selected, used, truncated) =
-            bounded_memory_documents(vec![first, second], budget).unwrap();
+            bounded_session_context(vec![first, second], budget).unwrap();
         assert_eq!(selected.len(), 2);
         assert_eq!(used, budget);
         assert!(!truncated);
