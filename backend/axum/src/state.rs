@@ -5,7 +5,7 @@ use crate::{
     memory_architecture::MemoryEpochCoordinator,
     memory_documents::MemoryDocumentRepository,
     memory_outbox::MemoryOutbox,
-    model::{Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace},
+    model::{Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace, WorkspaceMembership},
     qoin_vectors::QoinVectorClient,
     memory_intelligence::QoinScoringConfig,
     memory_vector_provider::MemoryVectorProvider,
@@ -229,6 +229,31 @@ impl AppState {
                     .create_workspace_for_user(user_id, name, actor)
                     .await
             }
+            None => Err(StorageError::IdentityStorageUnavailable),
+        }
+    }
+
+
+    pub async fn add_workspace_member(
+        &self,
+        workspace_id: Uuid,
+        actor_user_id: Uuid,
+        target_user_id: Uuid,
+    ) -> Result<WorkspaceMembership, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.add_workspace_member(workspace_id, actor_user_id, target_user_id).await,
+            None => Err(StorageError::IdentityStorageUnavailable),
+        }
+    }
+
+    pub async fn revoke_workspace_member(
+        &self,
+        workspace_id: Uuid,
+        actor_user_id: Uuid,
+        target_user_id: Uuid,
+    ) -> Result<bool, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.revoke_workspace_member(workspace_id, actor_user_id, target_user_id).await,
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }
