@@ -21,7 +21,7 @@ $env:AXON_MONGODB_MAX_POOL_SIZE="20"
 cargo run -p axon-api
 ```
 
-The API listens on `http://127.0.0.1:8080`. Only `GET /health` is public; all workspace routes require a verified Firebase ID token.
+The API listens on `http://127.0.0.1:8080`. `GET /health` is the public liveness probe and `GET /ready` is the public SQLite/MongoDB readiness probe; workspace routes require a verified Firebase ID token.
 
 MongoDB document storage is optional for local development. Set `AXON_MONGODB_URI` to enable it. Set `AXON_ENV=production` or `AXON_MEMORY_DOCUMENTS_REQUIRED=true` to make MongoDB a required startup dependency. The MongoDB adapter stores immutable document versions; SQLite continues to own workspace identity, document metadata, lifecycle and outbox state. See [MongoDB setup](MONGODB_SETUP.md).
 
@@ -102,7 +102,7 @@ The workspace UI can create and advance tasks. To simulate the manual handoff, a
 ## Current limitations
 
 - MongoDB document creation is queued durably in SQLite and delivered asynchronously. Direct retrieval by memory ID/version is available to a workspace-authorized registered agent after SQLite approval and MongoDB hash verification. The current retrieval provider is deterministic lexical hashing, not a neural embedding. Project-scope authorization remains fail-closed. The combined session-context endpoint resolves the session's pinned epoch and returns both progressive SQLite memories and exact MongoDB document versions from that epoch.
-- The current memory-document creation API supports workspace-shared, task-shared and agent-private scopes. Project-shared creation is deliberately rejected until a persisted project-membership authorization model exists.
+- The current memory-document creation API supports workspace-shared, task-shared and agent-private scopes. Project-shared creation is deliberately rejected until a persisted project-membership authorization model exists. Important: agent IDs are currently selected by workspace members and are not cryptographically authenticated; agent-private scope is not a security boundary between members of the same workspace.
 - Agent names/provider labels do not connect to provider APIs. The person using the UI still performs manual provider handoff.
 - SQLite must use a persistent volume in production. MongoDB backups and SQLite backups must both be configured.
 - Never place secrets or sensitive personal data in this prototype.
@@ -152,3 +152,22 @@ curl -X POST "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/agents/$AGEN
 ```
 
 The response identifies its retrieval mode as `deterministic_lexical_qkv_v1`. This is a stable hashed lexical representation, not a neural embedding. Results include QKV attention and Qoin score breakdowns, expose both algorithm versions, and are bounded to a 64 KiB content budget.
+
+
+## 7. Memory operations
+
+Run a bounded, read-only reconciliation report for the workspace:
+
+```sh
+curl "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/memory/reconciliation?limit=1000" \\
+  -H "Authorization: Bearer $FIREBASE_ID_TOKEN"
+```
+
+The report contains memory IDs, version mismatch categories, and outbox queue counts—not document contents. It does not repair either database. A workspace member can retry a dead-letter version with a retained payload:
+
+```sh
+curl -X POST "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/memory/documents/$MEMORY_ID/$VERSION/retry-sync" \\
+  -H "Authorization: Bearer $FIREBASE_ID_TOKEN"
+```
+
+The retry is recorded in SQLite audit history. This endpoint is workspace-member scoped because Axon does not yet have role-based operator permissions; restrict it before production use.
