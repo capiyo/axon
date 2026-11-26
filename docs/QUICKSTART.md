@@ -159,14 +159,14 @@ The response identifies its retrieval mode as `deterministic_lexical_qkv_v1`. Th
 Run a bounded, read-only reconciliation report for the workspace:
 
 ```sh
-curl "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/memory/reconciliation?limit=1000" \\
+curl "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/memory/reconciliation?limit=1000" \
   -H "Authorization: Bearer $FIREBASE_ID_TOKEN"
 ```
 
 The report contains memory IDs, version mismatch categories, and outbox queue counts—not document contents. It does not repair either database. A workspace member can retry a dead-letter version with a retained payload:
 
 ```sh
-curl -X POST "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/memory/documents/$MEMORY_ID/$VERSION/retry-sync" \\
+curl -X POST "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/memory/documents/$MEMORY_ID/$VERSION/retry-sync" \
   -H "Authorization: Bearer $FIREBASE_ID_TOKEN"
 ```
 
@@ -176,7 +176,7 @@ The retry is recorded in SQLite audit history. This endpoint is workspace-member
 ## Memory version history
 
 ```sh
-curl "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/agents/$AGENT_ID/memory-documents/$MEMORY_ID/versions/history?limit=20" \\
+curl "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/agents/$AGENT_ID/memory-documents/$MEMORY_ID/versions/history?limit=20" \
   -H "Authorization: Bearer $FIREBASE_ID_TOKEN"
 ```
 
