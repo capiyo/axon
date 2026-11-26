@@ -605,14 +605,20 @@ pub async fn retrieve_session_context(
         }
     }
 
-    let expected_qoin_scoring_version = state.qoin_memory_scoring.effective_version();
-    let legacy_default_policy = state.qoin_memory_scoring == QoinScoringConfig::default()
-        && epoch_qoin_scoring_version == crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION;
-    if epoch_qoin_scoring_version != expected_qoin_scoring_version && !legacy_default_policy {
-        return Err(error(
+    if !pinned_documents.is_empty() {
+        let epoch_qoin_scoring_version = epoch_qoin_scoring_version.ok_or_else(|| error(
             StatusCode::CONFLICT,
-            "The session epoch was created with a different Qoin scoring policy. Resume with a matching policy or create a new session.",
-        ));
+            "The pinned document epoch has no Qoin scoring policy metadata.",
+        ))?;
+        let expected_qoin_scoring_version = state.qoin_memory_scoring.effective_version();
+        let legacy_default_policy = state.qoin_memory_scoring == QoinScoringConfig::default()
+            && epoch_qoin_scoring_version == crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION;
+        if epoch_qoin_scoring_version != expected_qoin_scoring_version && !legacy_default_policy {
+            return Err(error(
+                StatusCode::CONFLICT,
+                "The session epoch was created with a different Qoin scoring policy. Resume with a matching policy or create a new session.",
+            ));
+        }
     }
 
     let fallback_provider = LexicalMemoryVectorProvider;
