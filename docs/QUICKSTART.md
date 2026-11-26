@@ -171,3 +171,13 @@ curl -X POST "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/memory/docum
 ```
 
 The retry is recorded in SQLite audit history. This endpoint is workspace-member scoped because Axon does not yet have role-based operator permissions; restrict it before production use.
+
+
+## Memory version history
+
+```sh
+curl "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/agents/$AGENT_ID/memory-documents/$MEMORY_ID/versions?limit=20" \\
+  -H "Authorization: Bearer $FIREBASE_ID_TOKEN"
+```
+
+For task-shared documents, include the authorized `task_id`. Use the returned `next_before_version` as the next page's `before_version`. The history endpoint returns verified metadata, not document content.
