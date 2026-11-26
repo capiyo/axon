@@ -44,13 +44,13 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 
 1. Added exact-version document hydration from the SQLite immutable epoch snapshot.
 2. Added session-bound hydration that resolves the epoch from `agent_memory_sessions`; callers cannot select an arbitrary epoch.
-3. Added authenticated session-document retrieval and a combined session-context endpoint that returns progressive SQLite retrieval and the exact MongoDB documents pinned to the same session epoch, ranked through QKV attention and Qoin. The MongoDB text query is separate from the SQLite progressive vector when model versions differ.
+3. Added authenticated paginated version history, session-document retrieval, and a combined session-context endpoint that returns progressive SQLite retrieval and the exact MongoDB documents pinned to the same session epoch, ranked through QKV attention and Qoin. The MongoDB text query is separate from the SQLite progressive vector when model versions differ.
 4. Enforced workspace membership and registering-user ownership for agent-specific document, handover, and session retrieval, plus agent/session association, task assignment, pinned visibility scope, authoritative SQLite metadata, MongoDB version identity, QKV version, and SHA-256 integrity before returning document values. New agents persist their registering Firebase user and agent memory/session routes enforce that owner before use. Cryptographic agent credentials remain outstanding; legacy unowned agents fail closed.
 5. Bounded serialized MongoDB session document context to 256 KiB and complete serialized QKV/Qoin search results to 64 KiB; whole documents/results are omitted rather than truncated, and responses report truncation.
 6. New document creation persists deterministic lexical QKV keys and model versions in MongoDB `key_metadata`.
 7. Added SHA-256 source hashing over the exact ordered title/content/tag text used to build each persisted QKV key.
 8. Document validation rejects malformed, partial, non-normalized, model-version-mismatched, or source-hash-mismatched persisted keys. Legacy documents without stored keys retain deterministic query-time fallback.
-9. Added tests for exact epoch hydration, session binding, private-scope denial, missing epochs, persisted QKV-key validation, and context-budget selection.
+9. Added tests for exact epoch hydration, session binding, private-scope denial, missing epochs, persisted QKV-key validation, version-history pagination/isolation, and context-budget selection.
 10. Added validated startup configuration for production-required MongoDB, connection/server-selection timeouts, maximum pool size, URI-redacted Debug output, and a pluggable asynchronous QKV provider injected through AppState.
 11. Added configurable, versioned Qoin scoring policies and returned the exact policy with ranked search results.
 12. Made outbox completion and failure transitions verify their lease and authoritative metadata row before committing.
