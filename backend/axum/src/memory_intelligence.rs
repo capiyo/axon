@@ -554,6 +554,15 @@ mod scoring_config_tests {
     }
 
     #[test]
+    fn legacy_scoring_config_defaults_feedback_weight_without_breaking_deserialization() {
+        let mut value = serde_json::to_value(QoinScoringConfig::default()).unwrap();
+        value.as_object_mut().unwrap().remove("feedback_weight");
+        let parsed: QoinScoringConfig = serde_json::from_value(value).unwrap();
+        assert_eq!(parsed.feedback_weight, 0.25);
+        assert!(parsed.validate().is_ok());
+    }
+
+    #[test]
     fn invalid_weights_and_thresholds_are_rejected() {
         let mut policy = QoinScoringConfig::default();
         policy.weights.semantic = f64::NAN;
