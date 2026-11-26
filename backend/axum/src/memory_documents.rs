@@ -180,8 +180,9 @@ pub trait MemoryDocumentRepository: Send + Sync {
 
     /// Bounded, read-only scan used by reconciliation. Returned documents
     /// contain content and must remain inside trusted service code.
-    async fn list_documents(
+    async fn list_workspace_documents(
         &self,
+        workspace_id: Uuid,
         limit: usize,
     ) -> Result<Vec<MemoryDocument>, MemoryDocumentError>;
 
@@ -325,12 +326,16 @@ impl MemoryDocumentRepository for MongoMemoryDocumentRepository {
         Ok(versions)
     }
 
-    async fn list_documents(
+    async fn list_workspace_documents(
         &self,
+        workspace_id: Uuid,
         limit: usize,
     ) -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
         let limit = limit.clamp(1, 5_000);
-        let mut cursor = self.collection.find(doc! {}, None).await?;
+        let mut cursor = self.collection.find(
+            doc! { "workspace_id": workspace_id.to_string() },
+            None,
+        ).await?;
         let mut documents = Vec::with_capacity(limit.min(256));
         while documents.len() < limit {
             match cursor.try_next().await? {
