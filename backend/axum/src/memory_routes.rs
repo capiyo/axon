@@ -41,6 +41,22 @@ fn error(status: StatusCode, message: &str) -> (StatusCode, Json<ApiError>) {
         }),
     )
 }
+async fn require_agent_owner(
+    state: &AppState,
+    user_id: Uuid,
+    workspace_id: Uuid,
+    agent_id: Uuid,
+) -> ApiResult<()> {
+    let agents = state.agents.read().await;
+    if agents.get(&agent_id).is_some_and(|agent| {
+        agent.workspace_id == workspace_id && agent.created_by_user_id == Some(user_id)
+    }) {
+        Ok(())
+    } else {
+        Err(error(StatusCode::NOT_FOUND, "Agent not found for this user in the workspace."))
+    }
+}
+
 async fn require_member(state: &AppState, user_id: Uuid, workspace_id: Uuid) -> ApiResult<()> {
     let member = state
         .is_workspace_member(user_id, workspace_id)
@@ -389,17 +405,7 @@ pub async fn prepare_handover(
             "Workspace and agent path identifiers must match the payload.",
         ));
     }
-    let agents = state.agents.read().await;
-    if !agents
-        .get(&agent_id)
-        .is_some_and(|agent| agent.workspace_id == workspace_id)
-    {
-        return Err(error(
-            StatusCode::NOT_FOUND,
-            "Agent not found in this workspace.",
-        ));
-    }
-    drop(agents);
+    require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
     if let Some(task_id) = input.task_id {
         let tasks = state.tasks.read().await;
         if !tasks.get(&task_id).is_some_and(|task| {
@@ -441,17 +447,7 @@ pub async fn progressive_retrieval(
     Json(input): Json<ProgressiveRetrievalRequest>,
 ) -> ApiResult<Json<ProgressiveRetrieval>> {
     require_member(&state, user.user_id, workspace_id).await?;
-    let agents = state.agents.read().await;
-    if !agents
-        .get(&agent_id)
-        .is_some_and(|agent| agent.workspace_id == workspace_id)
-    {
-        return Err(error(
-            StatusCode::NOT_FOUND,
-            "Agent not found in this workspace.",
-        ));
-    }
-    drop(agents);
+    require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
     let result = coordinator(&state)?
         .retrieve_progressive(workspace_id, agent_id, session_id, input)
         .await
@@ -573,14 +569,7 @@ pub async fn retrieve_session_context(
     Json(input): Json<AgentSessionContextRequest>,
 ) -> ApiResult<Json<AgentSessionMemoryContext>> {
     require_member(&state, user.user_id, workspace_id).await?;
-    let agents = state.agents.read().await;
-    if !agents
-        .get(&agent_id)
-        .is_some_and(|agent| agent.workspace_id == workspace_id)
-    {
-        return Err(error(StatusCode::NOT_FOUND, "Agent not found in this workspace."));
-    }
-    drop(agents);
+    require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
 
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| error(
         StatusCode::SERVICE_UNAVAILABLE,
