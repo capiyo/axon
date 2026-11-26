@@ -2173,7 +2173,10 @@ mod epoch_document_tests {
         assert_eq!(visible, vec![(document.memory_id, 3)]);
         assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
         let restored_epoch_version: i64 = sqlx::query_scalar(
-            "SELECT document_version FROM memory_document_epoch_items WHERE workspace_id = ? AND memory_id = ? ORDER BY rowid DESC LIMIT 1",
+            "SELECT i.document_version FROM memory_document_epoch_items i
+             JOIN memory_epochs e ON e.id = i.epoch_id
+             WHERE i.workspace_id = ? AND i.memory_id = ?
+             ORDER BY e.epoch_number DESC LIMIT 1",
         )
         .bind(account.workspace.id.to_string())
         .bind(document.memory_id.to_string())
