@@ -59,7 +59,7 @@ The API signals both the memory outbox worker and the periodic epoch publisher d
 - `POST /api/v1/workspaces/{workspace_id}/projects/{project_id}/members` grants a project role. Project owners/admins may grant member/viewer; only project owners may grant admin/owner.
 - `DELETE /api/v1/workspaces/{workspace_id}/projects/{project_id}/members/{target_user_id}` revokes non-owner project membership.
 
-The target user must already have an Axon account and be an active member of the workspace. Workspace revocation also revokes that user's project access and agent credentials for that workspace.
+The target user must already have an Axon account and be an active member of the workspace. Workspace revocation revokes non-owner project memberships and agent credentials for that workspace. Project-owner rows are retained for ownership continuity, but active workspace membership is required for all project access; re-adding the user restores the retained owner role.
 
 ## Memory lifecycle
 
