@@ -584,6 +584,7 @@ pub async fn retrieve_session_context(
             workspace_id,
             session_id,
             agent_id,
+            user.user_id,
             100,
         )
         .await
