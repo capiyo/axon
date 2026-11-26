@@ -345,6 +345,7 @@ use std::time::Duration;
 #[derive(Clone)]
 pub struct MemoryEpochCoordinator {
     pool: SqlitePool,
+    qoin_scoring_version: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryEpoch {
@@ -358,7 +359,17 @@ pub struct MemoryEpoch {
 }
 impl MemoryEpochCoordinator {
     pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            qoin_scoring_version: QOIN_MEMORY_SCORING_VERSION.to_owned(),
+        }
+    }
+
+    pub fn with_qoin_scoring_version(mut self, version: String) -> Self {
+        if !version.trim().is_empty() && version.len() <= 80 {
+            self.qoin_scoring_version = version;
+        }
+        self
     }
 
     /// Publish due workspaces. Called repeatedly by the supervised hourly
@@ -456,7 +467,7 @@ impl MemoryEpochCoordinator {
                     AND sync_status IN ('stored', 'indexed')",
         )
         .bind(id.to_string())
-        .bind(QOIN_MEMORY_SCORING_VERSION)
+        .bind(&self.qoin_scoring_version)
         .bind(now.to_rfc3339())
         .bind(workspace_id)
         .execute(&mut *tx)
