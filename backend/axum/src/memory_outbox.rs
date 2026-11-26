@@ -1327,6 +1327,21 @@ impl MemoryOutbox {
         if lifecycle_status != "approved" || !matches!(sync_status.as_str(), "stored" | "indexed") {
             return Ok(None);
         }
+        let superseded_by_lifecycle: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM memory_document_versions newer
+             WHERE newer.workspace_id = ? AND newer.memory_id = ? AND newer.version > ?
+               AND (newer.lifecycle_status IN ('archived', 'deleted', 'rejected', 'superseded')
+                    OR (newer.lifecycle_status = 'approved' AND newer.sync_status IN ('stored', 'indexed')))
+             LIMIT 1",
+        )
+        .bind(workspace_id.to_string())
+        .bind(memory_id.to_string())
+        .bind(version_sql)
+        .fetch_optional(&self.pool)
+        .await?;
+        if superseded_by_lifecycle.is_some() {
+            return Ok(None);
+        }
 
         let requester_agent_id_text = requester_agent_id.to_string();
         let requester_task_id_text = task_id.map(|id| id.to_string());
