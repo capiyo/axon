@@ -258,6 +258,45 @@ pub async fn approve_memory_document(
     }))
 }
 
+#[derive(Debug, Serialize)]
+pub struct MemoryDocumentRetryResponse {
+    pub memory_id: Uuid,
+    pub version: u64,
+    pub sync_status: &'static str,
+}
+
+pub async fn retry_memory_document_sync(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, memory_id, version)): Path<(Uuid, Uuid, u64)>,
+) -> Result<Json<MemoryDocumentRetryResponse>, (StatusCode, Json<ApiError>)> {
+    let member = state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+    if !member {
+        return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
+    }
+    let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory document outbox is unavailable.")
+    })?;
+    let requeued = outbox
+        .retry_dead_letter(workspace_id, memory_id, version, user.user_id)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "memory outbox recovery failed");
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory synchronization recovery failed.")
+        })?;
+    if !requeued {
+        return Err(api_error(StatusCode::NOT_FOUND, "Recoverable dead-letter event was not found."));
+    }
+    Ok(Json(MemoryDocumentRetryResponse {
+        memory_id,
+        version,
+        sync_status: "pending",
+    }))
+}
+
 pub async fn get_agent_memory_document(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,
