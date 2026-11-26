@@ -90,7 +90,7 @@ The existing memory-intelligence scorer receives the same lexical vector used by
 - `workspace_shared`: no narrower owner/task/project identifier.
 - `agent_private`: requires an owner agent ID.
 - `task_shared`: requires a task ID.
-- `project_shared`: requires a project ID, but API creation and retrieval remain disabled until project membership authorization is implemented.
+- `project_shared`: requires a project ID and active SQLite project membership; project membership is subordinate to active workspace membership.
 
 
 ## Agent ownership
@@ -101,3 +101,12 @@ The existing serialized `Agent` entity now carries optional `created_by_user_id`
 ## Version history API
 
 The authenticated agent-scoped history endpoint returns only approved and synchronized versions visible under SQLite scope metadata. It paginates by a descending `before_version` cursor, hydrates each exact MongoDB version, and verifies content hash, scope, project/task/owner metadata, source sequence, and QKV/Qoin versions before returning metadata. Document content is not included in the history response.
+
+
+## Projects and memberships
+
+Migration `0013_projects_and_memberships.sql` adds:
+- `projects`: workspace-bound project identity, name, creator, and creation time.
+- `project_memberships`: project/user association, role (`owner`, `admin`, `member`, `viewer`), creation time, and revocation timestamp.
+
+Project creation is restricted to workspace owners. Project members must be workspace members. Workspace membership revocation revokes project memberships in the same transaction. Project-scoped memory creation, search, direct retrieval, version history, approval, and session hydration check current active membership. Immutable epoch records retain their historical pins, but current authorization revocation takes precedence at read time.
