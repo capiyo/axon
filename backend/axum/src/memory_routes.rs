@@ -47,10 +47,7 @@ async fn require_agent_owner(
     workspace_id: Uuid,
     agent_id: Uuid,
 ) -> ApiResult<()> {
-    let agents = state.agents.read().await;
-    if agents.get(&agent_id).is_some_and(|agent| {
-        agent.workspace_id == workspace_id && agent.created_by_user_id == Some(user_id)
-    }) {
+    if state.is_agent_owner(user_id, workspace_id, agent_id).await {
         Ok(())
     } else {
         Err(error(StatusCode::NOT_FOUND, "Agent not found for this user in the workspace."))
