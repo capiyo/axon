@@ -870,10 +870,15 @@ impl MemoryOutbox {
             let count_raw: i64 = row.try_get("event_count")?;
             let count = u64::try_from(count_raw)
                 .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
-            let entry = counts.entry((memory_id, version)).or_default();
             match event_type.as_str() {
-                "helpful" | "selected" | "reused" => entry.0 = entry.0.saturating_add(count),
-                "irrelevant" | "contradicted" | "incorrect" => entry.1 = entry.1.saturating_add(count),
+                "helpful" | "selected" | "reused" => {
+                    let entry = counts.entry((memory_id, version)).or_default();
+                    entry.0 = entry.0.saturating_add(count);
+                }
+                "irrelevant" | "contradicted" | "incorrect" => {
+                    let entry = counts.entry((memory_id, version)).or_default();
+                    entry.1 = entry.1.saturating_add(count);
+                }
                 _ => {}
             }
         }
