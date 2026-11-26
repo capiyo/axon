@@ -12,7 +12,7 @@ The separate Qoin HTTP vector adapter is for market/event-time vectors. It is no
 
 ## Current data flow
 
-1. An authenticated workspace member submits a memory document.
+1. An authenticated workspace member submits a memory document. Agent-private creation additionally verifies the registering user owns the target agent.
 2. Axon validates the requested scope against the current workspace, task, or agent records.
 3. SQLite appends a `memory_document.created` audit event, uses its sequence as the immutable source-event sequence, and atomically stores authoritative metadata plus the durable outbox payload.
 4. The background worker claims the event using a lease.
@@ -20,7 +20,7 @@ The separate Qoin HTTP vector adapter is for market/event-time vectors. It is no
 6. The worker verifies the document hash and marks SQLite synchronization as stored.
 7. The worker clears the outbox payload after successful delivery.
 8. A workspace member explicitly approves the proposed version; SQLite records approval and an audit event atomically.
-9. A registered agent can retrieve or search approved versions after SQLite scope checks and MongoDB hash verification.
+9. The Firebase user who registered an agent can retrieve or search its approved versions after SQLite scope checks and MongoDB hash verification; other workspace members cannot impersonate that agent through its path ID.
 
 Retries use a unique memory/version/event key. Worker leases permit recovery after process restarts.
 
@@ -47,7 +47,7 @@ Before claiming end-to-end multi-agent memory completion, implement and test:
 - A separately searchable precomputed vector index and safe index rebuild.
 - Explicit, audited repair workflows based on the new read-only reconciliation report.
 - Persisted project-membership authorization.
-- Cryptographic agent-principal authentication; path-selected agent IDs are not a trusted identity.
+- Cryptographic agent-principal authentication; current routes bind agent IDs to their registering Firebase user but do not authenticate the agent process independently.
 - Agent/client consumers that use the combined session-context endpoint; no provider-backed agent execution runtime exists yet.
 - Real MongoDB outage, restart, and cross-scope security tests.
 - Backup/restore drills, worker health metrics, and measured retrieval/indexing performance.
