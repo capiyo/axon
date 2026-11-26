@@ -5,7 +5,7 @@ use crate::{
     memory_architecture::MemoryEpochCoordinator,
     memory_documents::MemoryDocumentRepository,
     memory_outbox::MemoryOutbox,
-    model::{Agent, Artifact, Task, Workspace},
+    model::{Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace},
     qoin_vectors::QoinVectorClient,
     memory_intelligence::QoinScoringConfig,
     memory_vector_provider::MemoryVectorProvider,
@@ -229,6 +229,72 @@ impl AppState {
                     .create_workspace_for_user(user_id, name, actor)
                     .await
             }
+            None => Err(StorageError::IdentityStorageUnavailable),
+        }
+    }
+
+    pub async fn create_project_for_user(
+        &self,
+        workspace_id: Uuid,
+        user_id: Uuid,
+        name: String,
+    ) -> Result<Project, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.create_project_for_user(workspace_id, user_id, name).await,
+            None => Err(StorageError::IdentityStorageUnavailable),
+        }
+    }
+
+    pub async fn list_user_projects(
+        &self,
+        workspace_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Vec<Project>, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.list_user_projects(workspace_id, user_id).await,
+            None => Err(StorageError::IdentityStorageUnavailable),
+        }
+    }
+
+    pub async fn is_project_member(
+        &self,
+        workspace_id: Uuid,
+        project_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.is_project_member(workspace_id, project_id, user_id).await,
+            None => Ok(false),
+        }
+    }
+
+    pub async fn set_project_member(
+        &self,
+        workspace_id: Uuid,
+        project_id: Uuid,
+        actor_user_id: Uuid,
+        target_user_id: Uuid,
+        role: ProjectRole,
+    ) -> Result<ProjectMembership, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.set_project_member(
+                workspace_id, project_id, actor_user_id, target_user_id, role,
+            ).await,
+            None => Err(StorageError::IdentityStorageUnavailable),
+        }
+    }
+
+    pub async fn revoke_project_member(
+        &self,
+        workspace_id: Uuid,
+        project_id: Uuid,
+        actor_user_id: Uuid,
+        target_user_id: Uuid,
+    ) -> Result<bool, StorageError> {
+        match &self.storage {
+            Some(storage) => storage.revoke_project_member(
+                workspace_id, project_id, actor_user_id, target_user_id,
+            ).await,
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }
