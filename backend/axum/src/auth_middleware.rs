@@ -107,16 +107,19 @@ pub async fn authenticate(
 }
 
 fn response(status: StatusCode) -> Response<Body> {
-    Response::builder()
-        .status(status)
-        .header("content-type", "application/json")
-        .body(Body::from(match status {
-            StatusCode::UNAUTHORIZED => r#"{\"error\":\"Authentication required.\"}"#,
-            StatusCode::NOT_FOUND => r#"{\"error\":\"Resource not found.\"}"#,
-            StatusCode::SERVICE_UNAVAILABLE => {
-                r#"{\"error\":\"Authentication is not configured.\"}"#
-            }
-            _ => r#"{\"error\":\"The request could not be completed.\"}"#,
-        }))
-        .expect("static authentication response is valid")
+    let body = match status {
+        StatusCode::UNAUTHORIZED => r#"{\"error\":\"Authentication required.\"}"#,
+        StatusCode::NOT_FOUND => r#"{\"error\":\"Resource not found.\"}"#,
+        StatusCode::SERVICE_UNAVAILABLE => {
+            r#"{\"error\":\"Authentication is not configured.\"}"#
+        }
+        _ => r#"{\"error\":\"The request could not be completed.\"}"#,
+    };
+    let mut response = Response::new(Body::from(body));
+    *response.status_mut() = status;
+    response.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("application/json"),
+    );
+    response
 }
