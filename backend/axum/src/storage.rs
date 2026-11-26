@@ -523,17 +523,15 @@ impl Storage for SqliteStorage {
         if actor_is_owner.is_none() {
             return Err(StorageError::ProjectAuthorizationDenied);
         }
-        let target_exists: Option<i64> = sqlx::query_scalar(
-            "SELECT 1 FROM users WHERE id = ?",
-        )
-        .bind(target_user_id.to_string())
-        .fetch_optional(&mut *tx)
-        .await?;
+        let target_exists: Option<i64> = sqlx::query_scalar("SELECT 1 FROM users WHERE id = ?")
+            .bind(target_user_id.to_string())
+            .fetch_optional(&mut *tx)
+            .await?;
         if target_exists.is_none() {
             return Err(StorageError::ProjectWorkspaceMembershipRequired);
         }
         let now = Utc::now();
-        sqlx::query(
+        let inserted = sqlx::query(
             "INSERT INTO workspace_memberships (workspace_id, user_id, role, created_at) VALUES (?, ?, 'member', ?) ON CONFLICT(workspace_id, user_id) DO NOTHING",
         )
         .bind(workspace_id.to_string())
@@ -541,26 +539,37 @@ impl Storage for SqliteStorage {
         .bind(now.to_rfc3339())
         .execute(&mut *tx)
         .await?;
-        let role: String = sqlx::query_scalar(
-            "SELECT role FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
+        let row = sqlx::query(
+            "SELECT role, created_at FROM workspace_memberships WHERE workspace_id = ? AND user_id = ?",
         )
         .bind(workspace_id.to_string())
         .bind(target_user_id.to_string())
         .fetch_one(&mut *tx)
         .await?;
-        sqlx::query(
-            "INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, ?, ?, 'workspace.member_added', 'workspace', ?, ?, ?)",
-        )
-        .bind(Uuid::new_v4().to_string())
-        .bind(workspace_id.to_string())
-        .bind(format!("human:{actor_user_id}"))
-        .bind(workspace_id.to_string())
-        .bind(now.to_rfc3339())
-        .bind(serde_json::json!({"user_id": target_user_id, "role": role}).to_string())
-        .execute(&mut *tx)
-        .await?;
+        let role: String = row.try_get("role")?;
+        let created_at: String = row.try_get("created_at")?;
+        if inserted.rows_affected() == 1 {
+            sqlx::query(
+                "INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, ?, ?, 'workspace.member_added', 'workspace', ?, ?, ?)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(workspace_id.to_string())
+            .bind(format!("human:{actor_user_id}"))
+            .bind(workspace_id.to_string())
+            .bind(now.to_rfc3339())
+            .bind(serde_json::json!({"user_id": target_user_id, "role": role}).to_string())
+            .execute(&mut *tx)
+            .await?;
+        }
         tx.commit().await?;
-        Ok(WorkspaceMembership { workspace_id, user_id: target_user_id, role, created_at: now })
+        Ok(WorkspaceMembership {
+            workspace_id,
+            user_id: target_user_id,
+            role,
+            created_at: DateTime::parse_from_rfc3339(&created_at)
+                .map_err(|_| StorageError::InvalidStoredTimestamp)?
+                .with_timezone(&Utc),
+        })
     }
 
     async fn revoke_workspace_member(
