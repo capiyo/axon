@@ -1586,6 +1586,7 @@ mod tests {
 #[cfg(test)]
 mod epoch_document_tests {
     use super::*;
+    use crate::storage::{SqliteStorage, Storage};
     use std::{collections::HashMap, sync::Mutex};
 
     #[derive(Default)]
