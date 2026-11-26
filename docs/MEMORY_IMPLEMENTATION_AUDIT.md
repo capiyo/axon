@@ -18,7 +18,7 @@
 
 - `memory_architecture.rs` implements multi-head scaled dot-product attention, Pareto handover selection, immutable epoch publication, agent memory sessions, and progressive retrieval.
 - `memory_vector_provider.rs` implements deterministic FNV-1a lexical feature hashing (64 dimensions). This is a deterministic lexical representation, not a neural embedding model.
-- `memory_intelligence.rs` implements deterministic Qoin memory ranking with semantic, context, dependency, outcome, failure, evidence, recency, and tag features, plus score explanations. A versioned `QoinScoringConfig` validates weights and thresholds, is configurable at startup, and is returned with search responses.
+- `memory_intelligence.rs` implements deterministic Qoin memory ranking with semantic, context, dependency, outcome, failure, evidence, recency, and tag features, plus score explanations. A versioned `QoinScoringConfig` validates weights and thresholds, is configurable at startup, and is returned with search responses. Its full-policy SHA-256 fingerprint is pinned to epochs and checked during session retrieval.
 - `qoin_vectors.rs` is a separate adapter for Qoin market/event-time vectors. Market vectors are not treated as interchangeable with memory embeddings.
 - MongoDB document search filters candidate metadata in SQLite, hydrates and verifies document versions, applies QKV attention, then runs Qoin memory ranking.
 
