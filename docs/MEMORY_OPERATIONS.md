@@ -78,3 +78,10 @@ Credential issuance, rotation, and revocation are human-owner operations:
 - `DELETE /api/v1/workspaces/{workspace_id}/agents/{agent_id}/credentials/{credential_id}`
 
 The issue/rotation response contains the bearer token once. Deliver it to the agent through a secure secret channel; do not put it in source control, logs, issue trackers, or ordinary telemetry. Axon stores only a SHA-256 hash. Credentials expire after 90 days. Rotation revokes the previous credential and creates its replacement atomically. A credential is accepted only on its bound agent's memory-document, memory-session, and memory-context routes; it cannot be used for another agent or for credential-management/workspace routes.
+
+
+## Session retrieval feedback
+
+`POST /api/v1/workspaces/{workspace_id}/agents/{agent_id}/memory-sessions/{session_id}/feedback` records one of: `retrieved`, `selected`, `ignored`, `reused`, `helpful`, `irrelevant`, `contradicted`, or `incorrect`. The exact memory ID/version must be pinned in the session's immutable epoch. Evidence JSON is limited to 4 KiB. Feedback is attributed to the authenticated owner and agent session and written to SQLite with an audit event.
+
+Qoin scoring v2 uses a configurable `feedback_weight` to blend smoothed positive (helpful/selected/reused) and negative (irrelevant/contradicted/incorrect) feedback signals into outcome/failure dimensions. The effective policy fingerprint includes this weight. Sessions pinned to the legacy v1 default do not apply the v2 feedback weighting.
