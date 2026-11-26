@@ -5,6 +5,7 @@
 //! Encryption belongs at the storage/KMS boundary; no custom cipher is used.
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
@@ -84,6 +85,35 @@ impl Default for QoinScoringConfig {
 }
 
 impl QoinScoringConfig {
+    /// Stable identifier for the complete scoring policy, not just its label.
+    /// Immutable epochs store this value so changing weights without bumping
+    /// the human-readable version cannot silently alter a pinned session.
+    pub fn effective_version(&self) -> String {
+        let material = format!(
+            "{}|{:016x}|{:016x}|{:016x}|{:016x}|{:016x}|{:016x}|{:016x}|{:016x}|{:016x}|{:016x}|{:016x}|{:016x}",
+            self.version,
+            self.weights.semantic.to_bits(),
+            self.weights.context.to_bits(),
+            self.weights.dependency.to_bits(),
+            self.weights.outcome.to_bits(),
+            self.weights.failure.to_bits(),
+            self.weights.evidence.to_bits(),
+            self.weights.recency.to_bits(),
+            self.weights.tags.to_bits(),
+            self.relevant_threshold.to_bits(),
+            self.conditional_threshold.to_bits(),
+            self.recency_half_life_days.to_bits(),
+            self.strong_failure_signal_threshold.to_bits(),
+        );
+        let material = format!(
+            "{material}|{:016x}|{:016x}",
+            self.strong_semantic_similarity_threshold.to_bits(),
+            self.weak_evidence_threshold.to_bits(),
+        );
+        let digest = Sha256::digest(material.as_bytes());
+        format!("{}:{}", self.version, format!("{digest:x}"))
+    }
+
     pub fn validate(&self) -> Result<(), VectorError> {
         let thresholds = [
             self.relevant_threshold,
