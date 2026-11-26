@@ -30,6 +30,12 @@ Axon already has multi-head scaled dot-product QKV attention and Pareto-style in
 
 Those systems remain in place. Direct document-by-ID retrieval is implemented with SQLite scope checks and MongoDB hash verification. Query-based search is available using deterministic lexical QKV attention followed by the existing Qoin memory-intelligence scorer. The current document key provider is deterministic lexical hashing, not a neural embedding. New document versions persist the lexical QKV key and source hash. Immutable epochs snapshot exact document version, content hash, scope, source sequence, QKV version, and Qoin scoring version. The authenticated session-document endpoint resolves the epoch from `agent_memory_sessions` (the caller cannot select another epoch), then hydrates only those pinned MongoDB versions after rechecking workspace, agent/task scope, SQLite metadata, and SHA-256 content integrity. The combined `POST .../memory-sessions/{session_id}/context` operation now returns progressive SQLite memories and the exact MongoDB versions pinned to that session. It runs QKV attention and Qoin ranking over the pinned documents using `query_text` for the MongoDB key provider (separate from the SQLite progressive vector when model versions differ), returns component explanations and the active scoring policy, and enforces a 256 KiB serialized context budget with an explicit truncation indicator.
 
+## Document lifecycle
+
+Archive, restore, and logical deletion create a new immutable document version through the SQLite-authoritative outbox. The prior MongoDB version is not rewritten. Archive and delete create lifecycle tombstones that immediately suppress older approved versions from normal search and from subsequently published epochs. Restore creates a new approved version and becomes searchable after its MongoDB projection is synchronized. Existing immutable session epochs continue to hydrate their exact historical version, subject to current authorization.
+
+Logical deletion does not physically purge MongoDB content. Retention scheduling, legal-hold policy, and permanent purge remain separate operational work and must not be inferred from the delete endpoint.
+
 ## Scope model
 
 The document schema supports:
