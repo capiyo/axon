@@ -35,7 +35,7 @@ Back up SQLite with a consistent SQLite backup procedure and MongoDB using its s
 
 ## Graceful shutdown
 
-The API signals the memory outbox worker during graceful shutdown and waits up to five seconds for it to finish its in-flight operation. Unclaimed work remains durable in SQLite and is eligible for recovery on the next process start. If the worker does not stop within the bounded wait, the process logs a warning; it does not mark pending events complete.
+The API signals both the memory outbox worker and the periodic epoch publisher during graceful shutdown and waits up to five seconds for each to finish its in-flight operation. Unclaimed work remains durable in SQLite and is eligible for recovery on the next process start. If the worker does not stop within the bounded wait, the process logs a warning; it does not mark pending events complete.
 
 
 ## Readiness and reconciliation
