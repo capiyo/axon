@@ -1033,6 +1033,26 @@ mod epoch_document_tests {
             Ok(versions)
         }
 
+        async fn list_workspace_documents(
+            &self,
+            workspace_id: Uuid,
+            limit: usize,
+        ) -> Result<Vec<MemoryDocument>, MemoryDocumentError> {
+            let mut documents = self.documents
+                .lock()
+                .map_err(|_| MemoryDocumentError::InvalidDocument)?
+                .values()
+                .filter(|document| document.workspace_id == workspace_id)
+                .cloned()
+                .collect::<Vec<_>>();
+            documents.sort_by(|left, right| {
+                left.memory_id.as_bytes().cmp(right.memory_id.as_bytes())
+                    .then_with(|| left.version.cmp(&right.version))
+            });
+            documents.truncate(limit.clamp(1, 5_000));
+            Ok(documents)
+        }
+
         async fn verify_version(
             &self,
             memory_id: Uuid,
