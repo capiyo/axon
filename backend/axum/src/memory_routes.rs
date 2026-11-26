@@ -1,5 +1,5 @@
 use crate::{
-    auth_middleware::AuthenticatedUser,
+    auth_middleware::{AuthenticatedAgent, AuthenticatedUser},
     memory_architecture::{
         qkv_attention, AttentionMemory, AttentionQuery, HandoverContext, HandoverRequest,
         IndexChatMessageInput, IndexMemoryInput, MemoryEpoch, ProgressiveRetrieval,
@@ -586,9 +586,13 @@ pub struct AgentSessionFeedbackResponse {
 pub async fn record_session_feedback(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,
+    agent_principal: Option<Extension<Arc<AuthenticatedAgent>>>,
     Path((workspace_id, agent_id, session_id)): Path<(Uuid, Uuid, Uuid)>,
     Json(input): Json<AgentSessionFeedbackRequest>,
 ) -> ApiResult<Json<AgentSessionFeedbackResponse>> {
+    if agent_principal.is_some() {
+        return Err(error(StatusCode::FORBIDDEN, "Retrieval quality feedback must be submitted by the authenticated human owner."));
+    }
     require_member(&state, user.user_id, workspace_id).await?;
     require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| error(
