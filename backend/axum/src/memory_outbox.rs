@@ -1700,6 +1700,20 @@ mod latest_version_search_tests {
         ).await.unwrap();
         assert_eq!(refs, vec![(first.memory_id, 2)]);
 
+        let first_history_page = outbox.list_authorized_document_versions(
+            workspace_id, first.memory_id, agent_id, None, None, 1,
+        ).await.unwrap();
+        assert_eq!(first_history_page.iter().map(|item| item.version).collect::<Vec<_>>(), vec![2]);
+        let second_history_page = outbox.list_authorized_document_versions(
+            workspace_id, first.memory_id, agent_id, None,
+            first_history_page.last().map(|item| item.version), 1,
+        ).await.unwrap();
+        assert_eq!(second_history_page.iter().map(|item| item.version).collect::<Vec<_>>(), vec![1]);
+        let denied_history = outbox.list_authorized_document_versions(
+            workspace_id, first.memory_id, Uuid::new_v4(), None, None, 100,
+        ).await.unwrap();
+        assert!(denied_history.is_empty());
+
         let coordinator = storage.memory_epoch_coordinator();
         assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
         let pinned_versions: Vec<i64> = sqlx::query_scalar(
