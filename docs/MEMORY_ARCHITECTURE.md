@@ -48,6 +48,7 @@ Before claiming end-to-end multi-agent memory completion, implement and test:
 - Project membership authorization.
 - Agent/client consumers must call the combined session-context endpoint; no provider-backed agent execution runtime exists yet.
 - Real MongoDB restart/security tests.
-- Reconciliation and safe index rebuild.
+- Cryptographic agent-principal authentication before treating agent-private scope as a cross-member security boundary.
+- Safe index rebuild and automated repair workflows (the current reconciliation endpoint is read-only).
 - Project membership authorization.
 - End-to-end restart and cross-scope security tests.
