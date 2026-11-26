@@ -508,16 +508,35 @@ impl MemoryEpochCoordinator {
     /// Run as a supervised Tokio task. A minute poll avoids a long-running
     /// fixed sleep and recovers naturally after process restarts.
     pub async fn run_hourly(self) {
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        self.run_hourly_until(shutdown_rx).await;
+    }
+
+    pub async fn run_hourly_until(
+        self,
+        mut shutdown: tokio::sync::watch::Receiver<bool>,
+    ) {
         let mut interval = tokio::time::interval(Duration::from_secs(60));
         loop {
-            interval.tick().await;
-            match self.publish_due_epochs().await {
-                Ok(count) if count > 0 => {
-                    tracing::info!(published_workspaces = count, "published memory epochs")
+            if *shutdown.borrow() {
+                break;
+            }
+            tokio::select! {
+                _ = interval.tick() => {
+                    match self.publish_due_epochs().await {
+                        Ok(count) if count > 0 => {
+                            tracing::info!(published_workspaces = count, "published memory epochs")
+                        }
+                        Ok(_) => {}
+                        Err(error) => {
+                            tracing::error!(%error, "memory epoch publication failed; will retry")
+                        }
+                    }
                 }
-                Ok(_) => {}
-                Err(error) => {
-                    tracing::error!(%error, "memory epoch publication failed; will retry")
+                changed = shutdown.changed() => {
+                    if changed.is_err() || *shutdown.borrow() {
+                        break;
+                    }
                 }
             }
         }
