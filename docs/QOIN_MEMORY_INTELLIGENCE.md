@@ -30,9 +30,7 @@ The default `axon-qoin-memory-v1` policy uses normalized components with weights
 
 ## Remaining work
 
-- Evaluate the versioned score configuration against a labelled memory-retrieval dataset.
 - Add evidence/source reliability and contradiction/duplication features only when their semantics and normalization are defined.
-- Expose score breakdowns consistently across document retrieval.
-- Evaluate ranking against a labelled memory-retrieval dataset.
-- The document search endpoint now applies the existing `retrieve_memories` score decomposition after QKV candidate attention and returns both score explanations.
+- Evaluate the versioned score configuration against a labelled memory-retrieval dataset.
+- The document search endpoint applies the configured Qoin score decomposition after QKV candidate attention and returns score explanations plus the exact scoring configuration.
 - Record retrieval feedback without mutating immutable historical epochs.
