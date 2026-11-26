@@ -8,6 +8,7 @@ use crate::memory_documents::{
 };
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
 use thiserror::Error;
