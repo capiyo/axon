@@ -9,7 +9,11 @@ MongoDB is a separate document repository. SQLite remains authoritative for Axon
 | `AXON_MONGODB_URI` | MongoDB connection URI | unset |
 | `AXON_MONGODB_DATABASE` | Database name | `axon` |
 | `AXON_MONGODB_COLLECTION` | Memory document collection | `memory_documents` |
-| `AXON_MEMORY_DOCUMENTS_REQUIRED` | Require MongoDB outside production | `false`; production always requires MongoDB |\n| `AXON_MONGODB_CONNECT_TIMEOUT_MS` | Driver connection timeout | `10000` (100–120000) |\n| `AXON_MONGODB_SERVER_SELECTION_TIMEOUT_MS` | Server selection/ping timeout | `5000` (100–120000) |\n| `AXON_MONGODB_MAX_POOL_SIZE` | Maximum pooled connections | `20` (1–500) |\n| `AXON_QOIN_MEMORY_SCORING_CONFIG` | Optional JSON versioned Qoin memory scoring policy | built-in `axon-qoin-memory-v1` policy |
+| `AXON_MEMORY_DOCUMENTS_REQUIRED` | Require MongoDB outside production | `false`; production always requires MongoDB |
+| `AXON_MONGODB_CONNECT_TIMEOUT_MS` | Driver connection timeout | `10000` (100–120000) |
+| `AXON_MONGODB_SERVER_SELECTION_TIMEOUT_MS` | Server selection/ping timeout | `5000` (100–120000) |
+| `AXON_MONGODB_MAX_POOL_SIZE` | Maximum pooled connections | `20` (1–500) |
+| `AXON_QOIN_MEMORY_SCORING_CONFIG` | Optional JSON versioned Qoin memory scoring policy | built-in `axon-qoin-memory-v1` policy |
 | `AXON_ENV` | Runtime environment | unset |
 
 Local SQLite-only mode remains available when MongoDB is not configured. Production mode always requires MongoDB; `AXON_MEMORY_DOCUMENTS_REQUIRED=false` cannot disable that requirement. Non-production and test environments can use SQLite-only mode.
