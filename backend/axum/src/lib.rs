@@ -3,6 +3,7 @@ pub mod auth_middleware;
 #[cfg(test)]
 mod auth_middleware_tests;
 pub mod chat_memory;
+pub mod config;
 mod chat_memory_routes;
 mod memory_document_routes;
 pub mod firebase_auth;
