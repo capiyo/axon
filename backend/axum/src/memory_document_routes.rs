@@ -145,10 +145,19 @@ pub async fn create_memory_document(
             }
         }
         "project_shared" => {
-            return Err(api_error(
-                StatusCode::NOT_IMPLEMENTED,
-                "Project-shared document access is disabled until Axon has a persisted project-membership authorization model.",
-            ));
+            let Some(project_id) = input.project_id else {
+                return Err(api_error(StatusCode::BAD_REQUEST, "Project-shared memory requires project_id."));
+            };
+            if input.task_id.is_some() || input.owner_agent_id.is_some() {
+                return Err(api_error(StatusCode::BAD_REQUEST, "Project-shared memory cannot carry task or private-agent identifiers."));
+            }
+            let project_member = state
+                .is_project_member(workspace_id, project_id, user.user_id)
+                .await
+                .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Project membership could not be checked."))?;
+            if !project_member {
+                return Err(api_error(StatusCode::NOT_FOUND, "Project was not found in this workspace."));
+            }
         }
         _ => return Err(api_error(StatusCode::BAD_REQUEST, "Unsupported memory scope.")),
     }
