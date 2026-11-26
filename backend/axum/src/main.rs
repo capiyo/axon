@@ -1,5 +1,6 @@
 use axon_api::{
     app,
+    config::BackendConfig,
     firebase_auth::FirebaseVerifier,
     memory_documents::{MemoryDocumentRepository, MongoMemoryDocumentRepository},
     qoin_vectors::QoinVectorClient,
@@ -30,39 +31,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parse::<u16>()?;
     let address: SocketAddr = format!("{host}:{port}").parse()?;
 
-    let database_url =
-        env::var("AXON_DATABASE_URL").unwrap_or_else(|_| "sqlite://axon.db".to_owned());
-    let storage = SqliteStorage::connect(&database_url).await?;
+    let config = BackendConfig::from_env()?;
+    let storage = SqliteStorage::connect(&config.database_url).await?;
     let memory_epochs = storage.memory_epoch_coordinator();
     tokio::spawn(memory_epochs.run_hourly());
     let memory_outbox = storage.memory_outbox();
 
-    let mongo_required = env::var("AXON_MEMORY_DOCUMENTS_REQUIRED")
-        .map(|value| value.eq_ignore_ascii_case("true"))
-        .unwrap_or_else(|_| {
-            env::var("AXON_ENV")
-                .map(|value| value.eq_ignore_ascii_case("production"))
-                .unwrap_or(false)
-        });
     let memory_documents: Option<Arc<dyn MemoryDocumentRepository>> =
-        match env::var("AXON_MONGODB_URI") {
-            Ok(uri) => {
-                let database = env::var("AXON_MONGODB_DATABASE")
-                    .unwrap_or_else(|_| "axon".to_owned());
-                let collection = env::var("AXON_MONGODB_COLLECTION")
-                    .unwrap_or_else(|_| "memory_documents".to_owned());
-                let repository =
-                    MongoMemoryDocumentRepository::connect(&uri, &database, &collection).await?;
-                tracing::info!("MongoDB memory document repository connected");
+        match config.mongo {
+            Some(settings) => {
+                let repository = MongoMemoryDocumentRepository::connect_with_options(
+                    &settings.uri,
+                    &settings.database,
+                    &settings.collection,
+                    settings.connect_timeout,
+                    settings.server_selection_timeout,
+                    settings.max_pool_size,
+                )
+                .await
+                .map_err(|_| {
+                    "MongoDB memory document connection or health check failed; verify the configured URI, network, and TLS settings"
+                })?;
+                tracing::info!(
+                    database = %settings.database,
+                    collection = %settings.collection,
+                    max_pool_size = settings.max_pool_size,
+                    "MongoDB memory document repository connected"
+                );
                 Some(Arc::new(repository))
             }
-            Err(_) if mongo_required => {
-                return Err(
-                    "AXON_MONGODB_URI is required when AXON_ENV=production or AXON_MEMORY_DOCUMENTS_REQUIRED=true"
-                        .into(),
-                );
-            }
-            Err(_) => {
+            None => {
                 tracing::warn!(
                     "MongoDB memory documents are disabled; SQLite-only mode remains active"
                 );
