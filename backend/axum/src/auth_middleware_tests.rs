@@ -154,7 +154,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn health_is_the_only_public_route() {
+    async fn health_and_readiness_are_public_routes() {
         let (app, _, _) = test_app().await;
         let health = app
             .clone()
@@ -162,6 +162,12 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(health.status(), StatusCode::OK);
+        let readiness = app
+            .clone()
+            .oneshot(request("GET", "/ready", None))
+            .await
+            .unwrap();
+        assert_eq!(readiness.status(), StatusCode::OK);
         let api = app
             .oneshot(request("GET", "/api/v1/workspaces", None))
             .await
