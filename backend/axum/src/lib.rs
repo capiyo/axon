@@ -82,6 +82,10 @@ pub fn app(state: AppState) -> Router {
             post(memory_document_routes::create_memory_document),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/memory/reconciliation",
+            get(memory_document_routes::reconcile_memory_documents),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/memory/documents/:memory_id/:version/approve",
             post(memory_document_routes::approve_memory_document),
         )
