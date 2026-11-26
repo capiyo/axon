@@ -18,6 +18,8 @@ pub struct CreateWorkspace {
 pub struct Agent {
     pub id: Uuid,
     pub workspace_id: Uuid,
+    #[serde(default)]
+    pub created_by_user_id: Option<Uuid>,
     pub display_name: String,
     pub provider: String,
     pub connection_mode: ConnectionMode,
