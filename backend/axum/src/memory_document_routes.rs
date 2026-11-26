@@ -2,6 +2,7 @@ use crate::{
     auth_middleware::AuthenticatedUser,
     memory_architecture::{qkv_attention, AttentionMemory, AttentionQuery, QoinVector},
     memory_documents::MemoryDocument,
+    memory_outbox::MemoryReconciliationReport,
     memory_vector_provider::{LexicalMemoryVectorProvider, MemoryVectorProvider, LEXICAL_MEMORY_VECTOR_VERSION},
     memory_intelligence::{
         retrieve_memories_with_config, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
@@ -10,7 +11,7 @@ use crate::{
     AppState,
 };
 use axum::{
-    extract::{Extension, Path, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -263,6 +264,45 @@ pub struct MemoryDocumentRetryResponse {
     pub memory_id: Uuid,
     pub version: u64,
     pub sync_status: &'static str,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MemoryReconciliationQuery {
+    #[serde(default = "default_reconciliation_limit")]
+    pub limit: usize,
+}
+
+fn default_reconciliation_limit() -> usize {
+    1000
+}
+
+pub async fn reconcile_memory_documents(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path(workspace_id): Path<Uuid>,
+    Query(query): Query<MemoryReconciliationQuery>,
+) -> Result<Json<MemoryReconciliationReport>, (StatusCode, Json<ApiError>)> {
+    let member = state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be verified."))?;
+    if !member {
+        return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
+    }
+    let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory reconciliation is unavailable.")
+    })?;
+    let repository = state.memory_documents.as_ref().ok_or_else(|| {
+        api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
+    })?;
+    let report = outbox
+        .reconcile_workspace(repository.as_ref(), workspace_id, query.limit)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "memory reconciliation failed");
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory reconciliation failed.")
+        })?;
+    Ok(Json(report))
 }
 
 pub async fn retry_memory_document_sync(
