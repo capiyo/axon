@@ -67,6 +67,7 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 - A separately searchable precomputed vector index and safe index-rebuild workflow. A bounded read-only reconciliation report now exists, but it does not repair data.
 - Retrieval feedback persistence and evaluation against a labelled memory-retrieval dataset.
 - Full MongoDB outage/restart integration tests.
+- Qoin source-reliability, contradiction, duplication, reuse-frequency, and persisted retrieval-feedback features with a labelled evaluation set.
 - Full readiness/observability coverage (basic DB readiness exists, worker health/metrics do not), backup/restore drills, production secrets management, and measured performance results.
 - Cryptographic agent-principal authentication is not implemented. New agent IDs are bound to their registering Firebase user, preventing cross-member agent impersonation; legacy agent records without owner metadata fail closed. The registering user still acts on behalf of the agent, so a separate agent process cannot yet authenticate independently.
 - Session-document hydration is now bound to the persisted session epoch, and a combined session-context API returns it alongside progressive retrieval. The repository still has no autonomous provider-backed agent execution runtime to wire this context into; client/agent consumer integration needs to use the new endpoint.
