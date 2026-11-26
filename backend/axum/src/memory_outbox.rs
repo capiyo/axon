@@ -94,6 +94,7 @@ impl MemoryOutbox {
         let lifecycle_status = match document.status.as_str() {
             "proposed" => "proposed",
             "archived" => "archived",
+            "deleted" => "deleted",
             "ready" => "approved",
             _ => return Err(MemoryOutboxError::VersionConflict),
         };
@@ -166,20 +167,29 @@ impl MemoryOutbox {
             return Err(MemoryOutboxError::VersionConflict);
         }
         let now = Utc::now().to_rfc3339();
+        let audit_event_type = match lifecycle_status {
+            "proposed" => "memory_document.created",
+            "approved" => "memory_document.approved",
+            "archived" => "memory_document.archived",
+            "deleted" => "memory_document.deleted",
+            _ => "memory_document.versioned",
+        };
         let audit_result = sqlx::query(
             "INSERT INTO audit_events \
              (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) \
-             VALUES (?, ?, ?, 'memory_document.created', 'memory_document', ?, ?, ?)",
+             VALUES (?, ?, ?, ?, 'memory_document', ?, ?, ?)",
         )
         .bind(Uuid::new_v4().to_string())
         .bind(document.workspace_id.to_string())
         .bind(format!("human:{actor_user_id}"))
+        .bind(audit_event_type)
         .bind(document.memory_id.to_string())
         .bind(&now)
         .bind(serde_json::json!({
             "memory_id": document.memory_id,
             "version": document.version,
-            "content_hash": document.content_hash
+            "content_hash": document.content_hash,
+            "lifecycle_status": lifecycle_status
         }).to_string())
         .execute(&mut *transaction)
         .await?;
