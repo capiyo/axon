@@ -1503,7 +1503,7 @@ mod reconciliation_tests {
         repository.put_version(conflicting).await.unwrap();
         let mismatch = outbox.reconcile_workspace(&repository, workspace_id, 100).await.unwrap();
         assert!(mismatch.issues.iter().any(|issue|
-            issue.kind == "sqlite_mongo_metadata_mismatch"));
+            issue.kind == "scope_mismatch"));
     }
 }
 
