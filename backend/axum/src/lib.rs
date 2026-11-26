@@ -157,6 +157,14 @@ pub fn app(state: AppState) -> Router {
                 .post(robotics_routes::ingest_simulated_telemetry),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/members",
+            post(project_routes::add_workspace_member),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/members/:target_user_id",
+            delete(project_routes::revoke_workspace_member),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/projects",
             get(project_routes::list_projects).post(project_routes::create_project),
         )
