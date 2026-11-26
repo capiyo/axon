@@ -1,6 +1,6 @@
 # Axon Memory Implementation Audit
 
-> Audit date: 2026-11-25  
+> Audit date: 2026-11-26  
 > Repository: `capiyo/axon`  
 > Branch: `production/phase-b-chats-memory`  
 > Status: implementation in progress; compiler/CI verification is still required.
@@ -11,14 +11,14 @@
 - SQLite remains the authoritative relational store through `Storage` and `SqliteStorage`.
 - MongoDB is isolated behind `MemoryDocumentRepository` and stores immutable versioned memory documents.
 - SQLite stores document lifecycle, scope, version, content hash, source sequence, synchronization state, audit data, and transactional outbox records.
-- A leased outbox worker persists MongoDB versions, verifies hashes, retries failures, and supports dead-letter state and restart recovery.
+- A leased outbox worker persists MongoDB versions, verifies hashes, retries failures, supports dead-letter state and restart recovery, and exposes audited retry for valid dead-letter payloads.
 - Existing chat memory, Firebase authentication, workspace membership, Qoin market-vector adapter, memory intelligence, QKV attention, immutable epochs, and progressive agent-memory sessions remain in place.
 
 ## 2. Existing QKV and Qoin implementation
 
 - `memory_architecture.rs` implements multi-head scaled dot-product attention, Pareto handover selection, immutable epoch publication, agent memory sessions, and progressive retrieval.
 - `memory_vector_provider.rs` implements deterministic FNV-1a lexical feature hashing (64 dimensions). This is a deterministic lexical representation, not a neural embedding model.
-- `memory_intelligence.rs` implements deterministic Qoin memory ranking with semantic, context, dependency, outcome, failure, evidence, recency, and tag features, plus score explanations.
+- `memory_intelligence.rs` implements deterministic Qoin memory ranking with semantic, context, dependency, outcome, failure, evidence, recency, and tag features, plus score explanations. A versioned `QoinScoringConfig` validates weights and thresholds, is configurable at startup, and is returned with search responses.
 - `qoin_vectors.rs` is a separate adapter for Qoin market/event-time vectors. Market vectors are not treated as interchangeable with memory embeddings.
 - MongoDB document search filters candidate metadata in SQLite, hydrates and verifies document versions, applies QKV attention, then runs Qoin memory ranking.
 
@@ -45,22 +45,30 @@ The SQLite transaction records metadata and a durable outbox event. The worker c
 1. Added exact-version document hydration from the SQLite immutable epoch snapshot.
 2. Added session-bound hydration that resolves the epoch from `agent_memory_sessions`; callers cannot select an arbitrary epoch.
 3. Added authenticated session-document retrieval and a combined session-context endpoint that returns progressive SQLite retrieval and MongoDB documents pinned to the same session epoch.
-4. Enforced workspace membership for document approval and retrieval, plus agent/session association, task assignment, pinned visibility scope, authoritative SQLite metadata, MongoDB version identity, QKV version, and SHA-256 integrity before returning document values.
+4. Enforced workspace membership for document approval and retrieval, plus agent/session association, task assignment, pinned visibility scope, authoritative SQLite metadata, MongoDB version identity, QKV version, and SHA-256 integrity before returning document values. Agent identity is still path-selected rather than cryptographically authenticated; see remaining security gaps.
 5. Bounded serialized MongoDB document context to 256 KiB; documents are omitted whole rather than truncated, and the response reports `documents_truncated`.
 6. New document creation persists deterministic lexical QKV keys and model versions in MongoDB `key_metadata`.
 7. Added SHA-256 source hashing over the exact ordered title/content/tag text used to build each persisted QKV key.
 8. Document validation rejects malformed, partial, non-normalized, model-version-mismatched, or source-hash-mismatched persisted keys. Legacy documents without stored keys retain deterministic query-time fallback.
 9. Added tests for exact epoch hydration, session binding, private-scope denial, missing epochs, persisted QKV-key validation, and context-budget selection.
-10. Updated architecture, QKV, MongoDB, testing, security, operations, and repository-state documentation. Added bounded graceful-shutdown waiting for the outbox worker.
+10. Added validated startup configuration for production-required MongoDB, connection/server-selection timeouts, maximum pool size, and URI-redacted Debug output.
+11. Added configurable, versioned Qoin scoring policies and returned the exact policy with ranked search results.
+12. Made outbox completion and failure transitions verify their lease and authoritative metadata row before committing.
+13. Added audited dead-letter retry for valid retained payloads, with SQLite-only transaction semantics and tests for invalid payload refusal.
+14. Added bounded, workspace-scoped, read-only SQLite/MongoDB reconciliation and an authenticated report endpoint; no automatic repair is performed.
+15. Added `/ready` to report SQLite readiness and optional/configured MongoDB readiness separately from `/health` liveness.
+16. Added tests for config policy validation, scoring-weight changes, reconciliation mismatches, dead-letter recovery, and public readiness.
+17. Updated architecture, QKV, MongoDB, testing, security, operations, quickstart, data-model, and repository-state documentation. Added bounded graceful-shutdown waiting for the outbox worker.
 
 ## 5. Remaining gaps
 
-- Neural embedding-provider implementation and configuration. The current provider is explicitly lexical.
+- Neural embedding-provider implementation. The `MemoryVectorProvider` abstraction exists; only the deterministic lexical implementation is currently available.
 - Project-shared memory remains fail-closed because persisted project-membership authorization does not yet exist.
-- A separately searchable precomputed vector index, reconciliation, and safe index-rebuild workflow.
+- A separately searchable precomputed vector index and safe index-rebuild workflow. A bounded read-only reconciliation report now exists, but it does not repair data.
 - Retrieval feedback persistence and evaluation against a labelled memory-retrieval dataset.
-- Dead-letter operator recovery and full MongoDB outage/restart integration tests.
-- Full readiness/observability coverage, backup/restore drills, production secrets management, and measured performance results.
+- Full MongoDB outage/restart integration tests.
+- Full readiness/observability coverage (basic DB readiness exists, worker health/metrics do not), backup/restore drills, production secrets management, and measured performance results.
+- Cryptographic agent-principal authentication is not implemented. Current agent IDs are selected in authenticated workspace-member routes; a workspace member can request context for another registered agent. Agent-private scope is therefore agent-ID isolation, not a security boundary against other members of the same workspace. Do not treat it as production-grade isolation until agent credentials/principal authorization are implemented.
 - Session-document hydration is now bound to the persisted session epoch, and a combined session-context API returns it alongside progressive retrieval. The repository still has no autonomous provider-backed agent execution runtime to wire this context into; client/agent consumer integration needs to use the new endpoint.
 
 ## 6. Verification status
@@ -76,7 +84,7 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-A MongoDB-enabled integration run must also exercise outbox retries/restart, hash conflicts, exact session epoch hydration, and workspace/task/private scope isolation.
+A MongoDB-enabled integration run must also exercise outbox retries/restart, hash conflicts, exact session epoch hydration, workspace/task/private scope isolation, and reconciliation against real MongoDB.
 
 ## 7. Files inspected
 
