@@ -55,5 +55,5 @@ Before claiming end-to-end multi-agent memory completion, implement and test:
 - General-purpose persisted capability grants for all workspace resources; agent credentials are implemented for a fixed allowlist of agent memory routes, bound to one agent/workspace, with 90-day expiry, rotation, and revocation.
 - Agent/client consumers that use the combined session-context endpoint; no provider-backed agent execution runtime exists yet.
 - Real MongoDB outage, restart, and cross-scope security tests.
-- Qoin source reliability, contradiction/duplication, reuse-frequency, and retrieval-feedback features backed by labelled evaluation data.
+- Qoin source reliability, explicit contradiction/duplication penalties, and reuse-frequency modeling backed by labelled evaluation data; persisted version-bound retrieval feedback now contributes to outcome/failure scoring.
 - Backup/restore drills, worker health metrics, and measured retrieval/indexing performance.
