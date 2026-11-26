@@ -1551,5 +1551,16 @@ mod latest_version_search_tests {
             workspace_id, agent_id, None, 200,
         ).await.unwrap();
         assert_eq!(refs, vec![(first.memory_id, 2)]);
+
+        let coordinator = storage.memory_epoch_coordinator();
+        assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
+        let pinned_versions: Vec<i64> = sqlx::query_scalar(
+            "SELECT document_version FROM memory_document_epoch_items WHERE memory_id = ? ORDER BY document_version",
+        )
+        .bind(first.memory_id.to_string())
+        .fetch_all(&outbox.pool)
+        .await
+        .unwrap();
+        assert_eq!(pinned_versions, vec![2]);
     }
 }
