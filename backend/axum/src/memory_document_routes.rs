@@ -733,7 +733,7 @@ pub async fn search_agent_memory_documents(
         &state.qoin_memory_scoring,
     )
     .map_err(|_| api_error(StatusCode::BAD_REQUEST, "Qoin memory ranking could not be evaluated."))?;
-    let qoin_scoring_version = qoin.scoring_config.version.clone();
+    let qoin_scoring_version = qoin.scoring_config.effective_version();
     let qoin_scoring_config = qoin.scoring_config.clone();
 
     const MAX_CONTEXT_BYTES: usize = 64 * 1024;
