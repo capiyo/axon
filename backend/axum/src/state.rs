@@ -7,6 +7,7 @@ use crate::{
     memory_outbox::MemoryOutbox,
     model::{Agent, Artifact, Task, Workspace},
     qoin_vectors::QoinVectorClient,
+    memory_intelligence::QoinScoringConfig,
     robotics::TelemetryEvent,
     storage::{EntityKind, Storage, StorageError, StorageMutation, StoredEntity, UserWorkspace},
 };
@@ -41,6 +42,7 @@ pub struct AppState {
     pub memory_documents: Option<Arc<dyn MemoryDocumentRepository>>,
     pub memory_outbox: Option<MemoryOutbox>,
     pub qoin_vectors: Option<QoinVectorClient>,
+    pub qoin_memory_scoring: QoinScoringConfig,
     pub firebase_verifier: Option<FirebaseVerifier>,
     pub simulator_enabled: bool,
 }
@@ -136,6 +138,14 @@ impl AppState {
 
     pub fn with_qoin_vector_client(mut self, client: Option<QoinVectorClient>) -> Self {
         self.qoin_vectors = client;
+        self
+    }
+
+    pub fn with_qoin_memory_scoring_config(
+        mut self,
+        config: QoinScoringConfig,
+    ) -> Self {
+        self.qoin_memory_scoring = config;
         self
     }
 
