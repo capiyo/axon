@@ -43,3 +43,6 @@ A workspace agent owner can issue a credential with `POST /api/v1/workspaces/{wo
 Agent bearer credentials are accepted only on the matching agent's memory-document, memory-session, and memory-context routes. The middleware verifies the credential's workspace and agent binding, current owner/workspace membership, and current agent registration. A credential for one agent cannot be used against another agent, workspace-management routes, or credential-management routes. The existing human Firebase authentication path remains required for credential issuance, rotation, and revocation.
 
 The agent credential currently carries a fixed memory-route capability boundary; the broader general-purpose capability-grant model in `identity.rs` is not yet persisted or enforced for all Axon resources.
+
+
+Retrieval quality feedback is restricted to the authenticated human owner; an agent bearer credential cannot submit helpful/irrelevant/contradicted/incorrect quality events. Feedback is bound to an exact version in the agent's immutable session epoch, attributed to the human user, and blended conservatively into future Qoin ranking (default weight 0.25). It is not treated as verified ground truth.
