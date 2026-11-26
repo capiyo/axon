@@ -626,16 +626,16 @@ impl MemoryOutbox {
         let limit = i64::try_from(limit.clamp(1, 200))
             .map_err(|_| sqlx::Error::Protocol("retrieval limit exceeds SQLite range".into()))?;
         let rows = sqlx::query(
-            "SELECT current.memory_id, current.version FROM memory_document_versions current \
-             WHERE current.workspace_id = ? AND current.lifecycle_status = 'approved' \
-             AND current.sync_status IN ('stored', 'indexed') \
-             AND (current.scope = 'workspace_shared' OR (current.scope = 'agent_private' AND current.owner_id = ?) \
-             OR (current.scope = 'task_shared' AND current.task_id = ?)) \
+            "SELECT v.memory_id, v.version FROM memory_document_versions v \
+             WHERE v.workspace_id = ? AND v.lifecycle_status = 'approved' \
+             AND v.sync_status IN ('stored', 'indexed') \
+             AND (v.scope = 'workspace_shared' OR (v.scope = 'agent_private' AND v.owner_id = ?) \
+             OR (v.scope = 'task_shared' AND v.task_id = ?)) \
              AND NOT EXISTS (SELECT 1 FROM memory_document_versions newer \
-                 WHERE newer.workspace_id = current.workspace_id AND newer.memory_id = current.memory_id \
-                 AND newer.version > current.version AND newer.lifecycle_status = 'approved' \
+                 WHERE newer.workspace_id = v.workspace_id AND newer.memory_id = v.memory_id \
+                 AND newer.version > v.version AND newer.lifecycle_status = 'approved' \
                  AND newer.sync_status IN ('stored', 'indexed')) \
-             ORDER BY current.updated_at DESC, current.memory_id ASC LIMIT ?",
+             ORDER BY v.updated_at DESC, v.memory_id ASC LIMIT ?",
         )
         .bind(workspace_id.to_string())
         .bind(requester_agent_id.to_string())
