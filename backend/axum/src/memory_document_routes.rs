@@ -253,6 +253,7 @@ pub async fn create_memory_document(
 #[derive(Debug, Deserialize)]
 pub struct MemoryDocumentTaskQuery {
     pub task_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -535,6 +536,7 @@ pub async fn get_agent_memory_document(
             memory_id,
             version,
             agent_id,
+            user.user_id,
             query.task_id,
         )
         .await
@@ -553,6 +555,8 @@ pub struct MemoryDocumentSearchRequest {
     pub query: String,
     #[serde(default)]
     pub task_id: Option<Uuid>,
+    #[serde(default)]
+    pub project_id: Option<Uuid>,
     #[serde(default)]
     pub tags: BTreeSet<String>,
     #[serde(default)]
@@ -685,8 +689,17 @@ pub async fn search_agent_memory_documents(
     if let Some(task_id) = input.task_id {
         let task_matches = state.tasks.read().await.get(&task_id)
             .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
-        if !task_matches {
+        if !task_matches || input.project_id.is_some() {
             return Err(api_error(StatusCode::NOT_FOUND, "Task not found for this agent."));
+        }
+    }
+    if let Some(project_id) = input.project_id {
+        let project_member = state
+            .is_project_member(workspace_id, project_id, user.user_id)
+            .await
+            .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Project membership could not be checked."))?;
+        if !project_member {
+            return Err(api_error(StatusCode::NOT_FOUND, "Project not found in this workspace."));
         }
     }
 
@@ -697,7 +710,7 @@ pub async fn search_agent_memory_documents(
         api_error(StatusCode::SERVICE_UNAVAILABLE, "MongoDB memory documents are unavailable.")
     })?;
     let refs = outbox
-        .list_authorized_document_refs(workspace_id, agent_id, input.task_id, 200)
+        .list_authorized_document_refs(workspace_id, agent_id, user.user_id, input.task_id, input.project_id, 200)
         .await
         .map_err(|error| {
             tracing::error!(error = %error, "memory document candidate lookup failed");
@@ -737,6 +750,7 @@ pub async fn search_agent_memory_documents(
                 memory_id,
                 version,
                 agent_id,
+                user.user_id,
                 input.task_id,
             )
             .await
@@ -857,7 +871,7 @@ pub async fn search_agent_memory_documents(
             workspace_id,
             requester_agent_id: Some(agent_id),
             task_id: input.task_id,
-            project_id: None,
+            project_id: input.project_id,
             semantic: query_values,
             context: input.context,
             outcome: input.outcome,
