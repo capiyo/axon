@@ -74,6 +74,22 @@ struct ApiError {
     error: String,
 }
 
+async fn require_agent_owner(
+    state: &AppState,
+    user_id: Uuid,
+    workspace_id: Uuid,
+    agent_id: Uuid,
+) -> Result<(), (StatusCode, Json<ApiError>)> {
+    let agents = state.agents.read().await;
+    if agents.get(&agent_id).is_some_and(|agent| {
+        agent.workspace_id == workspace_id && agent.created_by_user_id == Some(user_id)
+    }) {
+        Ok(())
+    } else {
+        Err(api_error(StatusCode::NOT_FOUND, "Agent not found for this user in the workspace."))
+    }
+}
+
 fn api_error(status: StatusCode, message: &str) -> (StatusCode, Json<ApiError>) {
     (status, Json(ApiError { error: message.into() }))
 }
@@ -125,7 +141,10 @@ pub async fn create_memory_document(
                 return Err(api_error(StatusCode::BAD_REQUEST, "Agent-private memory requires owner_agent_id."));
             };
             let agent_matches = state.agents.read().await.get(&agent_id)
-                .is_some_and(|agent| agent.workspace_id == workspace_id);
+                .is_some_and(|agent| {
+                    agent.workspace_id == workspace_id
+                        && agent.created_by_user_id == Some(user.user_id)
+                });
             if !agent_matches || input.task_id.is_some() || input.project_id.is_some() {
                 return Err(api_error(StatusCode::NOT_FOUND, "Private-memory agent was not found in this workspace."));
             }
@@ -362,11 +381,7 @@ pub async fn get_agent_memory_document(
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
-    let agent_matches = state.agents.read().await.get(&agent_id)
-        .is_some_and(|agent| agent.workspace_id == workspace_id);
-    if !agent_matches {
-        return Err(api_error(StatusCode::NOT_FOUND, "Agent not found."));
-    }
+    require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
     if let Some(task_id) = query.task_id {
         let task_matches = state.tasks.read().await.get(&task_id)
             .is_some_and(|task| task.workspace_id == workspace_id && task.assignee_agent_id == agent_id);
@@ -522,11 +537,7 @@ pub async fn search_agent_memory_documents(
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
-    let agent_matches = state.agents.read().await.get(&agent_id)
-        .is_some_and(|agent| agent.workspace_id == workspace_id);
-    if !agent_matches {
-        return Err(api_error(StatusCode::NOT_FOUND, "Agent not found."));
-    }
+    require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
     if input.query.trim().is_empty()
         || input.query.len() > 4096
         || input.tags.len() > 64
@@ -795,11 +806,7 @@ pub async fn get_agent_session_documents(
     if !member {
         return Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
-    let agent_matches = state.agents.read().await.get(&agent_id)
-        .is_some_and(|agent| agent.workspace_id == workspace_id);
-    if !agent_matches {
-        return Err(api_error(StatusCode::NOT_FOUND, "Agent not found."));
-    }
+    require_agent_owner(&state, user.user_id, workspace_id, agent_id).await?;
 
     let outbox = state.memory_outbox.as_ref().ok_or_else(|| {
         api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory epoch metadata is unavailable.")
