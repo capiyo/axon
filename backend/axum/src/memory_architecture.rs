@@ -413,12 +413,9 @@ impl MemoryEpochCoordinator {
         .fetch_one(&mut *tx)
         .await?;
         let max_document_sequence: i64 = sqlx::query_scalar(
-            "SELECT COALESCE(MAX(v.source_event_sequence), 0) FROM memory_document_versions v \
-             WHERE v.workspace_id = ? AND v.lifecycle_status = 'approved' AND v.sync_status IN ('stored', 'indexed') \
-             AND NOT EXISTS (SELECT 1 FROM memory_document_versions newer WHERE newer.workspace_id = v.workspace_id \
-                 AND newer.memory_id = v.memory_id AND newer.version > v.version \
-                 AND (newer.lifecycle_status IN ('archived', 'deleted', 'rejected', 'superseded') \
-                      OR (newer.lifecycle_status = 'approved' AND newer.sync_status IN ('stored', 'indexed'))))",
+            "SELECT COALESCE(MAX(source_event_sequence), 0) FROM memory_document_versions \
+             WHERE workspace_id = ? AND lifecycle_status IN ('approved', 'archived', 'deleted', 'rejected', 'superseded') \
+               AND sync_status IN ('stored', 'indexed')",
         )
         .bind(workspace_id)
         .fetch_one(&mut *tx)
