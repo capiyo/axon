@@ -176,7 +176,7 @@ The retry is recorded in SQLite audit history. This endpoint is workspace-member
 ## Memory version history
 
 ```sh
-curl "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/agents/$AGENT_ID/memory-documents/$MEMORY_ID/versions?limit=20" \\
+curl "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/agents/$AGENT_ID/memory-documents/$MEMORY_ID/versions/history?limit=20" \\
   -H "Authorization: Bearer $FIREBASE_ID_TOKEN"
 ```
 
