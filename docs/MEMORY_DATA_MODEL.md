@@ -120,3 +120,8 @@ Archive, restore, and logical delete are version transitions, not in-place edits
 - Delete writes lifecycle `deleted` as a tombstone.
 
 Tombstones suppress older approved versions from normal search and from newly published epochs. Already-published epochs keep their exact historical version pins. MongoDB retains the immutable document versions; the delete endpoint is logical deletion, not physical purge. Retention/purge execution and legal-hold policy are not implemented.
+
+
+## Agent credentials
+
+Migration `0014_agent_credentials.sql` adds credential metadata scoped to one workspace and one agent. Only a SHA-256 hash of the high-entropy secret is stored. Credential records include owner, creation/expiry, revocation, and last-used timestamps. Secrets expire after 90 days. Rotation revokes the old credential and inserts the replacement in one SQLite transaction. Middleware accepts the credential only on the matching agent's memory routes; general workspace/resource capabilities are not yet backed by persisted grants.
