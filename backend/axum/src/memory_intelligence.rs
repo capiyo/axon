@@ -9,7 +9,12 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
-pub const QOIN_MEMORY_SCORING_VERSION: &str = "axon-qoin-memory-v1";
+pub const QOIN_MEMORY_SCORING_VERSION: &str = "axon-qoin-memory-v2";
+pub const LEGACY_QOIN_MEMORY_SCORING_VERSION: &str = "axon-qoin-memory-v1";
+
+fn default_feedback_weight() -> f64 {
+    0.5
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct QoinScoringWeights {
@@ -67,6 +72,8 @@ pub struct QoinScoringConfig {
     pub strong_failure_signal_threshold: f64,
     pub strong_semantic_similarity_threshold: f64,
     pub weak_evidence_threshold: f64,
+    #[serde(default = "default_feedback_weight")]
+    pub feedback_weight: f64,
 }
 
 impl Default for QoinScoringConfig {
@@ -80,6 +87,7 @@ impl Default for QoinScoringConfig {
             strong_failure_signal_threshold: 0.65,
             strong_semantic_similarity_threshold: 0.75,
             weak_evidence_threshold: 0.25,
+            feedback_weight: default_feedback_weight(),
         }
     }
 }
@@ -110,6 +118,7 @@ impl QoinScoringConfig {
             self.strong_semantic_similarity_threshold.to_bits(),
             self.weak_evidence_threshold.to_bits(),
         );
+        let material = format!("{material}|{:016x}", self.feedback_weight.to_bits());
         let digest = Sha256::digest(material.as_bytes());
         format!("{}:{}", self.version, format!("{digest:x}"))
     }
@@ -121,6 +130,7 @@ impl QoinScoringConfig {
             self.strong_failure_signal_threshold,
             self.strong_semantic_similarity_threshold,
             self.weak_evidence_threshold,
+            self.feedback_weight,
         ];
         if self.version.trim().is_empty()
             || self.version.len() > 80
