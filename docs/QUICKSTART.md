@@ -13,7 +13,11 @@ $env:AXON_DATABASE_URL="sqlite://axon.db"
 # Optional in local SQLite-only mode; required when AXON_ENV=production
 $env:AXON_MONGODB_URI="mongodb://127.0.0.1:27017"
 $env:AXON_MONGODB_DATABASE="axon"
-$env:AXON_MONGODB_COLLECTION="memory_documents"\n# Optional connection tuning (defaults: 10000ms connect, 5000ms server selection, pool 20)\n$env:AXON_MONGODB_CONNECT_TIMEOUT_MS="10000"\n$env:AXON_MONGODB_SERVER_SELECTION_TIMEOUT_MS="5000"\n$env:AXON_MONGODB_MAX_POOL_SIZE="20"
+$env:AXON_MONGODB_COLLECTION="memory_documents"
+# Optional connection tuning (defaults: 10000ms connect, 5000ms server selection, pool 20)
+$env:AXON_MONGODB_CONNECT_TIMEOUT_MS="10000"
+$env:AXON_MONGODB_SERVER_SELECTION_TIMEOUT_MS="5000"
+$env:AXON_MONGODB_MAX_POOL_SIZE="20"
 cargo run -p axon-api
 ```
 
