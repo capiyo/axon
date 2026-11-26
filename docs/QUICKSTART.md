@@ -13,7 +13,7 @@ $env:AXON_DATABASE_URL="sqlite://axon.db"
 # Optional in local SQLite-only mode; required when AXON_ENV=production
 $env:AXON_MONGODB_URI="mongodb://127.0.0.1:27017"
 $env:AXON_MONGODB_DATABASE="axon"
-$env:AXON_MONGODB_COLLECTION="memory_documents"
+$env:AXON_MONGODB_COLLECTION="memory_documents"\n# Optional connection tuning (defaults: 10000ms connect, 5000ms server selection, pool 20)\n$env:AXON_MONGODB_CONNECT_TIMEOUT_MS="10000"\n$env:AXON_MONGODB_SERVER_SELECTION_TIMEOUT_MS="5000"\n$env:AXON_MONGODB_MAX_POOL_SIZE="20"
 cargo run -p axon-api
 ```
 
@@ -97,7 +97,7 @@ The workspace UI can create and advance tasks. To simulate the manual handoff, a
 
 ## Current limitations
 
-- MongoDB document creation is queued durably in SQLite and delivered asynchronously. Direct retrieval by memory ID/version is available to a workspace-authorized registered agent after SQLite approval and MongoDB hash verification. Neural embedding-provider integration, project-scope authorization, and memory-epoch document-version pinning are still in progress.
+- MongoDB document creation is queued durably in SQLite and delivered asynchronously. Direct retrieval by memory ID/version is available to a workspace-authorized registered agent after SQLite approval and MongoDB hash verification. The current retrieval provider is deterministic lexical hashing, not a neural embedding. Project-scope authorization remains fail-closed. The combined session-context endpoint resolves the session's pinned epoch and returns both progressive SQLite memories and exact MongoDB document versions from that epoch.
 - The current memory-document creation API supports workspace-shared, task-shared and agent-private scopes. Project-shared creation is deliberately rejected until a persisted project-membership authorization model exists.
 - Agent names/provider labels do not connect to provider APIs. The person using the UI still performs manual provider handoff.
 - SQLite must use a persistent volume in production. MongoDB backups and SQLite backups must both be configured.
@@ -135,7 +135,7 @@ curl "http://127.0.0.1:8080/api/v1/workspaces/$WORKSPACE_ID/agents/$AGENT_ID/mem
   -H "Authorization: Bearer $FIREBASE_ID_TOKEN"
 ```
 
-For task-shared memory, supply `task_id` as a query parameter and the task must be assigned to the requesting agent. Agent-private memory is only returned when its stored owner agent matches the agent ID in the route. Project-shared memory is intentionally unavailable until project membership is persisted.
+For task-shared memory, supply `task_id` as a query parameter and the task must be assigned to the requesting agent. Agent-private memory is only returned when its stored owner agent matches the agent ID in the route. Project-shared memory is intentionally unavailable until project membership is persisted. Dead-letter events with valid retained payloads can be requeued through the authenticated `retry-sync` endpoint; this operation is audited.
 
 
 Search authorized, approved MongoDB documents through the deterministic lexical QKV fallback and Qoin memory-ranking layer:
