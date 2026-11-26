@@ -462,6 +462,8 @@ pub struct AgentSessionContextRequest {
     #[serde(flatten)]
     pub progressive: ProgressiveRetrievalRequest,
     #[serde(default)]
+    pub query_text: Option<String>,
+    #[serde(default)]
     pub context: Option<f32>,
     #[serde(default)]
     pub outcome: Option<f32>,
@@ -608,11 +610,32 @@ pub async fn retrieve_session_context(
         .memory_vector_provider
         .as_deref()
         .unwrap_or(&fallback_provider);
-    validate_memory_key(&input.progressive.query, vector_provider.model_version())
-        .map_err(|_| error(
+    let document_query_vector = if let Some(query_text) = input.query_text.as_deref() {
+        if query_text.trim().is_empty() || query_text.len() > 4096 {
+            return Err(error(StatusCode::BAD_REQUEST, "query_text must contain 1–4096 bytes."));
+        }
+        let key = vector_provider
+            .key_for_text(query_text)
+            .await
+            .map_err(|provider_error| match provider_error {
+                MemoryVectorProviderError::EmptyQuery => {
+                    error(StatusCode::BAD_REQUEST, "query_text contains no searchable terms.")
+                }
+                _ => error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
+            })?;
+        validate_memory_key(&key, vector_provider.model_version())
+            .map_err(|_| error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an invalid or incompatible query key."))?;
+        key
+    } else if input.progressive.query.model_version == vector_provider.model_version() {
+        validate_memory_key(&input.progressive.query, vector_provider.model_version())
+            .map_err(|_| error(StatusCode::BAD_REQUEST, "The supplied session query key is invalid."))?;
+        input.progressive.query.clone()
+    } else {
+        return Err(error(
             StatusCode::BAD_REQUEST,
-            "The session query vector does not match the configured memory embedding provider.",
-        ))?;
+            "query_text is required when the progressive SQLite vector uses a different model version from MongoDB memory keys.",
+        ));
+    };
 
     // The coordinator verifies the session/agent/workspace binding and records
     // progressive retrieval against the already pinned immutable epoch.
@@ -629,7 +652,7 @@ pub async fn retrieve_session_context(
             "Could not retrieve additional context from this agent's pinned memory epoch.",
         ))?;
 
-    let query_vector = input.progressive.query.clone();
+    let query_vector = document_query_vector;
     let mut attention_candidates = Vec::with_capacity(pinned_documents.len());
     let mut indexed_memories = Vec::with_capacity(pinned_documents.len());
     let mut documents_by_id = HashMap::with_capacity(pinned_documents.len());
