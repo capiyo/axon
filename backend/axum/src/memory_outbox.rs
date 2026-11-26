@@ -626,11 +626,16 @@ impl MemoryOutbox {
         let limit = i64::try_from(limit.clamp(1, 200))
             .map_err(|_| sqlx::Error::Protocol("retrieval limit exceeds SQLite range".into()))?;
         let rows = sqlx::query(
-            "SELECT memory_id, version FROM memory_document_versions \
-             WHERE workspace_id = ? AND lifecycle_status = 'approved' AND sync_status IN ('stored', 'indexed') \
-             AND (scope = 'workspace_shared' OR (scope = 'agent_private' AND owner_id = ?) \
-             OR (scope = 'task_shared' AND task_id = ?)) \
-             ORDER BY updated_at DESC, memory_id ASC, version DESC LIMIT ?",
+            "SELECT current.memory_id, current.version FROM memory_document_versions current \
+             WHERE current.workspace_id = ? AND current.lifecycle_status = 'approved' \
+             AND current.sync_status IN ('stored', 'indexed') \
+             AND (current.scope = 'workspace_shared' OR (current.scope = 'agent_private' AND current.owner_id = ?) \
+             OR (current.scope = 'task_shared' AND current.task_id = ?)) \
+             AND NOT EXISTS (SELECT 1 FROM memory_document_versions newer \
+                 WHERE newer.workspace_id = current.workspace_id AND newer.memory_id = current.memory_id \
+                 AND newer.version > current.version AND newer.lifecycle_status = 'approved' \
+                 AND newer.sync_status IN ('stored', 'indexed')) \
+             ORDER BY current.updated_at DESC, current.memory_id ASC LIMIT ?",
         )
         .bind(workspace_id.to_string())
         .bind(requester_agent_id.to_string())
@@ -1482,5 +1487,52 @@ mod reconciliation_tests {
         let mismatch = outbox.reconcile_workspace(&repository, workspace_id, 100).await.unwrap();
         assert!(mismatch.issues.iter().any(|issue|
             issue.kind == "sqlite_mongo_metadata_mismatch"));
+    }
+}
+
+#[cfg(test)]
+mod latest_version_search_tests {
+    use super::*;
+    use crate::storage::SqliteStorage;
+
+    #[tokio::test]
+    async fn search_candidate_refs_return_only_latest_approved_synchronized_version() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let outbox = storage.memory_outbox();
+        let workspace_id = Uuid::new_v4();
+        let agent_id = Uuid::new_v4();
+        let actor_id = Uuid::new_v4();
+        let mut first = super::tests::document(workspace_id, agent_id);
+        outbox.enqueue(&mut first, actor_id).await.unwrap();
+        assert!(outbox.approve(workspace_id, first.memory_id, 1, actor_id).await.unwrap());
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 1",
+        )
+        .bind(first.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+
+        let mut second = first.clone();
+        second.version = 2;
+        second.source_event_sequence = 0;
+        second.title = "Updated private memory".into();
+        second.content = "The newer approved version supersedes the old search candidate.".into();
+        second.updated_at = Utc::now();
+        second.content_hash = second.calculate_content_hash();
+        outbox.enqueue(&mut second, actor_id).await.unwrap();
+        assert!(outbox.approve(workspace_id, second.memory_id, 2, actor_id).await.unwrap());
+        sqlx::query(
+            "UPDATE memory_document_versions SET sync_status = 'stored' WHERE memory_id = ? AND version = 2",
+        )
+        .bind(second.memory_id.to_string())
+        .execute(&outbox.pool)
+        .await
+        .unwrap();
+
+        let refs = outbox.list_authorized_document_refs(
+            workspace_id, agent_id, None, 200,
+        ).await.unwrap();
+        assert_eq!(refs, vec![(first.memory_id, 2)]);
     }
 }
