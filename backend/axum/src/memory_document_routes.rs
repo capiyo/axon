@@ -3,7 +3,7 @@ use crate::{
     memory_architecture::{qkv_attention, AttentionMemory, AttentionQuery, QoinVector},
     memory_documents::MemoryDocument,
     memory_outbox::MemoryReconciliationReport,
-    memory_vector_provider::{LexicalMemoryVectorProvider, MemoryVectorProvider, MemoryVectorProviderError, LEXICAL_MEMORY_VECTOR_VERSION},
+    memory_vector_provider::{validate_memory_key, LexicalMemoryVectorProvider, MemoryVectorProvider, MemoryVectorProviderError, LEXICAL_MEMORY_VECTOR_VERSION},
     memory_intelligence::{
         retrieve_memories_with_config, IndexedMemory, MemoryQuery, MemoryStatus, MemoryVector,
         MemoryVisibility, QoinScoringConfig, ScoreBreakdown,
@@ -163,9 +163,8 @@ pub async fn create_memory_document(
             }
             _ => api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
         })?;
-    if qkv_key.model_version != vector_provider.model_version() {
-        return Err(api_error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an incompatible model version."));
-    }
+    validate_memory_key(&qkv_key, vector_provider.model_version())
+        .map_err(|_| api_error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an invalid or incompatible key."))?;
     let mut key_metadata = match input.key_metadata {
         Value::Object(metadata) => metadata,
         Value::Null => Map::new(),
@@ -576,9 +575,8 @@ pub async fn search_agent_memory_documents(
             }
             _ => api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
         })?;
-    if query_vector.model_version != vector_provider.model_version() {
-        return Err(api_error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an incompatible model version."));
-    }
+    validate_memory_key(&query_vector, vector_provider.model_version())
+        .map_err(|_| api_error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an invalid or incompatible query key."))?;
     let qkv_model_version = query_vector.model_version.clone();
     let query_values = query_vector.values.clone();
 
@@ -626,7 +624,7 @@ pub async fn search_agent_memory_documents(
         } else {
             // Backward compatibility for documents created before persistent
             // QKV keys were stored in MongoDB.
-            vector_provider
+            let key = vector_provider
                 .key_for_text(&key_text)
                 .await
                 .map_err(|provider_error| match provider_error {
@@ -634,7 +632,10 @@ pub async fn search_agent_memory_documents(
                         api_error(StatusCode::BAD_REQUEST, "A memory document has no searchable terms.")
                     }
                     _ => api_error(StatusCode::SERVICE_UNAVAILABLE, "Memory embedding provider is unavailable."),
-                })?
+                })?;
+            validate_memory_key(&key, vector_provider.model_version())
+                .map_err(|_| api_error(StatusCode::BAD_GATEWAY, "Memory embedding provider returned an invalid or incompatible key."))?;
+            key
         };
         if document.qkv_version != key.model_version {
             // Never compare vectors from different model spaces.
