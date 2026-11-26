@@ -121,7 +121,9 @@ pub struct UserWorkspace {
 
 #[async_trait]
 pub trait Storage: Send + Sync {
-    async fn ping(&self) -> Result<(), StorageError>;
+    async fn ping(&self) -> Result<(), StorageError> {
+        Err(StorageError::IdentityStorageUnavailable)
+    }
     fn chat_memory_store(&self) -> ChatMemoryStore;
     fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator;
     async fn apply(&self, mutation: StorageMutation) -> Result<(), StorageError>;
