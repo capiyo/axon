@@ -91,3 +91,8 @@ The existing memory-intelligence scorer receives the same lexical vector used by
 - `agent_private`: requires an owner agent ID.
 - `task_shared`: requires a task ID.
 - `project_shared`: requires a project ID, but API creation and retrieval remain disabled until project membership authorization is implemented.
+
+
+## Agent ownership
+
+The existing serialized `Agent` entity now carries optional `created_by_user_id` metadata. New agents record the authenticated Firebase user who registered them. Memory, handover, and session routes require that owner; older agent entities without this field fail closed until an explicit ownership backfill. This is user ownership/delegation, not an independent cryptographic agent credential.
