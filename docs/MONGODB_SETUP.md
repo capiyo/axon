@@ -6,7 +6,7 @@ MongoDB is a separate document repository. SQLite remains authoritative for Axon
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `AXON_MONGODB_URI` | MongoDB connection URI | unset |
+| `AXON_DATABASE_URL` | Authoritative SQLite database URL | `sqlite://axon.db` |\n| `AXON_MONGODB_URI` | MongoDB connection URI | unset |
 | `AXON_MONGODB_DATABASE` | Database name | `axon` |
 | `AXON_MONGODB_COLLECTION` | Memory document collection | `memory_documents` |
 | `AXON_MEMORY_DOCUMENTS_REQUIRED` | Require MongoDB outside production | `false`; production always requires MongoDB |
@@ -47,4 +47,4 @@ Then run `cargo run -p axon-api`.
 
 ## Current implementation boundary
 
-MongoDB connection lifecycle, immutable document writes, hash verification, and the SQLite outbox worker are implemented in this branch. Direct retrieval by memory ID/version is implemented after explicit SQLite approval and scope verification. Query-based search is available through deterministic lexical QKV attention followed by Qoin memory ranking. New immutable document versions include the precomputed lexical QKV key, its version, and a source-text SHA-256 integrity hash in `key_metadata`. The combined session-context endpoint returns progressive SQLite retrieval plus exact MongoDB versions pinned to the same agent session epoch. `GET /ready` probes SQLite and MongoDB readiness. The authenticated workspace reconciliation endpoint provides a bounded, read-only comparison of SQLite metadata and MongoDB document versions. Neural embedding-provider implementation, persisted vector index/rebuild, reconciliation, and MongoDB outage integration tests remain outstanding.
+MongoDB connection lifecycle, immutable document writes, hash verification, and the SQLite outbox worker are implemented in this branch. Direct retrieval by memory ID/version is implemented after explicit SQLite approval and scope verification. Query-based search is available through deterministic lexical QKV attention followed by Qoin memory ranking. New immutable document versions include the precomputed lexical QKV key, its version, and a source-text SHA-256 integrity hash in `key_metadata`. The combined session-context endpoint returns progressive SQLite retrieval plus exact MongoDB versions pinned to the same agent session epoch, ranked through QKV attention and Qoin. It returns the scoring-policy fingerprint and refuses a policy mismatch against the pinned epoch. `GET /ready` probes SQLite and MongoDB readiness. The authenticated workspace reconciliation endpoint provides a bounded, read-only comparison of SQLite metadata and MongoDB document versions. Neural embedding-provider implementation, a separately searchable persisted vector index/rebuild, automated reconciliation repair, and MongoDB outage integration tests remain outstanding. A bounded read-only reconciliation report is implemented.
