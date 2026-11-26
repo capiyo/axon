@@ -59,7 +59,7 @@
 - [x] Added validated MongoDB configuration, redacted URI debug output, bounded connection timeouts, bounded pool size, production-required startup behavior, and separate SQLite/MongoDB readiness probes.
 - [x] Added approved, scope-checked agent document retrieval and query search using deterministic lexical QKV attention followed by configurable, versioned Qoin memory scoring. Search responses return the scoring policy and per-candidate breakdown.
 - [x] Immutable memory-document epoch metadata now pins exact document version, content hash, source sequence, QKV version, and Qoin scoring version.
-- [ ] Neural embedding-provider integration remains outstanding; newly created MongoDB memory documents now persist versioned deterministic lexical QKV keys and source-text integrity hashes.
+- [ ] A production neural embedding provider remains outstanding; the asynchronous provider abstraction is injected through AppState and defaults to deterministic lexical QKV keys with source-text integrity hashes.
 - [x] An authenticated session-bound endpoint resolves the session's immutable epoch and hydrates exact MongoDB document versions with scope, source sequence, QKV version, and SHA-256 verification.
 - [ ] Project-shared memory is disabled until persisted project-membership authorization exists.
 - [x] Added audited dead-letter recovery for valid retained outbox payloads.
