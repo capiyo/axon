@@ -695,6 +695,9 @@ pub async fn search_agent_memory_documents(
             api_error(StatusCode::INTERNAL_SERVER_ERROR, "Memory document search failed.")
         })?;
 
+    if input.query.trim().is_empty() || input.query.len() > 4096 {
+        return Err(api_error(StatusCode::BAD_REQUEST, "query must contain 1–4096 bytes."));
+    }
     let fallback_provider = LexicalMemoryVectorProvider;
     let vector_provider: &dyn MemoryVectorProvider = state
         .memory_vector_provider
