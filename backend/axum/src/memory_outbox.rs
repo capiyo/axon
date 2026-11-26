@@ -866,21 +866,22 @@ impl MemoryOutbox {
                     && stored_task_id.as_deref() == requester_task_id_text.as_deref()
             }
             "project_shared" => {
-                let Some(project_id) = stored_project_id.as_deref() else {
+                if let Some(project_id) = stored_project_id.as_deref() {
+                    let membership: Option<i64> = sqlx::query_scalar(
+                        "SELECT 1 FROM project_memberships pm
+                         JOIN projects p ON p.id = pm.project_id
+                         WHERE pm.project_id = ? AND pm.user_id = ?
+                           AND pm.revoked_at IS NULL AND p.workspace_id = ?",
+                    )
+                    .bind(project_id)
+                    .bind(requester_user_id.to_string())
+                    .bind(workspace_id.to_string())
+                    .fetch_optional(&self.pool)
+                    .await?;
+                    membership.is_some()
+                } else {
                     false
-                };
-                let membership: Option<i64> = sqlx::query_scalar(
-                    "SELECT 1 FROM project_memberships pm
-                     JOIN projects p ON p.id = pm.project_id
-                     WHERE pm.project_id = ? AND pm.user_id = ?
-                       AND pm.revoked_at IS NULL AND p.workspace_id = ?",
-                )
-                .bind(project_id)
-                .bind(requester_user_id.to_string())
-                .bind(workspace_id.to_string())
-                .fetch_optional(&self.pool)
-                .await?;
-                membership.is_some()
+                }
             },
             _ => false,
         };
