@@ -63,6 +63,10 @@ All other registered routes require a valid Firebase bearer token.
 - POST /api/v1/tasks/{task_id}/submit
 - POST /api/v1/tasks/{task_id}/transition
 
+## Provider-backed task execution
+
+The task execution route uses the assigned agent's provider name to load credentials from environment variables. Provider slugs are normalized to uppercase ASCII letters and digits. For an agent whose provider is openai, configure AXON_AGENT_OPENAI_BASE_URL, AXON_AGENT_OPENAI_API_KEY, and AXON_AGENT_OPENAI_MODEL. For an agent whose provider is anthropic or claude, use the corresponding AXON_AGENT_ANTHROPIC_* or AXON_AGENT_CLAUDE_* variables. Base URLs are service roots; Axon appends the provider's chat-completions or messages path. Keep API keys in the deployment secret manager, never in agent records or source control. A successful execution stores the response as a workspace artifact and moves the task to submitted. A provider failure leaves the task in progress so it can be retried.
+
 ## Platform model registry administration
 
 Set `AXON_PLATFORM_ADMIN_UIDS` to an explicit comma-separated allowlist of Firebase UIDs. The backend fails closed: users not on this list cannot access provider/model registry administration, even when authenticated. Do not put email addresses or secrets in this variable. Registry routes are under `/api/v1/admin/` and include provider management, provider data-terms review, model candidate review, evaluations, stats, flags and assignment history.
