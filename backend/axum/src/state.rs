@@ -1,4 +1,5 @@
 use crate::{
+    explore::ExploreStore,
     audit::{AuditEvent, AuditStore},
     chat_memory::ChatMemoryStore,
     firebase_auth::FirebaseVerifier,
@@ -34,6 +35,7 @@ pub struct TelemetryStore {
 
 #[derive(Clone, Default)]
 pub struct AppState {
+    pub explore: Option<Arc<ExploreStore>>,
     pub workspaces: Arc<RwLock<HashMap<Uuid, Workspace>>>,
     pub agents: Arc<RwLock<HashMap<Uuid, Agent>>>,
     pub artifacts: Arc<RwLock<HashMap<Uuid, Artifact>>>,
@@ -56,6 +58,11 @@ pub struct AppState {
 }
 
 impl AppState {
+    pub fn with_explore_store(mut self, store: Arc<ExploreStore>) -> Self {
+        self.explore = Some(store);
+        self
+    }
+
     pub async fn with_storage(storage: Arc<dyn Storage>) -> Result<Self, StorageError> {
         let chat_memory = Some(storage.chat_memory_store());
         let memory_epochs = Some(storage.memory_epoch_coordinator());

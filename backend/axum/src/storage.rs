@@ -309,6 +309,10 @@ impl SqliteStorage {
         Ok(Self { pool })
     }
 
+    pub fn sqlite_pool(&self) -> SqlitePool {
+        self.pool.clone()
+    }
+
     pub fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator {
         MemoryEpochCoordinator::new(self.pool.clone())
     }

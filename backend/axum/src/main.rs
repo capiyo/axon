@@ -1,5 +1,6 @@
 use axon_api::{
     app,
+    explore::ExploreStore,
     config::BackendConfig,
     firebase_auth::FirebaseVerifier,
     memory_documents::{MemoryDocumentRepository, MongoMemoryDocumentRepository},
@@ -34,6 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = BackendConfig::from_env()?;
     let storage = SqliteStorage::connect(&config.database_url).await?;
+    let explore_store = Arc::new(ExploreStore::new(storage.sqlite_pool()));
     let memory_epochs = storage
         .memory_epoch_coordinator()
         .with_qoin_scoring_version(config.qoin_memory_scoring.effective_version());
@@ -90,6 +92,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = AppState::with_storage(storage.shared())
         .await?
+        .with_explore_store(explore_store)
         .with_memory_document_repository(memory_documents)
         .with_memory_outbox(Some(memory_outbox))
         .with_qoin_vector_client(qoin_vectors)
