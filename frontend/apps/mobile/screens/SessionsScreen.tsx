@@ -820,7 +820,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 <ActionButton label="Propose memory" onPress={proposeMemory} disabled={!memoryDraft.trim() || busy} secondary/>
                 {chatDetail.memory.map(entry => <View key={entry.id} style={styles.listRow}><Text style={styles.rowTitle}>{entry.type.replaceAll("_"," ")} · {entry.status}</Text><Text style={styles.rowMeta}>{entry.text}</Text>{entry.status==="proposed" ? <><ActionButton label="Approve" onPress={() => approveMemory(entry)} disabled={busy} secondary/><ActionButton label="Reject" onPress={() => changeMemory(entry,"reject")} disabled={busy} secondary/></> : null}<ActionButton label="Edit" onPress={() => {setEditingMemoryId(entry.id);setEditMemoryDraft(entry.text);}} disabled={busy} secondary/>{editingMemoryId===entry.id ? <><TextInput value={editMemoryDraft} onChangeText={setEditMemoryDraft} style={styles.input}/><ActionButton label="Save edit" onPress={() => saveMemoryEdit(entry)} disabled={busy || !editMemoryDraft.trim()}/></> : null}<ActionButton label="Delete" onPress={() => changeMemory(entry,"delete")} disabled={busy} secondary/></View>)}
               </View>
-            </ExploreScreen>
+            </>
           ) : (
             <SessionPanel>
               <View style={styles.screenHeading}><Text style={styles.eyebrow}>PRIVATE WORKSPACE</Text><Text style={styles.screenTitle}>Sessions</Text><Text style={styles.description}>Sessions, agent work and project context in one place.</Text></View>
