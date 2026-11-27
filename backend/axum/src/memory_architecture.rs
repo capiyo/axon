@@ -391,6 +391,15 @@ impl MemoryEpochCoordinator {
     }
 
     async fn publish_workspace_if_due(&self, workspace_id: &str) -> Result<bool, sqlx::Error> {
+        self.publish_workspace_if_due_at(workspace_id, Utc::now()).await
+    }
+
+    /// Deterministic clock seam for lifecycle and hourly-boundary tests.
+    pub(crate) async fn publish_workspace_if_due_at(
+        &self,
+        workspace_id: &str,
+        now: DateTime<Utc>,
+    ) -> Result<bool, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         let latest: Option<String> = sqlx::query_scalar(
             "SELECT published_at FROM memory_epochs WHERE workspace_id = ? ORDER BY epoch_number DESC LIMIT 1"
@@ -446,7 +455,6 @@ impl MemoryEpochCoordinator {
         .bind(workspace_id)
         .fetch_one(&mut *tx)
         .await?;
-        let now = Utc::now();
         let id = Uuid::new_v4();
         // This is a reproducibility marker, not a cryptographic integrity hash.
         let marker = format!(

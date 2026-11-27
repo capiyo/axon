@@ -2396,15 +2396,15 @@ mod epoch_document_tests {
             .await
             .unwrap();
         assert_eq!(visible, vec![(document.memory_id, 3)]);
-        // The epoch publisher is hourly; simulate the next hourly boundary so
-        // the restored version is picked up in a subsequent immutable epoch.
-        sqlx::query("UPDATE memory_epochs SET published_at = ? WHERE workspace_id = ?")
-            .bind((chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339())
-            .bind(account.workspace.id.to_string())
-            .execute(&outbox.pool)
+        // The epoch publisher is hourly; advance its injected clock to the next
+        // hourly boundary so the restored version is pinned in a new epoch.
+        assert!(coordinator
+            .publish_workspace_if_due_at(
+                &account.workspace.id.to_string(),
+                chrono::Utc::now() + chrono::Duration::hours(1),
+            )
             .await
-            .unwrap();
-        assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
+            .unwrap());
         let restored_epoch_version: i64 = sqlx::query_scalar(
             "SELECT i.document_version FROM memory_document_epoch_items i
              JOIN memory_epochs e ON e.id = i.epoch_id
