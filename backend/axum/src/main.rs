@@ -1,7 +1,7 @@
 use axon_api::{
     app,
-    explore::ExploreStore,
     config::BackendConfig,
+    explore::ExploreStore,
     firebase_auth::FirebaseVerifier,
     memory_documents::{MemoryDocumentRepository, MongoMemoryDocumentRepository},
     memory_vector_provider::LexicalMemoryVectorProvider,
