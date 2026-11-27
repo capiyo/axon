@@ -215,7 +215,7 @@ pub async fn revoke_project_member(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{app, storage::SqliteStorage};
+    use crate::{app, model::ProjectRole, storage::SqliteStorage};
     use axum::{
         body::{to_bytes, Body},
         http::Request,
