@@ -51,6 +51,7 @@ export type Task = {
   title: string;
   objective: string;
   assignee_agent_id: string;
+  source_chat_id: string | null;
   context_artifact_ids: string[];
   response_artifact_id: string | null;
   status: TaskStatus;
@@ -177,6 +178,66 @@ export type AxonAuditEvent = {
 };
 
 
+export type ModerationReport = {
+  id: string;
+  listing_id: string;
+  comment_id: string | null;
+  reporter_id: string;
+  reason: string;
+  status: string;
+  created_at: string;
+};
+
+export type Notification = {
+  id: string;
+  workspace_id: string | null;
+  event_type: string;
+  entity_type: string;
+  entity_id: string;
+  title: string;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+};
+
+export type NotificationPage = {
+  items: Notification[];
+  unread_count: number;
+};
+
+export type ExploreAgent = {
+  id: string;
+  agent_id: string;
+  workspace_id: string;
+  owner_id: string;
+  title: string;
+  provider: string;
+  description: string;
+  category: string;
+  created_at: string;
+  updated_at: string;
+  like_count: number;
+  comment_count: number;
+  is_liked: boolean;
+  is_following: boolean;
+  is_owner: boolean;
+};
+
+export type ExploreComment = {
+  id: string;
+  listing_id: string;
+  parent_comment_id: string | null;
+  author_id: string;
+  author_label: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  like_count: number;
+  reply_count: number;
+  is_liked: boolean;
+  is_mine: boolean;
+};
+
 export type Chat = {
   id: string;
   workspace_id: string;
@@ -185,6 +246,10 @@ export type Chat = {
   created_at: string;
   updated_at: string;
   archived: boolean;
+  unread_count: number;
+  is_liked: boolean;
+  message_count: number;
+  last_message: ChatMessage | null;
 };
 
 export type ChatMessage = {
