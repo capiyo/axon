@@ -266,9 +266,7 @@ pub async fn execute_task(
                     system_context.push_str(
                         &artifact
                             .title
-                            .replace('<', "")
-                            .replace('>', "")
-                            .replace('"', ""),
+                            .replace(['<', '>', '"'], ""),
                     );
                     system_context.push_str("\">\n");
                     system_context.push_str(&artifact.content);
