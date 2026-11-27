@@ -10,6 +10,8 @@ Configure a Firebase project dedicated to Axon. Do not reuse Funspot's Firebase 
     export AXON_DATABASE_URL="sqlite://axon.db"
     export AXON_HOST="127.0.0.1"
     export AXON_PORT="8080"
+    # Optional: comma-separated Firebase UIDs allowed to administer provider/model registry.
+    export AXON_PLATFORM_ADMIN_UIDS="firebase-uid-1,firebase-uid-2"
     # Optional: comma-separated browser origins for a separately hosted web client.
     export AXON_ALLOWED_ORIGINS="https://axon.example.com"
     # Optional: private service URL for the Qoin Axum research API.
@@ -58,7 +60,11 @@ All other registered routes require a valid Firebase bearer token.
 - GET /api/v1/workspaces/{workspace_id}/tasks
 - POST /api/v1/workspaces/{workspace_id}/tasks — JSON: {"title":"Review the fixture status bug","objective":"Inspect the event timing logic and report evidence.","assignee_agent_id":"<agent-uuid>","context_artifact_ids":[]}
 - POST /api/v1/tasks/{task_id}/submit
-- POST /api/v1/tasks/{task_id}/transitions
+- POST /api/v1/tasks/{task_id}/transition
+
+## Platform model registry administration
+
+Set `AXON_PLATFORM_ADMIN_UIDS` to an explicit comma-separated allowlist of Firebase UIDs. The backend fails closed: users not on this list cannot access provider/model registry administration, even when authenticated. Do not put email addresses or secrets in this variable. Registry routes are under `/api/v1/admin/` and include provider management, provider data-terms review, model candidate review, evaluations, stats, flags and assignment history.
 
 ## Qoin market-vector integration
 
