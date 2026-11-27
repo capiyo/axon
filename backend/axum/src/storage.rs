@@ -49,6 +49,8 @@ pub enum StorageError {
     ProjectAuthorizationDenied,
     #[error("target user is not an active member of the project workspace")]
     ProjectWorkspaceMembershipRequired,
+    #[error("model evaluation contains an invalid score or cost")]
+    InvalidModelEvaluation,
 }
 
 #[derive(Debug, Clone, Serialize)]

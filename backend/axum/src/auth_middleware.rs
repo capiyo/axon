@@ -83,12 +83,13 @@ pub async fn authenticate(
         {
             return response(StatusCode::FORBIDDEN);
         }
+        let is_platform_admin = platform_admin_allowed(&credential.firebase_uid);
         let user = Arc::new(AuthenticatedUser {
             user_id: credential.owner_user_id,
             firebase_uid: credential.firebase_uid,
             project_id: credential.firebase_project_id,
             personal_workspace_id: credential.personal_workspace_id,
-            is_platform_admin: platform_admin_allowed(&credential.firebase_uid),
+            is_platform_admin,
         });
         request.extensions_mut().insert(user);
         request
@@ -116,12 +117,13 @@ pub async fn authenticate(
         Ok(account) => account,
         Err(_) => return response(StatusCode::INTERNAL_SERVER_ERROR),
     };
+    let is_platform_admin = platform_admin_allowed(&identity.uid);
     let user = Arc::new(AuthenticatedUser {
         user_id: account.user_id,
         firebase_uid: identity.uid,
         project_id: identity.project_id,
         personal_workspace_id: account.workspace.id,
-        is_platform_admin: platform_admin_allowed(&identity.uid),
+        is_platform_admin,
     });
     state
         .workspaces

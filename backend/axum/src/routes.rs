@@ -377,6 +377,7 @@ mod tests {
             firebase_uid: "user-1".into(),
             project_id: "axon-test".into(),
             personal_workspace_id: account.workspace.id,
+            is_platform_admin: false,
         });
         state
             .workspaces

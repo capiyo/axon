@@ -278,7 +278,15 @@ pub fn score_candidate(
         return prior * 1000.0;
     };
     VectorDecisionEngine
-        .score(agent_vector, TaskVector::for_level(level), prior)
+        .score(
+            agent_vector,
+            TaskVector::for_level(match level {
+                TaskLevel::Quick => crate::vector_decision::TaskLevel::Quick,
+                TaskLevel::Normal => crate::vector_decision::TaskLevel::Normal,
+                TaskLevel::Important => crate::vector_decision::TaskLevel::Important,
+            }),
+            prior,
+        )
         .map(|score| score * 1000.0)
         .unwrap_or(prior * 1000.0)
 }
