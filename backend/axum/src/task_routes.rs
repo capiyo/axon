@@ -167,6 +167,168 @@ pub struct TaskSubmission {
     pub artifact: Artifact,
 }
 
+pub async fn execute_task(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path(task_id): Path<Uuid>,
+) -> TaskResult<Json<TaskSubmission>> {
+    let mut task = state
+        .tasks
+        .read()
+        .await
+        .get(&task_id)
+        .cloned()
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Task not found."))?;
+
+    if !state
+        .is_workspace_member(user.user_id, task.workspace_id)
+        .await
+        .map_err(|_| storage_failure())?
+    {
+        return Err(error(StatusCode::NOT_FOUND, "Task not found."));
+    }
+
+    let agent = state
+        .agents
+        .read()
+        .await
+        .get(&task.assignee_agent_id)
+        .cloned()
+        .filter(|agent| agent.workspace_id == task.workspace_id)
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Assigned agent not found."))?;
+
+    let now = Utc::now();
+    match task.status {
+        TaskStatus::Offered => {
+            task.transitions.push(TaskTransition {
+                from: Some(TaskStatus::Offered),
+                to: TaskStatus::Acknowledged,
+                note: "Assigned agent accepted execution.".into(),
+                occurred_at: now,
+            });
+            task.status = TaskStatus::Acknowledged;
+            task.version += 1;
+        }
+        TaskStatus::Acknowledged | TaskStatus::ChangesRequested => {}
+        TaskStatus::InProgress => {}
+        _ => {
+            return Err(error(
+                StatusCode::CONFLICT,
+                "Task must be offered, acknowledged, in progress, or awaiting changes before execution.",
+            ));
+        }
+    }
+
+    if task.status != TaskStatus::InProgress {
+        if !allowed_transition(&task.status, &TaskStatus::InProgress) {
+            return Err(error(StatusCode::CONFLICT, "Task cannot enter execution."));
+        }
+        let previous = task.status.clone();
+        task.transitions.push(TaskTransition {
+            from: Some(previous),
+            to: TaskStatus::InProgress,
+            note: "Assigned agent execution started.".into(),
+            occurred_at: now,
+        });
+        task.status = TaskStatus::InProgress;
+        task.version += 1;
+    }
+    task.updated_at = now;
+    state
+        .persist_entity(
+            StoredEntity::Task(task.clone()),
+            vec![],
+            AuditEvent::attributed(
+                format!("human:{}", user.user_id),
+                Some(task.workspace_id),
+                "task.execution_started",
+                "task",
+                task.id.to_string(),
+                serde_json::json!({"agent_id": agent.id, "version": task.version}),
+            ),
+        )
+        .await
+        .map_err(|_| storage_failure())?;
+    state.tasks.write().await.insert(task.id, task.clone());
+
+    let mut system_context = format!(
+        "You are {}. Complete the assigned task carefully. Return the deliverable directly, state assumptions, and do not claim external actions you did not perform.",
+        agent.display_name
+    );
+    {
+        let artifacts = state.artifacts.read().await;
+        for artifact_id in &task.context_artifact_ids {
+            if let Some(artifact) = artifacts.get(artifact_id) {
+                if artifact.workspace_id == task.workspace_id
+                    && system_context.len() + artifact.content.len() <= 96_000
+                {
+                    system_context.push_str("\n\nReference artifact: ");
+                    system_context.push_str(&artifact.title);
+                    system_context.push_str("\n");
+                    system_context.push_str(&artifact.content);
+                }
+            }
+        }
+    }
+
+    let runtime = crate::agent_runtime::AgentRuntime::from_environment(&agent.provider)
+        .map_err(|_| error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "The assigned agent provider is not configured. Configure its AXON_AGENT_<PROVIDER> environment variables.",
+        ))?;
+    let content = runtime
+        .execute(&system_context, &task.objective, &format!("axon-task-{}", task.id))
+        .await
+        .map_err(|_| error(
+            StatusCode::BAD_GATEWAY,
+            "The assigned agent provider could not complete this task. The task remains in progress and can be retried.",
+        ))?;
+    if content.trim().is_empty() || content.len() > 512_000 {
+        return Err(error(
+            StatusCode::BAD_GATEWAY,
+            "The assigned agent returned an empty or oversized response.",
+        ));
+    }
+
+    let artifact = Artifact {
+        id: Uuid::new_v4(),
+        workspace_id: task.workspace_id,
+        title: format!("{} — agent response", task.title),
+        content,
+        source_agent_id: Some(agent.id),
+        captured_at: Utc::now(),
+    };
+    let submitted_at = Utc::now();
+    task.response_artifact_id = Some(artifact.id);
+    task.status = TaskStatus::Submitted;
+    task.version += 1;
+    task.updated_at = submitted_at;
+    task.transitions.push(TaskTransition {
+        from: Some(TaskStatus::InProgress),
+        to: TaskStatus::Submitted,
+        note: format!("Assigned agent response captured as artifact {}.", artifact.id),
+        occurred_at: submitted_at,
+    });
+    state
+        .persist_entity(
+            StoredEntity::Task(task.clone()),
+            vec![StoredEntity::Artifact(artifact.clone())],
+            AuditEvent::attributed(
+                format!("human:{}", user.user_id),
+                Some(task.workspace_id),
+                "task.execution_completed",
+                "task",
+                task.id.to_string(),
+                serde_json::json!({"artifact_id": artifact.id, "agent_id": agent.id, "version": task.version}),
+            ),
+        )
+        .await
+        .map_err(|_| storage_failure())?;
+    state.tasks.write().await.insert(task.id, task.clone());
+    state.artifacts.write().await.insert(artifact.id, artifact.clone());
+    Ok(Json(TaskSubmission { task, artifact }))
+}
+
 pub async fn submit_task(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,

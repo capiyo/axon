@@ -268,6 +268,10 @@ pub fn app(state: AppState) -> Router {
             post(task_routes::submit_task),
         )
         .route(
+            "/api/v1/tasks/:task_id/execute",
+            post(task_routes::execute_task),
+        )
+        .route(
             "/api/v1/tasks/:task_id/transition",
             post(task_routes::transition_task),
         )
