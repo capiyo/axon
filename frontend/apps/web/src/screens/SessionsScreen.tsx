@@ -4,7 +4,7 @@ import HomeScreen from "./HomeScreen";
 import SessionPanel from "./ChatsScreen";
 import ExploreScreen from "./ExploreScreen";
 import ProfileModal from "../modals/ProfileModal";
-import ChatCard from "../views/SessionCard";
+import SessionCard from "../views/SessionCard";
 import type { FormEvent } from "react";
 import { auth } from "../firebase";
 
