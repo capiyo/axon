@@ -786,7 +786,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 </View>;
               })}
               {exploreAgents.length===0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No public agents yet</Text><Text style={styles.muted}>Publish an agent from Profile to make it discoverable.</Text></View> : null}
-            </>
+            </ExploreScreen>
           ) : mobileChatOpen && chatDetail ? (
             <>
               <View style={styles.screenHeading}><Pressable onPress={() => setMobileChatOpen(false)}><Text style={styles.back}>← Sessions</Text></Pressable><Text style={styles.screenTitle}>{chatDetail.chat.title}</Text><Text style={styles.description}>{chatDetail.messages.length} messages · Updated {new Date(chatDetail.chat.updated_at).toLocaleString()}</Text></View>
