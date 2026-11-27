@@ -648,7 +648,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
     setBusy(true);
     setError("");
     try {
-      await api<Task>(`/api/v1/tasks/${task.id}/transitions`, {
+      await api<Task>(`/api/v1/tasks/${task.id}/transition`, {
         method: "POST",
         body: JSON.stringify({
           expected_version: task.version,

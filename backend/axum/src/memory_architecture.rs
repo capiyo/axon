@@ -391,7 +391,8 @@ impl MemoryEpochCoordinator {
     }
 
     async fn publish_workspace_if_due(&self, workspace_id: &str) -> Result<bool, sqlx::Error> {
-        self.publish_workspace_if_due_at(workspace_id, Utc::now()).await
+        self.publish_workspace_if_due_at(workspace_id, Utc::now())
+            .await
     }
 
     /// Deterministic clock seam for lifecycle and hourly-boundary tests.

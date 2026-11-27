@@ -623,7 +623,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
   async function advanceTask(task: Task, status: string) {
     if (!selected) return;
     await perform(async () => {
-      await request<Task>(`/api/v1/tasks/${task.id}/transitions`, {
+      await request<Task>(`/api/v1/tasks/${task.id}/transition`, {
         method: "POST",
         body: JSON.stringify({
           expected_version: task.version,

@@ -53,7 +53,10 @@ async fn require_workspace_member(
     match state.is_workspace_member(user.user_id, workspace_id).await {
         Ok(true) => Ok(()),
         Ok(false) => Err(error(StatusCode::NOT_FOUND, "Workspace not found.")),
-        Err(_) => Err(error(StatusCode::INTERNAL_SERVER_ERROR, "Could not verify workspace access.")),
+        Err(_) => Err(error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Could not verify workspace access.",
+        )),
     }
 }
 
