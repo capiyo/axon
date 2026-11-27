@@ -134,7 +134,7 @@ impl QoinScoringConfig {
         );
         let material = format!("{material}|{:016x}", self.feedback_weight.to_bits());
         let digest = Sha256::digest(material.as_bytes());
-        format!("{}:{}", self.version, format!("{digest:x}"))
+        format!("{}:{digest:x}", self.version)
     }
 
     pub fn validate(&self) -> Result<(), VectorError> {
