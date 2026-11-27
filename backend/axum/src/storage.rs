@@ -8,8 +8,7 @@ use crate::{
         WorkspaceMembership,
     },
     model_registry::{
-        AssignmentDecision, ModelChangeFlag, ModelEvaluation, ModelProvider, ModelRecord,
-        ModelStat,
+        AssignmentDecision, ModelChangeFlag, ModelEvaluation, ModelProvider, ModelRecord, ModelStat,
     },
 };
 use async_trait::async_trait;
