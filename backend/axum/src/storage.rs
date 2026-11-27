@@ -3,10 +3,13 @@ use crate::{
     chat_memory::ChatMemoryStore,
     memory_architecture::MemoryEpochCoordinator,
     memory_outbox::MemoryOutbox,
-    model_registry::{AssignmentDecision, ModelChangeFlag, ModelEvaluation, ModelProvider, ModelRecord, ModelStat},
     model::{
         Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace,
         WorkspaceMembership,
+    },
+    model_registry::{
+        AssignmentDecision, ModelChangeFlag, ModelEvaluation, ModelProvider, ModelRecord,
+        ModelStat,
     },
 };
 use async_trait::async_trait;
@@ -165,7 +168,12 @@ impl StoredEntity {
             Self::Agent(record) => Some(record.workspace_id),
             Self::Artifact(record) => Some(record.workspace_id),
             Self::Task(record) => Some(record.workspace_id),
-            Self::Provider(_) | Self::Model(_) | Self::ModelEvaluation(_) | Self::ModelStat(_) | Self::AssignmentDecision(_) | Self::ModelChangeFlag(_) => None,
+            Self::Provider(_)
+            | Self::Model(_)
+            | Self::ModelEvaluation(_)
+            | Self::ModelStat(_)
+            | Self::AssignmentDecision(_)
+            | Self::ModelChangeFlag(_) => None,
         }
     }
 
