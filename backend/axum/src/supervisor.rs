@@ -6,12 +6,11 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum TaskLevel { Quick, Normal, Important }
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
-use thiserror::Error;
-use uuid::Uuid;
+pub enum TaskLevel {
+    Quick,
+    Normal,
+    Important,
+}
 
 pub const REQUIRED_WORKER_COUNT: usize = 2;
 pub const REQUIRED_SUPERVISOR_COUNT: usize = 2;
