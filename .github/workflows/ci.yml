@@ -6,9 +6,8 @@ concurrency:
 
 on:
   push:
-    branches: [main, "foundation/**", "production/**", "feature/**"]
-  pull_request:
-    branches: [main, "production/**"]
+    branches: [master]
+  workflow_dispatch:
 
 permissions:
   contents: read
