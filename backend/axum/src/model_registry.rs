@@ -1121,7 +1121,7 @@ mod tests {
     }
 
     #[test]
-    fn history_only_overrides_curated_cold_start_after_minimum_runs() {
+    fn history_blends_with_curated_prior_after_minimum_runs() {
         let (providers, models) = fixture();
         let high = ModelStat {
             id: Uuid::new_v4(),
@@ -1144,7 +1144,8 @@ mod tests {
             score_candidate(Some(&low_sample), &TaskLevel::Quick, 5, 2),
             998.0
         );
-        assert!(score_candidate(Some(&high), &TaskLevel::Quick, 5, 2) > 998.0);
+        let observed = score_candidate(Some(&high), &TaskLevel::Quick, 5, 2);
+        assert!(observed > 900.0 && observed < 998.0);
         assert_eq!(providers.len(), 6);
     }
 

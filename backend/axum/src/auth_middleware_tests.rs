@@ -86,7 +86,7 @@ mod tests {
             ("GET", format!("/api/v1/workspaces/{workspace_id}/tasks")),
             ("POST", format!("/api/v1/workspaces/{workspace_id}/tasks")),
             ("POST", format!("/api/v1/tasks/{task_id}/submit")),
-            ("POST", format!("/api/v1/tasks/{task_id}/transitions")),
+            ("POST", format!("/api/v1/tasks/{task_id}/transition")),
         ];
         for (method, path) in routes {
             let missing = app

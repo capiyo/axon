@@ -1883,7 +1883,7 @@ mod tests {
         assert_eq!(pinned_qkv, "axon-lexical-qkv-v1");
         assert_eq!(
             pinned_qoin,
-            crate::memory_intelligence::QOIN_MEMORY_SCORING_VERSION
+            crate::memory_intelligence::QoinScoringConfig::default().effective_version()
         );
         let update_result = sqlx::query(
             "UPDATE memory_document_epoch_items SET content_hash = 'tampered' WHERE memory_id = ?",
@@ -2396,6 +2396,14 @@ mod epoch_document_tests {
             .await
             .unwrap();
         assert_eq!(visible, vec![(document.memory_id, 3)]);
+        // The epoch publisher is hourly; simulate the next hourly boundary so
+        // the restored version is picked up in a subsequent immutable epoch.
+        sqlx::query("UPDATE memory_epochs SET published_at = ? WHERE workspace_id = ?")
+            .bind((chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339())
+            .bind(account.workspace.id.to_string())
+            .execute(&outbox.pool)
+            .await
+            .unwrap();
         assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
         let restored_epoch_version: i64 = sqlx::query_scalar(
             "SELECT i.document_version FROM memory_document_epoch_items i

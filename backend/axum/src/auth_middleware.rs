@@ -52,12 +52,6 @@ pub async fn authenticate(
     };
     if token.starts_with("axn_") {
         let segments: Vec<&str> = request.uri().path().split('/').collect();
-        let Some(workspace_text) = segments.get(4) else {
-            return response(StatusCode::UNAUTHORIZED);
-        };
-        let Some(agent_text) = segments.get(6) else {
-            return response(StatusCode::UNAUTHORIZED);
-        };
         let allowed_agent_endpoint = segments.get(3) == Some(&"workspaces")
             && segments.get(5) == Some(&"agents")
             && segments.get(7).is_some_and(|endpoint| {
@@ -68,6 +62,12 @@ pub async fn authenticate(
         if !allowed_agent_endpoint {
             return response(StatusCode::FORBIDDEN);
         }
+        let Some(workspace_text) = segments.get(4) else {
+            return response(StatusCode::NOT_FOUND);
+        };
+        let Some(agent_text) = segments.get(6) else {
+            return response(StatusCode::NOT_FOUND);
+        };
         let (Ok(request_workspace_id), Ok(request_agent_id)) =
             (Uuid::parse_str(workspace_text), Uuid::parse_str(agent_text))
         else {
