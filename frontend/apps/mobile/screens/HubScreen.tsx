@@ -1053,17 +1053,19 @@ function AuthGate() {
   }
 
   async function resendVerification() {
-    if (!auth?.currentUser) return;
+    const currentUser = auth?.currentUser;
+    if (!currentUser) return;
     setWorking(true); setAuthError(""); setNotice("");
-    try { await sendEmailVerification(auth.currentUser); setNotice("Verification email sent. Check your inbox and spam folder."); }
+    try { await sendEmailVerification(currentUser); setNotice("Verification email sent. Check your inbox and spam folder."); }
     catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not send verification email."); }
     finally { setWorking(false); }
   }
 
   async function checkVerification() {
-    if (!auth?.currentUser) return;
+    const currentUser = auth?.currentUser;
+    if (!currentUser) return;
     setWorking(true); setAuthError("");
-    try { await reload(auth.currentUser); setUser(auth.currentUser); if (!auth.currentUser.emailVerified) setAuthError("Your email is not verified yet. Open the link in the email we sent."); }
+    try { await reload(currentUser); setUser(currentUser); if (!currentUser.emailVerified) setAuthError("Your email is not verified yet. Open the link in the email we sent."); }
     catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not refresh account status."); }
     finally { setWorking(false); }
   }
