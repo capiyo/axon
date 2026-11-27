@@ -89,7 +89,7 @@
 
 ## Not implemented / production gates
 
-- Web and Expo mobile Firebase email/password sign-in and account creation, session restoration, sign-out, and Firebase ID-token injection on authenticated API requests. Client configuration is supplied through app-specific public Firebase environment variables; no Firebase credentials are committed. Google, email-link and phone-first sign-in providers remain outside the current email/password implementation.
+- Live Firebase project validation for web and Expo mobile authentication, including confirmation that email/password sign-in is enabled in the Axon Firebase project, configured app-specific public Firebase environment variables, verified-email behavior, account creation, session restoration, sign-out, and authenticated API calls. The web and mobile clients already implement email/password sign-in and account creation, verification-email sending/resending, terms acceptance at registration, auth-state restoration, sign-out, and Firebase ID-token injection on API requests. No Firebase credentials are committed. Google, email-link and phone-first sign-in providers remain outside the current email/password implementation.
 - Provider-side sign-in abuse controls and any client-specific phone/SMS quota configuration. Axon currently exposes no password/SMS sign-in endpoint; credentials should go directly through Firebase Auth, not through Axon's API.
 - Invitations, workspace membership management UI, role/capability grant persistence and management APIs.
 - A news consumer and provider/model-driven assistant response generation. Chat messages are persisted, but Axon does not invent assistant replies.
