@@ -1,7 +1,7 @@
 use crate::{
-    explore::ExploreStore,
     audit::{AuditEvent, AuditStore},
     chat_memory::ChatMemoryStore,
+    explore::ExploreStore,
     firebase_auth::FirebaseVerifier,
     memory_architecture::MemoryEpochCoordinator,
     memory_documents::MemoryDocumentRepository,
