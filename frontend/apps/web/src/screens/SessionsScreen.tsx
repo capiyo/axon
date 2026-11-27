@@ -814,7 +814,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                     {chats.map(chat => {
                       const linkedTasks = tasks.filter(task => task.source_chat_id === chat.id);
                       const progress = linkedTasks.length ? Math.round(linkedTasks.reduce((sum, task) => sum + taskProgress(task.status), 0) / linkedTasks.length) : null;
-                      return <SessionCard key={chat.id} chat={chat} linkedTaskCount={linkedTasks.length} progress={progress} active={activeChat === chat.id} onOpen={() => { setActiveChat(chat.id); setMobileConversationOpen(true); }} onLike={() => void toggleChatLike(chat.id)} onArchive={() => void archiveChatById(chat.id)} />;
+                      return <SessionCard key={chat.id} session={chat} linkedTaskCount={linkedTasks.length} progress={progress} active={activeChat === chat.id} onOpen={() => { setActiveChat(chat.id); setMobileConversationOpen(true); }} onLike={() => void toggleChatLike(chat.id)} onArchive={() => void archiveChatById(chat.id)} />;
                     })}
                     {chats.length === 0 && <div className="chat-list-empty"><span className="chat-empty-mark">＋</span><strong>No sessions yet</strong><p>Create a session to start working and capture project discussions and decisions.</p></div>}
                   </div>
