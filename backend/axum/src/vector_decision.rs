@@ -153,7 +153,11 @@ impl VectorDecisionEngine {
         {
             return Err(VectorError::OutOfRange);
         }
-        if agent.features.iter().any(|value| !(0.0..=1.0).contains(value)) {
+        if agent
+            .features
+            .iter()
+            .any(|value| !(0.0..=1.0).contains(value))
+        {
             return Err(VectorError::OutOfRange);
         }
         let observed: f64 = agent
