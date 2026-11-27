@@ -1,7 +1,7 @@
 use crate::{
     auth_middleware::AuthenticatedUser,
     model::{
-        AddWorkspaceMember, CreateProject, Project, ProjectMembership, ProjectRole,
+        AddWorkspaceMember, CreateProject, Project, ProjectMembership,
         SetProjectMember, WorkspaceMembership,
     },
     storage::StorageError,
