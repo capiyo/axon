@@ -45,10 +45,24 @@ fn actor(user: &AuthenticatedUser) -> String {
     format!("human:{}", user.user_id)
 }
 
+async fn require_workspace_member(
+    state: &AppState,
+    user: &AuthenticatedUser,
+    workspace_id: Uuid,
+) -> ApiResult<()> {
+    match state.is_workspace_member(user.user_id, workspace_id).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(error(StatusCode::NOT_FOUND, "Workspace not found.")),
+        Err(_) => Err(error(StatusCode::INTERNAL_SERVER_ERROR, "Could not verify workspace access.")),
+    }
+}
+
 pub async fn list_chats(
     State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path(workspace_id): Path<Uuid>,
 ) -> ApiResult<Json<Vec<Chat>>> {
+    require_workspace_member(&state, &user, workspace_id).await?;
     let chats = store(&state)?
         .list_chats(workspace_id)
         .await
@@ -62,6 +76,7 @@ pub async fn create_chat(
     Path(workspace_id): Path<Uuid>,
     Json(input): Json<CreateChat>,
 ) -> ApiResult<(StatusCode, Json<Chat>)> {
+    require_workspace_member(&state, &user, workspace_id).await?;
     let title = input.title.trim();
     if title.is_empty() || title.len() > 160 {
         return Err(error(
@@ -78,8 +93,10 @@ pub async fn create_chat(
 
 pub async fn get_chat(
     State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, chat_id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<Json<ChatDetail>> {
+    require_workspace_member(&state, &user, workspace_id).await?;
     let detail = store(&state)?
         .get_chat(workspace_id, chat_id)
         .await
@@ -95,6 +112,7 @@ pub async fn append_message(
     Path((workspace_id, chat_id)): Path<(Uuid, Uuid)>,
     Json(mut input): Json<CreateMessage>,
 ) -> ApiResult<(StatusCode, Json<crate::chat_memory::ChatMessage>)> {
+    require_workspace_member(&state, &user, workspace_id).await?;
     input.role = input.role.trim().to_ascii_lowercase();
     if !["user", "assistant", "system"].contains(&input.role.as_str()) {
         return Err(error(
@@ -129,6 +147,7 @@ pub async fn archive_chat(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, chat_id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<StatusCode> {
+    require_workspace_member(&state, &user, workspace_id).await?;
     let archived = store(&state)?
         .archive_chat(workspace_id, chat_id, &actor(&user))
         .await
@@ -146,6 +165,7 @@ pub async fn create_memory_entry(
     Path((workspace_id, chat_id)): Path<(Uuid, Uuid)>,
     Json(mut input): Json<CreateMemoryEntry>,
 ) -> ApiResult<(StatusCode, Json<crate::chat_memory::MemoryEntry>)> {
+    require_workspace_member(&state, &user, workspace_id).await?;
     input.entry_type = input.entry_type.trim().to_ascii_lowercase();
     if !["decision", "fact", "constraint", "open_task", "note"].contains(&input.entry_type.as_str())
     {
@@ -181,6 +201,7 @@ pub async fn mutate_memory_entry(
     Path((workspace_id, chat_id, entry_id, action)): Path<(Uuid, Uuid, Uuid, String)>,
     input: Option<Json<EditMemoryEntry>>,
 ) -> ApiResult<Json<crate::chat_memory::MemoryEntry>> {
+    require_workspace_member(&state, &user, workspace_id).await?;
     let action = action.to_ascii_lowercase();
     if !["approve", "reject", "edit", "delete"].contains(&action.as_str()) {
         return Err(error(StatusCode::NOT_FOUND, "Memory action not found."));
