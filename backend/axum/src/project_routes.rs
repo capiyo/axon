@@ -17,7 +17,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
-struct ProjectApiError {
+pub struct ProjectApiError {
     error: &'static str,
 }
 
