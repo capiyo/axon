@@ -76,7 +76,7 @@ pub struct CreateMemoryDocumentResponse {
 }
 
 #[derive(Debug, Serialize)]
-struct ApiError {
+pub struct ApiError {
     error: String,
 }
 
