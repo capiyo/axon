@@ -409,7 +409,7 @@ impl MemoryEpochCoordinator {
             let parsed = DateTime::parse_from_rfc3339(&timestamp)
                 .map_err(|error| sqlx::Error::Decode(Box::new(error)))?
                 .with_timezone(&Utc);
-            if Utc::now().signed_duration_since(parsed).num_seconds() < 3600 {
+            if now.signed_duration_since(parsed).num_seconds() < 3600 {
                 tx.rollback().await?;
                 return Ok(false);
             }
