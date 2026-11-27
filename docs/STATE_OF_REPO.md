@@ -128,3 +128,13 @@ The historical Phase A CI run referenced in earlier repository notes belongs to 
 ## Dual-database memory implementation note
 
 The current implementation includes SQLite-authoritative metadata, immutable versioned MongoDB documents, a recoverable transactional outbox with audited dead-letter retry, deterministic lexical QKV retrieval, configurable versioned Qoin v2 ranking with session-pinned retrieval feedback, immutable document-version epoch pins, combined session-context retrieval, persistent workspace/project memberships with project-scope authorization, bounded read-only reconciliation, and separate database readiness probes. It is not a completed production memory system: neural embeddings, searchable vector indexing/rebuild, automatic repair, scope promotion, physical deletion/retention purge, general-purpose persisted capability grants for all resource families, provider-backed agent execution, live MongoDB failure/restart tests, and performance/restore drills remain outstanding. See [Memory Architecture](MEMORY_ARCHITECTURE.md), [MongoDB Setup](MONGODB_SETUP.md), [QKV Retrieval](QKV_RETRIEVAL.md), [Qoin Memory Intelligence](QOIN_MEMORY_INTELLIGENCE.md), and [Memory Testing](MEMORY_TESTING.md). Current-branch Rust compilation and integration tests must pass before production use.
+
+
+## Mandatory master-only development policy (2026-11-27)
+
+- `master` is the only authoritative branch for all future implementation, fixes, tests, docs, refactors, dependency updates, and releases.
+- Do not create or use new feature, fix, implementation, production, foundation, or integration branches. Work directly on the latest `master`.
+- Legacy branches are historical sources only. Port reviewed, non-duplicate changes into `master`; never force-merge divergent histories or overwrite current code.
+- Never force-push or reset `master`. A task is complete only after its code is committed on `master`, relevant tests have run, and the resulting commit/CI status is verified.
+- GitHub repository settings must set `master` as the default branch and enforce branch restrictions/rulesets. Documentation and CI triggers alone do not enforce repository permissions.
+- Keep Axon independent of Funspot and Qoin; do not reintroduce retired integrations.
