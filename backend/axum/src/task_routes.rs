@@ -263,11 +263,7 @@ pub async fn execute_task(
                     && system_context.len() + artifact.content.len() <= 96_000
                 {
                     system_context.push_str("\n\n<reference-artifact title=\"");
-                    system_context.push_str(
-                        &artifact
-                            .title
-                            .replace(['<', '>', '"'], ""),
-                    );
+                    system_context.push_str(&artifact.title.replace(['<', '>', '"'], ""));
                     system_context.push_str("\">\n");
                     system_context.push_str(&artifact.content);
                     system_context.push_str("\n</reference-artifact>");
