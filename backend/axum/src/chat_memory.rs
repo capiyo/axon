@@ -16,9 +16,9 @@ pub struct Chat {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub archived: bool,
-    pub unread_count: u64,
+    pub unread_count: i64,
     pub is_liked: bool,
-    pub message_count: u64,
+    pub message_count: i64,
     pub last_message: Option<ChatMessage>,
 }
 
