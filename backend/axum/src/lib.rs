@@ -15,6 +15,7 @@ pub mod memory_intelligence;
 pub mod memory_outbox;
 mod memory_routes;
 pub mod memory_vector_provider;
+pub mod vector_decision;
 mod model;
 mod project_routes;
 pub mod qoin_vectors;
