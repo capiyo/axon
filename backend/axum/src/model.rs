@@ -164,6 +164,7 @@ pub struct SubmitTask {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct TransitionTask {
     pub expected_version: u64,
     pub status: TaskStatus,
