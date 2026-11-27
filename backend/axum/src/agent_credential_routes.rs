@@ -33,7 +33,7 @@ impl From<IssuedAgentCredential> for AgentCredentialResponse {
 }
 
 #[derive(Debug, Serialize)]
-struct AgentCredentialApiError {
+pub struct AgentCredentialApiError {
     error: &'static str,
 }
 
