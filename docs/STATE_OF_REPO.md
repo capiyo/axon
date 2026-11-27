@@ -1,14 +1,16 @@
 # State of Repository
 
-**Last updated:** 2026-11-26
+**Last updated:** 2026-11-27
 
 **Product identity:** Axon (working name; public trademark/domain clearance remains outstanding).
 
 ## Repository
 
 - Repository: `capiyo/axon`
-- Default branch: `main`
-- Active implementation branch: `production/phase-b-chats-memory`
+- GitHub default branch setting: `main` (must be changed to `master` in repository settings; the connected GitHub operations available here cannot change this setting).
+- Authoritative development branch: `master` (all implementation, fixes, tests, documentation, configuration, and integration changes are committed directly here).
+- Other branches are legacy consolidation inputs only; do not use them for new development. Port verified, non-duplicate changes to `master` without overwriting unrelated work.
+- At this update, `master` is 862 commits ahead of `main`; `main` is stale and must not replace `master`.
 - Repository: [github.com/capiyo/axon](https://github.com/capiyo/axon)
 - License: MIT (see [LICENSE](../LICENSE))
 
