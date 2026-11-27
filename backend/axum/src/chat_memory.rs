@@ -930,6 +930,96 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn chat_summary_tracks_messages_reads_and_likes_per_user() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let account = storage
+            .ensure_firebase_user("axon-test", "chat-summary-user")
+            .await
+            .unwrap();
+        let store = storage.chat_memory_store();
+        let chat = store
+            .create_chat(
+                account.workspace.id,
+                account.user_id,
+                "human:test",
+                "Summary test".into(),
+            )
+            .await
+            .unwrap();
+        store
+            .append_message(
+                account.workspace.id,
+                chat.id,
+                "human:test",
+                CreateMessage {
+                    role: "assistant".into(),
+                    content: "A reply to count as unread.".into(),
+                    answered_by: Some("test-agent".into()),
+                },
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+        let summary = store
+            .list_chats_for_user(account.workspace.id, account.user_id)
+            .await
+            .unwrap()
+            .remove(0);
+        assert_eq!(summary.message_count, 1);
+        assert_eq!(summary.unread_count, 1);
+        assert!(!summary.is_liked);
+        assert_eq!(
+            summary.last_message.as_ref().map(|message| message.content.as_str()),
+            Some("A reply to count as unread.")
+        );
+
+        assert!(store
+            .mark_chat_read(account.workspace.id, chat.id, account.user_id)
+            .await
+            .unwrap());
+        assert_eq!(
+            store
+                .list_chats_for_user(account.workspace.id, account.user_id)
+                .await
+                .unwrap()[0]
+                .unread_count,
+            0
+        );
+        assert_eq!(
+            store
+                .toggle_chat_like(
+                    account.workspace.id,
+                    chat.id,
+                    account.user_id,
+                    "human:test",
+                )
+                .await
+                .unwrap(),
+            Some(true)
+        );
+        assert!(
+            store
+                .list_chats_for_user(account.workspace.id, account.user_id)
+                .await
+                .unwrap()[0]
+                .is_liked
+        );
+        assert_eq!(
+            store
+                .toggle_chat_like(
+                    account.workspace.id,
+                    chat.id,
+                    account.user_id,
+                    "human:test",
+                )
+                .await
+                .unwrap(),
+            Some(false)
+        );
+    }
+
+    #[tokio::test]
     async fn memory_event_log_rejects_updates_and_deletes() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let account = storage
