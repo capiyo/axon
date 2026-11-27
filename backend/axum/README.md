@@ -59,6 +59,7 @@ All other registered routes require a valid Firebase bearer token.
 - POST /api/v1/workspaces/{workspace_id}/artifacts — JSON: {"title":"Investigation","content":"Captured response","source_agent_id":null}
 - GET /api/v1/workspaces/{workspace_id}/tasks
 - POST /api/v1/workspaces/{workspace_id}/tasks — JSON: {"title":"Review the fixture status bug","objective":"Inspect the event timing logic and report evidence.","assignee_agent_id":"<agent-uuid>","context_artifact_ids":[]}
+- POST /api/v1/tasks/{task_id}/execute
 - POST /api/v1/tasks/{task_id}/submit
 - POST /api/v1/tasks/{task_id}/transition
 

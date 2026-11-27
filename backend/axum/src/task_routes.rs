@@ -198,7 +198,7 @@ pub async fn execute_task(
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Assigned agent not found."))?;
 
     let now = Utc::now();
-    match task.status {
+    match &task.status {
         TaskStatus::Offered => {
             task.transitions.push(TaskTransition {
                 from: Some(TaskStatus::Offered),
