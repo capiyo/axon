@@ -67,7 +67,7 @@ pub async fn list_chats(
 ) -> ApiResult<Json<Vec<Chat>>> {
     require_workspace_member(&state, &user, workspace_id).await?;
     let chats = store(&state)?
-        .list_chats(workspace_id)
+        .list_chats_for_user(workspace_id, user.user_id)
         .await
         .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load chats."))?;
     Ok(Json(chats))
@@ -101,12 +101,43 @@ pub async fn get_chat(
 ) -> ApiResult<Json<ChatDetail>> {
     require_workspace_member(&state, &user, workspace_id).await?;
     let detail = store(&state)?
-        .get_chat(workspace_id, chat_id)
+        .get_chat_for_user(workspace_id, chat_id, user.user_id)
         .await
         .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load chat."))?;
     detail
         .map(Json)
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Chat not found."))
+}
+
+pub async fn mark_chat_read(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, chat_id)): Path<(Uuid, Uuid)>,
+) -> ApiResult<StatusCode> {
+    require_workspace_member(&state, &user, workspace_id).await?;
+    let updated = store(&state)?
+        .mark_chat_read(workspace_id, chat_id, user.user_id)
+        .await
+        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not update chat read state."))?;
+    if updated {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(error(StatusCode::NOT_FOUND, "Chat not found."))
+    }
+}
+
+pub async fn toggle_chat_like(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, chat_id)): Path<(Uuid, Uuid)>,
+) -> ApiResult<Json<serde_json::Value>> {
+    require_workspace_member(&state, &user, workspace_id).await?;
+    let is_liked = store(&state)?
+        .toggle_chat_like(workspace_id, chat_id, user.user_id, &actor(&user))
+        .await
+        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not update chat reaction."))?
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Chat not found."))?;
+    Ok(Json(serde_json::json!({"is_liked": is_liked})))
 }
 
 pub async fn append_message(

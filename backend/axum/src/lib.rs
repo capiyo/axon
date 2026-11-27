@@ -107,6 +107,14 @@ pub fn app(state: AppState) -> Router {
             get(chat_memory_routes::get_chat),
         )
         .route(
+            "/api/v1/workspaces/:workspace_id/chats/:chat_id/read",
+            post(chat_memory_routes::mark_chat_read),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/chats/:chat_id/like",
+            post(chat_memory_routes::toggle_chat_like),
+        )
+        .route(
             "/api/v1/workspaces/:workspace_id/chats/:chat_id/messages",
             post(chat_memory_routes::append_message),
         )
