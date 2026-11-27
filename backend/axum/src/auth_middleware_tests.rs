@@ -75,9 +75,24 @@ mod tests {
             ("POST", "/api/v1/sim/devices/simulator-1/telemetry".into()),
             ("GET", format!("/api/v1/workspaces/{workspace_id}/agents")),
             ("GET", format!("/api/v1/workspaces/{workspace_id}/chats")),
-            ("GET", format!("/api/v1/workspaces/{workspace_id}/chats/{}", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/chats/{}/read", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/chats/{}/like", Uuid::new_v4())),
+            (
+                "GET",
+                format!("/api/v1/workspaces/{workspace_id}/chats/{}", Uuid::new_v4()),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/chats/{}/read",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/chats/{}/like",
+                    Uuid::new_v4()
+                ),
+            ),
             ("GET", format!("/api/v1/explore/agents/{}", Uuid::new_v4())),
             ("POST", format!("/api/v1/workspaces/{workspace_id}/agents")),
             (
