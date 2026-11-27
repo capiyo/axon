@@ -3,6 +3,7 @@ use crate::{
     chat_memory::ChatMemoryStore,
     memory_architecture::MemoryEpochCoordinator,
     memory_outbox::MemoryOutbox,
+    model_registry::{AssignmentDecision, ModelChangeFlag, ModelEvaluation, ModelProvider, ModelRecord, ModelStat},
     model::{
         Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace,
         WorkspaceMembership,
@@ -87,6 +88,12 @@ pub enum EntityKind {
     Agent,
     Artifact,
     Task,
+    Provider,
+    Model,
+    ModelEvaluation,
+    ModelStat,
+    AssignmentDecision,
+    ModelChangeFlag,
 }
 
 impl EntityKind {
@@ -96,6 +103,12 @@ impl EntityKind {
             Self::Agent => "agent",
             Self::Artifact => "artifact",
             Self::Task => "task",
+            Self::Provider => "provider",
+            Self::Model => "model",
+            Self::ModelEvaluation => "model_evaluation",
+            Self::ModelStat => "model_stat",
+            Self::AssignmentDecision => "assignment_decision",
+            Self::ModelChangeFlag => "model_change_flag",
         }
     }
 }
@@ -107,6 +120,12 @@ pub enum StoredEntity {
     Agent(Agent),
     Artifact(Artifact),
     Task(Task),
+    Provider(ModelProvider),
+    Model(ModelRecord),
+    ModelEvaluation(ModelEvaluation),
+    ModelStat(ModelStat),
+    AssignmentDecision(AssignmentDecision),
+    ModelChangeFlag(ModelChangeFlag),
 }
 
 impl StoredEntity {
@@ -116,6 +135,12 @@ impl StoredEntity {
             Self::Agent(_) => EntityKind::Agent,
             Self::Artifact(_) => EntityKind::Artifact,
             Self::Task(_) => EntityKind::Task,
+            Self::Provider(_) => EntityKind::Provider,
+            Self::Model(_) => EntityKind::Model,
+            Self::ModelEvaluation(_) => EntityKind::ModelEvaluation,
+            Self::ModelStat(_) => EntityKind::ModelStat,
+            Self::AssignmentDecision(_) => EntityKind::AssignmentDecision,
+            Self::ModelChangeFlag(_) => EntityKind::ModelChangeFlag,
         }
     }
 
@@ -125,6 +150,12 @@ impl StoredEntity {
             Self::Agent(record) => record.id,
             Self::Artifact(record) => record.id,
             Self::Task(record) => record.id,
+            Self::Provider(record) => record.id,
+            Self::Model(record) => record.id,
+            Self::ModelEvaluation(record) => record.id,
+            Self::ModelStat(record) => record.id,
+            Self::AssignmentDecision(record) => record.id,
+            Self::ModelChangeFlag(record) => record.id,
         }
     }
 
@@ -134,6 +165,7 @@ impl StoredEntity {
             Self::Agent(record) => Some(record.workspace_id),
             Self::Artifact(record) => Some(record.workspace_id),
             Self::Task(record) => Some(record.workspace_id),
+            Self::Provider(_) | Self::Model(_) | Self::ModelEvaluation(_) | Self::ModelStat(_) | Self::AssignmentDecision(_) | Self::ModelChangeFlag(_) => None,
         }
     }
 
@@ -143,6 +175,12 @@ impl StoredEntity {
             Self::Agent(record) => record.created_at,
             Self::Artifact(record) => record.captured_at,
             Self::Task(record) => record.created_at,
+            Self::Provider(record) => record.created_at,
+            Self::Model(record) => record.created_at,
+            Self::ModelEvaluation(record) => record.run_at,
+            Self::ModelStat(record) => record.last_updated,
+            Self::AssignmentDecision(record) => record.created_at,
+            Self::ModelChangeFlag(record) => record.detected_at,
         }
     }
 }

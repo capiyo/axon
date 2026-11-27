@@ -14,6 +14,7 @@ pub struct AuthenticatedUser {
     pub firebase_uid: String,
     pub project_id: String,
     pub personal_workspace_id: Uuid,
+    pub is_platform_admin: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -22,6 +23,12 @@ pub struct AuthenticatedAgent {
     pub agent_id: Uuid,
     pub workspace_id: Uuid,
     pub owner_user_id: Uuid,
+}
+
+fn platform_admin_allowed(firebase_uid: &str) -> bool {
+    std::env::var("AXON_PLATFORM_ADMIN_UIDS")
+        .ok()
+        .is_some_and(|uids| uids.split(',').any(|uid| uid.trim() == firebase_uid))
 }
 
 pub async fn authenticate(
@@ -81,6 +88,7 @@ pub async fn authenticate(
             firebase_uid: credential.firebase_uid,
             project_id: credential.firebase_project_id,
             personal_workspace_id: credential.personal_workspace_id,
+            is_platform_admin: platform_admin_allowed(&credential.firebase_uid),
         });
         request.extensions_mut().insert(user);
         request
@@ -113,6 +121,7 @@ pub async fn authenticate(
         firebase_uid: identity.uid,
         project_id: identity.project_id,
         personal_workspace_id: account.workspace.id,
+        is_platform_admin: platform_admin_allowed(&identity.uid),
     });
     state
         .workspaces

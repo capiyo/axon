@@ -18,6 +18,8 @@ pub mod memory_intelligence;
 pub mod memory_outbox;
 mod memory_routes;
 pub mod memory_vector_provider;
+pub mod model_registry;
+mod model_registry_routes;
 mod model;
 mod project_routes;
 pub mod qoin_vectors;
@@ -61,6 +63,27 @@ pub fn app(state: AppState) -> Router {
     };
     Router::new()
         .route("/health", get(routes::health))
+        .route(
+            "/api/v1/admin/providers",
+            get(model_registry_routes::list_providers).post(model_registry_routes::create_provider),
+        )
+        .route(
+            "/api/v1/admin/providers/:provider_id/terms-review",
+            post(model_registry_routes::review_provider_terms),
+        )
+        .route(
+            "/api/v1/admin/models",
+            get(model_registry_routes::list_models).post(model_registry_routes::create_model),
+        )
+        .route(
+            "/api/v1/admin/models/:model_id/review",
+            post(model_registry_routes::review_candidate),
+        )
+        .route("/api/v1/admin/evaluations", get(model_registry_routes::list_evaluations))
+        .route("/api/v1/admin/stats", get(model_registry_routes::list_stats))
+        .route("/api/v1/admin/flags", get(model_registry_routes::list_flags))
+        .route("/api/v1/admin/flags/:flag_id/clear", post(model_registry_routes::clear_flag))
+        .route("/api/v1/admin/assignments", get(model_registry_routes::list_assignments))
         .route("/api/v1/explore/agents", get(explore::list_agents))
         .route("/api/v1/workspaces/:workspace_id/agents/:agent_id/publish", post(explore::publish_agent).delete(explore::unpublish_agent))
         .route("/api/v1/explore/agents/:listing_id/comments", get(explore::list_comments).post(explore::create_comment))
