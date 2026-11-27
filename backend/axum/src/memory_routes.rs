@@ -215,7 +215,7 @@ pub async fn index_chat_message_with_qoin(
         .map_err(|_| {
             error(
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "Chat message could not be indexed with the historical Qoin vector.",
+                "Chat message could not be indexed with the historical vector snapshot.",
             )
         })?;
     Ok(Json(QoinChatMessageIndexReceipt {
@@ -330,7 +330,7 @@ pub async fn index_memory_with_qoin(
         .map_err(|_| {
             error(
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "Only an approved memory in this chat can be indexed. Check the memory state and Qoin vector metadata.",
+                "Only an approved memory in this chat can be indexed. Check the memory state and vector metadata.",
             )
         })?;
     Ok(Json(QoinMemoryIndexReceipt {
@@ -386,7 +386,7 @@ pub async fn index_memory(
         .map_err(|_| {
             error(
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "Memory must exist, be approved, and have valid Qoin vector metadata.",
+                "Memory must exist, be approved, and have valid vector metadata.",
             )
         })?;
     Ok(StatusCode::CREATED)
@@ -418,7 +418,7 @@ pub async fn prepare_handover(
         }
     }
     let context = coordinator(&state)?.prepare_handover(input).await
-        .map_err(|_| error(StatusCode::UNPROCESSABLE_ENTITY, "Could not construct a verified memory handover. Check the published epoch, Qoin model version, and vector dimensions."))?;
+        .map_err(|_| error(StatusCode::UNPROCESSABLE_ENTITY, "Could not construct a verified memory handover. Check the published epoch, compatible vector model version, and vector dimensions."))?;
     Ok(Json(context))
 }
 
