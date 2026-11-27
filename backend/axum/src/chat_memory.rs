@@ -970,7 +970,10 @@ mod tests {
         assert_eq!(summary.unread_count, 1);
         assert!(!summary.is_liked);
         assert_eq!(
-            summary.last_message.as_ref().map(|message| message.content.as_str()),
+            summary
+                .last_message
+                .as_ref()
+                .map(|message| message.content.as_str()),
             Some("A reply to count as unread.")
         );
 
@@ -988,12 +991,7 @@ mod tests {
         );
         assert_eq!(
             store
-                .toggle_chat_like(
-                    account.workspace.id,
-                    chat.id,
-                    account.user_id,
-                    "human:test",
-                )
+                .toggle_chat_like(account.workspace.id, chat.id, account.user_id, "human:test")
                 .await
                 .unwrap(),
             Some(true)
