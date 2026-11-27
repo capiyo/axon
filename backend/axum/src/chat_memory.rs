@@ -172,12 +172,11 @@ impl ChatMemoryStore {
     }
 
     async fn enrich_chat(&self, chat: &mut Chat, user_id: Uuid) -> Result<(), sqlx::Error> {
-        chat.message_count = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM chat_messages WHERE chat_id = ?",
-        )
-        .bind(chat.id.to_string())
-        .fetch_one(&self.pool)
-        .await?;
+        chat.message_count =
+            sqlx::query_scalar("SELECT COUNT(*) FROM chat_messages WHERE chat_id = ?")
+                .bind(chat.id.to_string())
+                .fetch_one(&self.pool)
+                .await?;
         let last_message = sqlx::query(
             "SELECT id, chat_id, role, content, created_at, answered_by FROM chat_messages WHERE chat_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
         )
@@ -267,7 +266,11 @@ impl ChatMemoryStore {
             &mut tx,
             workspace_id,
             actor,
-            if is_liked { "chat.liked" } else { "chat.unliked" },
+            if is_liked {
+                "chat.liked"
+            } else {
+                "chat.unliked"
+            },
             "chat",
             chat_id,
             json!({"is_liked": is_liked}),

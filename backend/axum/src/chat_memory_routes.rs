@@ -118,7 +118,12 @@ pub async fn mark_chat_read(
     let updated = store(&state)?
         .mark_chat_read(workspace_id, chat_id, user.user_id)
         .await
-        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not update chat read state."))?;
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not update chat read state.",
+            )
+        })?;
     if updated {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -135,7 +140,12 @@ pub async fn toggle_chat_like(
     let is_liked = store(&state)?
         .toggle_chat_like(workspace_id, chat_id, user.user_id, &actor(&user))
         .await
-        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not update chat reaction."))?
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not update chat reaction.",
+            )
+        })?
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Chat not found."))?;
     Ok(Json(serde_json::json!({"is_liked": is_liked})))
 }
