@@ -306,7 +306,10 @@ pub async fn execute_task(
     task.transitions.push(TaskTransition {
         from: Some(TaskStatus::InProgress),
         to: TaskStatus::Submitted,
-        note: format!("Assigned agent response captured as artifact {}.", artifact.id),
+        note: format!(
+            "Assigned agent response captured as artifact {}",
+            artifact.id
+        ),
         occurred_at: submitted_at,
     });
     state
@@ -325,7 +328,11 @@ pub async fn execute_task(
         .await
         .map_err(|_| storage_failure())?;
     state.tasks.write().await.insert(task.id, task.clone());
-    state.artifacts.write().await.insert(artifact.id, artifact.clone());
+    state
+        .artifacts
+        .write()
+        .await
+        .insert(artifact.id, artifact.clone());
     Ok(Json(TaskSubmission { task, artifact }))
 }
 
