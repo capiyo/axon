@@ -146,7 +146,6 @@ pub async fn list_tasks(
     Ok(Json(tasks))
 }
 
-#[allow(dead_code)]
 fn allowed_transition(from: &TaskStatus, to: &TaskStatus) -> bool {
     use TaskStatus::*;
 
@@ -252,7 +251,6 @@ pub async fn submit_task(
     Ok(Json(TaskSubmission { task, artifact }))
 }
 
-#[allow(dead_code)]
 pub async fn transition_task(
     State(state): State<AppState>,
     Extension(user): Extension<Arc<AuthenticatedUser>>,
