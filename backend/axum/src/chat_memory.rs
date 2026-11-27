@@ -1005,12 +1005,7 @@ mod tests {
         );
         assert_eq!(
             store
-                .toggle_chat_like(
-                    account.workspace.id,
-                    chat.id,
-                    account.user_id,
-                    "human:test",
-                )
+                .toggle_chat_like(account.workspace.id, chat.id, account.user_id, "human:test")
                 .await
                 .unwrap(),
             Some(false)
