@@ -96,3 +96,8 @@ The repository is at its architecture and foundation stage. See [STATE_OF_REPO.m
 ## Development status
 
 No production deployment, provider integration, autonomous browser access, or external agent connection is implied by this initial repository foundation. Those capabilities require explicit implementation, testing, and user authorization.
+
+
+## Development branch policy
+
+`master` is the sole authoritative development branch. All future code, tests, fixes, documentation, and integration work must be committed directly to `master`. Do not create development branches. Treat existing non-master branches as read-only historical sources and port only reviewed, non-duplicate changes into `master`. Never force-merge divergent history or overwrite `master`. See `docs/STATE_OF_REPO.md` for the full policy.
