@@ -1,4 +1,6 @@
 mod agent_credential_routes;
+pub mod agent_runtime;
+pub mod ai_provider;
 pub mod audit;
 pub mod auth_middleware;
 #[cfg(test)]
@@ -6,8 +8,8 @@ mod auth_middleware_tests;
 pub mod chat_memory;
 mod chat_memory_routes;
 pub mod config;
-pub mod firebase_auth;
 pub mod explore;
+pub mod firebase_auth;
 pub mod identity;
 pub mod memory_architecture;
 mod memory_document_routes;
@@ -16,7 +18,6 @@ pub mod memory_intelligence;
 pub mod memory_outbox;
 mod memory_routes;
 pub mod memory_vector_provider;
-pub mod vector_decision;
 mod model;
 mod project_routes;
 pub mod qoin_vectors;
@@ -25,11 +26,10 @@ mod robotics_routes;
 mod routes;
 mod state;
 pub mod storage;
-pub mod ai_provider;
-pub mod agent_runtime;
 pub mod supervisor;
 pub mod supervisor_roles;
 mod task_routes;
+pub mod vector_decision;
 
 pub use state::AppState;
 
