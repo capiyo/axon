@@ -828,7 +828,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
               {chats.map(chat => {
                 const linkedTasks = tasks.filter(task => task.source_chat_id === chat.id);
                 const progress = linkedTasks.length ? Math.round(linkedTasks.reduce((sum, task) => sum + taskProgress(task.status), 0) / linkedTasks.length) : null;
-                return <SessionCard key={chat.id} chat={chat} linkedTaskCount={linkedTasks.length} progress={progress} styles={styles} onOpen={() => { setActiveChat(chat.id); setMobileChatOpen(true); }} onLike={() => toggleChatLike(chat.id)} onArchive={() => archiveChatById(chat.id)} />;
+                return <SessionCard key={chat.id} session={chat} linkedTaskCount={linkedTasks.length} progress={progress} styles={styles} onOpen={() => { setActiveChat(chat.id); setMobileChatOpen(true); }} onLike={() => toggleChatLike(chat.id)} onArchive={() => archiveChatById(chat.id)} />;
               })}
               {chats.length === 0 ? <View style={styles.panel}><Text style={styles.rowTitle}>No sessions yet</Text><Text style={styles.muted}>Create your first session above to open a session.</Text></View> : null}
             </SessionPanel>
@@ -1070,17 +1070,19 @@ function AuthGate() {
   }
 
   async function resendVerification() {
-    if (!auth?.currentUser) return;
+    const currentUser = auth?.currentUser;
+    if (!currentUser) return;
     setWorking(true); setAuthError(""); setNotice("");
-    try { await sendEmailVerification(auth.currentUser); setNotice("Verification email sent. Check your inbox and spam folder."); }
+    try { await sendEmailVerification(currentUser); setNotice("Verification email sent. Check your inbox and spam folder."); }
     catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not send verification email."); }
     finally { setWorking(false); }
   }
 
   async function checkVerification() {
-    if (!auth?.currentUser) return;
+    const currentUser = auth?.currentUser;
+    if (!currentUser) return;
     setWorking(true); setAuthError("");
-    try { await reload(auth.currentUser); setUser(auth.currentUser); if (!auth.currentUser.emailVerified) setAuthError("Your email is not verified yet. Open the link in the email we sent."); }
+    try { await reload(currentUser); setUser(currentUser); if (!currentUser.emailVerified) setAuthError("Your email is not verified yet. Open the link in the email we sent."); }
     catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not refresh account status."); }
     finally { setWorking(false); }
   }
