@@ -133,6 +133,7 @@ mod tests {
         storage::{SqliteStorage, Storage},
     };
     use chrono::Utc;
+    use tower::ServiceExt;
 
     #[tokio::test]
     async fn agent_tokens_are_limited_to_their_agent_memory_routes() {
