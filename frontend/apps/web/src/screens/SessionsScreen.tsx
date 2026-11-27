@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import WorkspaceView from "../views/WorkspaceView";
 import HomeScreen from "./HomeScreen";
-import ChatsScreen from "./SessionPanel";
+import SessionPanel from "./ChatsScreen";
 import ExploreScreen from "./ExploreScreen";
 import ProfileModal from "../modals/ProfileModal";
 import ChatCard from "../views/SessionCard";
