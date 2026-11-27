@@ -63,6 +63,21 @@ All other registered routes require a valid Firebase bearer token.
 - POST /api/v1/tasks/{task_id}/submit
 - POST /api/v1/tasks/{task_id}/transition
 
+## Chats and Explore
+
+- GET /api/v1/workspaces/{workspace_id}/chats
+- POST /api/v1/workspaces/{workspace_id}/chats
+- GET /api/v1/workspaces/{workspace_id}/chats/{chat_id}
+- POST /api/v1/workspaces/{workspace_id}/chats/{chat_id}/messages
+- PATCH /api/v1/workspaces/{workspace_id}/chats/{chat_id}/archive
+- POST /api/v1/workspaces/{workspace_id}/chats/{chat_id}/read
+- POST /api/v1/workspaces/{workspace_id}/chats/{chat_id}/like
+- GET /api/v1/explore/agents
+- GET /api/v1/explore/agents/{listing_id}
+- POST /api/v1/explore/agents/{listing_id}/comments
+
+Chat listing responses include per-user unread count and reaction state, message count, and the latest message. Chat and memory routes enforce workspace membership before accessing private records.
+
 ## Provider-backed task execution
 
 The task execution route uses the assigned agent's provider name to load credentials from environment variables. Provider slugs are normalized to uppercase ASCII letters and digits. For an agent whose provider is openai, configure AXON_AGENT_OPENAI_BASE_URL, AXON_AGENT_OPENAI_API_KEY, and AXON_AGENT_OPENAI_MODEL. For an agent whose provider is anthropic or claude, use the corresponding AXON_AGENT_ANTHROPIC_* or AXON_AGENT_CLAUDE_* variables. Base URLs are service roots; Axon appends the provider's chat-completions or messages path. Keep API keys in the deployment secret manager, never in agent records or source control. A successful execution stores the response as a workspace artifact and moves the task to submitted. A provider failure leaves the task in progress so it can be retried.
