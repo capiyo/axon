@@ -85,6 +85,7 @@ pub fn app(state: AppState) -> Router {
         .route("/api/v1/admin/flags/:flag_id/clear", post(model_registry_routes::clear_flag))
         .route("/api/v1/admin/assignments", get(model_registry_routes::list_assignments))
         .route("/api/v1/explore/agents", get(explore::list_agents))
+        .route("/api/v1/explore/agents/:listing_id", get(explore::get_agent))
         .route("/api/v1/workspaces/:workspace_id/agents/:agent_id/publish", post(explore::publish_agent).delete(explore::unpublish_agent))
         .route("/api/v1/explore/agents/:listing_id/comments", get(explore::list_comments).post(explore::create_comment))
         .route("/api/v1/explore/comments/:comment_id", patch(explore::edit_comment).delete(explore::delete_comment))
