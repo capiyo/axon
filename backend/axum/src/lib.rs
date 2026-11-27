@@ -244,6 +244,10 @@ pub fn app(state: AppState) -> Router {
             "/api/v1/tasks/:task_id/submit",
             post(task_routes::submit_task),
         )
+        .route(
+            "/api/v1/tasks/:task_id/transition",
+            post(task_routes::transition_task),
+        )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware::authenticate,
