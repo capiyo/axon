@@ -244,7 +244,11 @@ impl ExploreStore {
         rows.iter().map(parse_agent).collect()
     }
 
-    pub async fn get_agent(&self, listing_id: Uuid, user_id: Uuid) -> Result<Option<ExploreAgent>, sqlx::Error> {
+    pub async fn get_agent(
+        &self,
+        listing_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Option<ExploreAgent>, sqlx::Error> {
         let row = sqlx::query(
             "SELECT l.id, l.agent_id, l.workspace_id, l.owner_id, l.title, l.provider, l.description, l.category, l.created_at, l.updated_at,
              (SELECT COUNT(*) FROM agent_listing_likes x WHERE x.listing_id = l.id) AS like_count,
@@ -949,12 +953,20 @@ pub async fn get_agent(
     Path(listing_id): Path<Uuid>,
 ) -> ApiResult<Json<ExploreAgent>> {
     let store = state.explore.as_ref().ok_or_else(|| {
-        error(StatusCode::SERVICE_UNAVAILABLE, "Explore storage is unavailable.")
+        error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Explore storage is unavailable.",
+        )
     })?;
     let listing = store
         .get_agent(listing_id, user.user_id)
         .await
-        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not load agent details."))?
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not load agent details.",
+            )
+        })?
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Agent listing not found."))?;
     Ok(Json(listing))
 }
