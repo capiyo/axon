@@ -671,6 +671,7 @@ impl MemoryOutbox {
     /// Records feedback only for the exact memory version pinned to the
     /// caller's authenticated agent session. Feedback never mutates a memory
     /// version or an already-published epoch.
+    #[allow(clippy::too_many_arguments)]
     pub async fn record_retrieval_feedback(
         &self,
         workspace_id: Uuid,
@@ -919,6 +920,7 @@ impl MemoryOutbox {
     /// Returns only approved, synchronized versions visible to this
     /// workspace-owned agent. The query runs against SQLite before MongoDB
     /// content is hydrated by the API layer.
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_authorized_document_versions(
         &self,
         workspace_id: Uuid,
@@ -1325,6 +1327,7 @@ impl MemoryOutbox {
 
     /// Returns a MongoDB document only when SQLite confirms its workspace,
     /// approval state, synchronization state, and agent/task visibility.
+    #[allow(clippy::too_many_arguments)]
     pub async fn get_authorized_document(
         &self,
         repository: &dyn MemoryDocumentRepository,
@@ -1444,6 +1447,7 @@ impl MemoryOutbox {
     /// Hydrates only the exact MongoDB document versions pinned by an immutable
     /// memory epoch. Current lifecycle changes do not rewrite historical epoch
     /// membership; SQLite epoch pins remain the authority for this snapshot.
+    #[allow(clippy::too_many_arguments)]
     pub async fn list_epoch_authorized_documents(
         &self,
         repository: &dyn MemoryDocumentRepository,
