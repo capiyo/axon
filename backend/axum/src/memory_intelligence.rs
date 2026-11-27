@@ -538,6 +538,7 @@ pub fn reconstruct_history(
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod scoring_config_tests {
     use super::*;
 
@@ -620,6 +621,7 @@ mod scoring_config_tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
 mod tests {
     use super::*;
 

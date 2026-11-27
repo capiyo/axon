@@ -80,15 +80,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok()
         .map(|url| QoinVectorClient::new(&url))
         .transpose()?;
-    let outbox_worker = if let Some(repository) = memory_documents.clone() {
-        Some(tokio::spawn(memory_outbox.clone().run(
+    let outbox_worker = memory_documents.clone().map(|repository| {
+        tokio::spawn(memory_outbox.clone().run(
             repository,
             format!("axon-memory-outbox-{}", uuid::Uuid::new_v4()),
             shutdown_rx,
-        )))
-    } else {
-        None
-    };
+        ))
+    });
 
     let state = AppState::with_storage(storage.shared())
         .await?
