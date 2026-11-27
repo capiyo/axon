@@ -25,6 +25,7 @@ mod routes;
 mod state;
 pub mod storage;
 pub mod ai_provider;
+pub mod agent_runtime;
 pub mod supervisor;
 pub mod supervisor_roles;
 mod task_routes;
