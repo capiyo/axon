@@ -1483,7 +1483,7 @@ mod tests {
         let storage = SqliteStorage::connect_in_memory()
             .await
             .expect("in-memory storage");
-        let store = storage.explore_store();
+        let store = ExploreStore::new(storage.sqlite_pool());
         let owner_id = Uuid::new_v4();
         let visitor_id = Uuid::new_v4();
         let workspace_id = Uuid::new_v4();
