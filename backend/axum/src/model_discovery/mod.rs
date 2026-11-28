@@ -14,9 +14,9 @@ use std::{
 use thiserror::Error;
 use uuid::Uuid;
 
-include!("model_discovery/catalog.rs");
-include!("model_discovery/refresh.rs");
-include!("model_discovery/scheduler.rs");
+include!("catalog.rs");
+include!("refresh.rs");
+include!("scheduler.rs");
 
 #[cfg(test)]
-include!("model_discovery/tests.rs");
+include!("tests.rs");

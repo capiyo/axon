@@ -12,9 +12,9 @@ use std::{
 use thiserror::Error;
 use uuid::Uuid;
 
-include!("model_registry/types.rs");
-include!("model_registry/assignment.rs");
-include!("model_registry/persistence.rs");
+include!("types.rs");
+include!("assignment.rs");
+include!("persistence.rs");
 
 #[cfg(test)]
-include!("model_registry/tests.rs");
+include!("tests.rs");

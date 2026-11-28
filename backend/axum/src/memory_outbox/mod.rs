@@ -93,13 +93,12 @@ pub struct MemoryOutbox {
     pool: SqlitePool,
 }
 
-
-include!("memory_outbox/queue.rs");
-include!("memory_outbox/lifecycle.rs");
-include!("memory_outbox/feedback.rs");
-include!("memory_outbox/reconciliation.rs");
-include!("memory_outbox/retrieval.rs");
-include!("memory_outbox/worker.rs");
+include!("queue.rs");
+include!("lifecycle.rs");
+include!("feedback.rs");
+include!("reconciliation.rs");
+include!("retrieval.rs");
+include!("worker.rs");
 
 #[cfg(test)]
-include!("memory_outbox/tests.rs");
+include!("tests.rs");
