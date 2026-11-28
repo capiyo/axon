@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -1045,10 +1046,23 @@ function AuthGate() {
   const [ready, setReady] = useState(false);
   const [authError, setAuthError] = useState("");
   const [working, setWorking] = useState(false);
+  const googleClientIds = {
+    web: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    android: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    ios: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
+  };
+  const activeGoogleClientId = Platform.select({
+    android: googleClientIds.android,
+    ios: googleClientIds.ios,
+    default: googleClientIds.web
+  });
+  const googleAuthConfigured = Boolean(activeGoogleClientId);
   const [request, response, promptAsync] = useIdTokenAuthRequest({
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
+    clientId: activeGoogleClientId || "not-configured.apps.googleusercontent.com",
+    webClientId: googleClientIds.web,
+    androidClientId: googleClientIds.android,
+    iosClientId: googleClientIds.ios,
+    selectAccount: true
   });
 
   useEffect(() => {
@@ -1070,6 +1084,7 @@ function AuthGate() {
   if (!ready) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><ActivityIndicator/><Text style={styles.muted}>Restoring your secure session…</Text></View></SafeAreaView>;
   if (!auth) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><Text style={styles.authTitle}>Google Sign-In is not configured</Text><Text style={styles.description}>Configure the Axon identity project and Google OAuth client IDs, then restart the app.</Text></View></SafeAreaView>;
   if (user) return <WorkspaceApp user={user}/>;
+  if (!googleAuthConfigured) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><Text style={styles.authTitle}>Google Sign-In needs setup</Text><Text style={styles.description}>Add the Google OAuth client ID for this platform to the mobile app environment, then restart Axon.</Text></View></SafeAreaView>;
   return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.authEyebrow}>YOUR WORK, IN ONE PLACE</Text><Text style={styles.authTitle}>Welcome to Axon</Text><Text style={styles.description}>Continue securely with your Google account. No separate Axon password required.</Text><ActionButton label={working ? "Connecting to Google…" : "Continue with Google"} onPress={()=>{setAuthError("");void promptAsync();}} disabled={working || !request}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}<Text style={styles.authFootnote}>By continuing, you agree to the Terms &amp; Conditions and Privacy Policy.</Text></ScrollView></SafeAreaView>;
 }
 
