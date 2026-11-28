@@ -11,8 +11,8 @@ use uuid::Uuid;
 #[derive(Debug, Clone)]
 pub struct AuthenticatedUser {
     pub user_id: Uuid,
-    pub firebase_uid: String,
-    pub project_id: String,
+    pub identity_subject: String,
+    pub email: Option<String>,
     pub personal_workspace_id: Uuid,
     pub is_platform_admin: bool,
 }
@@ -25,10 +25,9 @@ pub struct AuthenticatedAgent {
     pub owner_user_id: Uuid,
 }
 
-fn platform_admin_allowed(firebase_uid: &str) -> bool {
-    std::env::var("AXON_PLATFORM_ADMIN_UIDS")
-        .ok()
-        .is_some_and(|uids| uids.split(',').any(|uid| uid.trim() == firebase_uid))
+fn platform_admin_allowed(email: Option<&str>) -> bool {
+    let Some(email) = email else { return false; };
+    std::env::var("AXON_PLATFORM_ADMIN_EMAILS").ok().is_some_and(|items| items.split(',').any(|item| item.trim().eq_ignore_ascii_case(email)))
 }
 
 pub async fn authenticate(
@@ -83,11 +82,11 @@ pub async fn authenticate(
         {
             return response(StatusCode::FORBIDDEN);
         }
-        let is_platform_admin = platform_admin_allowed(&credential.firebase_uid);
+        let is_platform_admin = platform_admin_allowed(credential.email.as_deref());
         let user = Arc::new(AuthenticatedUser {
             user_id: credential.owner_user_id,
-            firebase_uid: credential.firebase_uid,
-            project_id: credential.firebase_project_id,
+            identity_subject: credential.identity_subject,
+            email: credential.email,
             personal_workspace_id: credential.personal_workspace_id,
             is_platform_admin,
         });
@@ -103,7 +102,7 @@ pub async fn authenticate(
         return next.run(request).await;
     }
 
-    let Some(verifier) = state.firebase_verifier.as_ref() else {
+    let Some(verifier) = state.google_verifier.as_ref() else {
         return response(StatusCode::SERVICE_UNAVAILABLE);
     };
     let identity = match verifier.verify(token).await {
@@ -111,17 +110,17 @@ pub async fn authenticate(
         Err(_) => return response(StatusCode::UNAUTHORIZED),
     };
     let account = match state
-        .ensure_firebase_user(&identity.project_id, &identity.uid)
+        .ensure_google_user(&identity.sub, &identity.email, identity.name.as_deref(), identity.picture.as_deref())
         .await
     {
         Ok(account) => account,
         Err(_) => return response(StatusCode::INTERNAL_SERVER_ERROR),
     };
-    let is_platform_admin = platform_admin_allowed(&identity.uid);
+    let is_platform_admin = platform_admin_allowed(Some(&identity.email));
     let user = Arc::new(AuthenticatedUser {
         user_id: account.user_id,
-        firebase_uid: identity.uid,
-        project_id: identity.project_id,
+        identity_subject: identity.sub,
+        email: Some(identity.email),
         personal_workspace_id: account.workspace.id,
         is_platform_admin,
     });

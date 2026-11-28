@@ -2,7 +2,7 @@ use crate::{
     audit::{AuditEvent, AuditStore},
     chat_memory::ChatMemoryStore,
     explore::ExploreStore,
-    firebase_auth::FirebaseVerifier,
+    google_auth::GoogleVerifier,
     memory::MemoryRepository,
     memory_architecture::MemoryEpochCoordinator,
     memory_documents::MemoryDocumentRepository,
@@ -62,7 +62,7 @@ pub struct AppState {
     pub qoin_vectors: Option<QoinVectorClient>,
     pub qoin_memory_scoring: QoinScoringConfig,
     pub memory_vector_provider: Option<Arc<dyn MemoryVectorProvider>>,
-    pub firebase_verifier: Option<FirebaseVerifier>,
+    pub google_verifier: Option<GoogleVerifier>,
     pub simulator_enabled: bool,
 }
 
@@ -79,7 +79,7 @@ impl AppState {
             storage: Some(storage.clone()),
             chat_memory,
             memory_epochs,
-            firebase_verifier: None,
+            google_verifier: None,
             simulator_enabled: false,
             ..Self::default()
         };
@@ -298,20 +298,22 @@ impl AppState {
         self
     }
 
-    pub fn with_firebase_verifier(
+    pub fn with_google_verifier(
         mut self,
-        verifier: FirebaseVerifier,
+        verifier: GoogleVerifier,
         simulator_enabled: bool,
     ) -> Self {
-        self.firebase_verifier = Some(verifier);
+        self.google_verifier = Some(verifier);
         self.simulator_enabled = simulator_enabled;
         self
     }
 
-    pub async fn ensure_firebase_user(
+    pub async fn ensure_google_user(
         &self,
-        project_id: &str,
-        uid: &str,
+        subject: &str,
+        email: &str,
+        display_name: Option<&str>,
+        avatar_url: Option<&str>,
     ) -> Result<UserWorkspace, StorageError> {
         match &self.storage {
             Some(storage) => storage.ensure_firebase_user(project_id, uid).await,

@@ -16,7 +16,8 @@ pub mod chat_memory;
 pub mod config;
 pub mod explore;
 #[path = "auth/firebase.rs"]
-pub mod firebase_auth;
+#[path = "auth/google.rs"]
+pub mod google_auth;
 #[path = "auth/identity.rs"]
 pub mod identity;
 #[path = "memory/repository.rs"]

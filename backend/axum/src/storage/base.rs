@@ -42,7 +42,7 @@ pub enum StorageError {
     InvalidStoredEntityKind,
     #[error("identity storage is unavailable")]
     IdentityStorageUnavailable,
-    #[error("Firebase UID is already bound to a different Firebase project")]
+    #[error("Google identity subject is invalid")]
     IdentityProjectMismatch,
     #[error("project was not found in the requested workspace")]
     ProjectNotFound,
@@ -68,8 +68,8 @@ pub struct AgentCredentialIdentity {
     pub agent_id: Uuid,
     pub workspace_id: Uuid,
     pub owner_user_id: Uuid,
-    pub firebase_uid: String,
-    pub firebase_project_id: String,
+    pub identity_subject: String,
+    pub email: Option<String>,
     pub personal_workspace_id: Uuid,
 }
 
@@ -247,10 +247,12 @@ pub trait Storage: Send + Sync {
 
     async fn list_audit_events(&self, workspace_id: Uuid) -> Result<Vec<AuditEvent>, StorageError>;
 
-    async fn ensure_firebase_user(
+    async fn ensure_google_user(
         &self,
-        project_id: &str,
-        uid: &str,
+        subject: &str,
+        email: &str,
+        display_name: Option<&str>,
+        avatar_url: Option<&str>,
     ) -> Result<UserWorkspace, StorageError>;
 
     async fn is_workspace_member(

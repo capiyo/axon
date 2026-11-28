@@ -228,7 +228,7 @@
         let mut tx = self.pool.begin().await?;
         let row = sqlx::query(
             "SELECT c.agent_id, c.workspace_id, c.owner_user_id,
-                    u.provider_subject, u.firebase_project_id, u.personal_workspace_id
+                    u.provider_subject, u.email, u.personal_workspace_id
              FROM agent_credentials c
              JOIN users u ON u.id = c.owner_user_id
              WHERE c.id = ? AND c.secret_hash = ? AND c.revoked_at IS NULL AND c.expires_at > ?",
@@ -245,8 +245,8 @@
         let agent_id_text: String = row.try_get("agent_id")?;
         let workspace_id_text: String = row.try_get("workspace_id")?;
         let owner_user_id_text: String = row.try_get("owner_user_id")?;
-        let firebase_uid: String = row.try_get("provider_subject")?;
-        let firebase_project_id: Option<String> = row.try_get("firebase_project_id")?;
+        let identity_subject: String = row.try_get("provider_subject")?;
+        let email: Option<String> = row.try_get("email")?;
         let personal_workspace_id: Option<String> = row.try_get("personal_workspace_id")?;
         let agent_id =
             Uuid::parse_str(&agent_id_text).map_err(|_| StorageError::InvalidStoredIdentifier)?;
@@ -254,8 +254,6 @@
             .map_err(|_| StorageError::InvalidStoredIdentifier)?;
         let owner_user_id = Uuid::parse_str(&owner_user_id_text)
             .map_err(|_| StorageError::InvalidStoredIdentifier)?;
-        let firebase_project_id =
-            firebase_project_id.ok_or(StorageError::InvalidStoredIdentifier)?;
         let personal_workspace_id = Uuid::parse_str(
             personal_workspace_id
                 .as_deref()
@@ -302,8 +300,8 @@
             agent_id,
             workspace_id,
             owner_user_id,
-            firebase_uid,
-            firebase_project_id,
+            identity_subject,
+            email,
             personal_workspace_id,
         }))
     }

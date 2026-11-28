@@ -2,7 +2,7 @@ use axon_api::{
     app,
     config::BackendConfig,
     explore::ExploreStore,
-    firebase_auth::FirebaseVerifier,
+    google_auth::GoogleVerifier,
     memory::MemoryRepository,
     memory_documents::{MemoryDocumentRepository, MongoMemoryDocumentRepository},
     memory_store::MemoryStore,
@@ -26,10 +26,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let project_id = env::var("FIREBASE_PROJECT_ID").map_err(|_| {
-        "FIREBASE_PROJECT_ID must be configured; refusing to start without Firebase authentication"
-    })?;
-    let verifier = FirebaseVerifier::new(project_id)?;
+    let client_ids = env::var("GOOGLE_OAUTH_CLIENT_IDS").map_err(|_| "GOOGLE_OAUTH_CLIENT_IDS must be configured")?;
+    let client_ids = client_ids.split(',').map(str::trim).filter(|id| !id.is_empty()).map(str::to_owned).collect();
+    let verifier = GoogleVerifier::new(client_ids)?;
     let platform_port = env::var("PORT").ok();
     let host = env::var("AXON_HOST").unwrap_or_else(|_| {
         if platform_port.is_some() {
@@ -122,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_qoin_vector_client(qoin_vectors)
         .with_qoin_memory_scoring_config(config.qoin_memory_scoring)
         .with_memory_vector_provider(Some(Arc::new(LexicalMemoryVectorProvider)))
-        .with_firebase_verifier(verifier, simulator_enabled);
+        .with_google_verifier(verifier, simulator_enabled);
 
     let listener = TcpListener::bind(address).await?;
     tracing::info!(
@@ -131,7 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         mongo_memory_documents = state.memory_documents.is_some(),
         simulator_enabled,
         qoin_vectors = env::var("QOIN_API_URL").is_ok(),
-        "Axon API listening with Firebase authentication and durable SQLite storage"
+        "Axon API listening with Google authentication and durable SQLite storage"
     );
     let serve_result = axum::serve(listener, app(state))
         .with_graceful_shutdown(async {
