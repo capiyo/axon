@@ -16,7 +16,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use uuid::Uuid;
 
 #[derive(Debug, serde::Serialize)]
-struct ApiError {
+pub(crate) struct ApiError {
     error: String,
 }
 
@@ -122,7 +122,7 @@ pub async fn propose(
             ));
         }
     }
-    let token_cost = ((input.content.chars().count() + 3) / 4).max(1);
+    let token_cost = input.content.chars().count().div_ceil(4).max(1);
     let record = MemoryRecord {
         id: Uuid::new_v4(),
         workspace_id,
