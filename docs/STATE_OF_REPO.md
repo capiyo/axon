@@ -59,6 +59,7 @@
 - [x] The deterministic 2-2-2 supervision policy is represented in the run state machine; Quick and Normal assignments use their configured reduced stages, while Important and unassigned runs require the full independent stages.
 - [x] Model assignment decisions are persisted with their supervisor run, including candidate sets, applied filters, selected model, rationale, and estimated cost.
 - [x] Daily per-user model budget reservations are atomic in SQLite and emit audit events; a configured daily limit defaults to 10,000,000 micro-units.
+- [x] Agent task execution is protected by an owner-scoped SQLite lease (with an in-memory fallback for non-durable test/runtime state), preventing concurrent duplicate provider executions; lease release is ownership-checked and stale leases expire.
 - [x] A scheduled model catalogue worker refreshes configured active providers daily. New models remain unapproved candidates; changes to approved model pricing are flagged for review rather than silently applied.
 - [x] Workspace capability-consensus polls are exposed through authenticated routes and persisted in MongoDB; memory context references must resolve to active records in the same workspace.
 - [x] Authorization tests now include all supervisor and capability routes for missing/expired tokens and cross-workspace access.
