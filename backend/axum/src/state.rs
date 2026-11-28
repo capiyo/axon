@@ -53,6 +53,7 @@ pub struct AppState {
     pub audit: Arc<RwLock<AuditStore>>,
     storage: Option<Arc<dyn Storage>>,
     pub chat_memory: Option<ChatMemoryStore>,
+    pub memory_store: Option<crate::memory_store::MemoryStore>,
     pub memory_epochs: Option<MemoryEpochCoordinator>,
     /// Long-form document storage. Authorization and lifecycle remain in SQLite.
     pub memory_documents: Option<Arc<dyn MemoryDocumentRepository>>,
@@ -132,6 +133,14 @@ impl AppState {
         state.audit.write().await.restore(audit_events);
 
         Ok(state)
+    }
+
+    pub fn with_agent_memory_store(
+        mut self,
+        store: Option<crate::memory_store::MemoryStore>,
+    ) -> Self {
+        self.memory_store = store;
+        self
     }
 
     pub fn with_memory_document_repository(
