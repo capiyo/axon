@@ -85,3 +85,14 @@ A second audit used GitHub three-dot commit comparisons (master...branch) for ev
 These are comparison metadata, not a statement that every line is absent from master. Targeted blob checks confirmed exact master/branch matches for capability routing (capability.rs, memory.rs), Qoin vectors (qoin_vectors.rs), agent runtime (agent_runtime.rs), and the desktop Tauri host (src-tauri/src/main.rs). Targeted checks also found evolved differences in memory architecture/intelligence, supervisor/model registry, and Explore. In those cases master contains newer additions, including Qoin scoring-version validation, epoch publication/lifecycle safeguards, and Explore agent-detail retrieval, while the historical branch has older implementations. Those older files must not overwrite master.
 
 **Correction:** the earlier tree-path reconciliation was not a recursive commit/content consolidation. It only established path coverage and migration/auth path disposition. It did not cherry-pick every historical commit or prove complete behavioral equivalence. This three-dot audit records actual divergence; code-level reconciliation and CI validation must decide each differing behavior. Do not describe every branch commit as merged merely because its file paths exist.
+
+
+## Additional recursive integrations applied after the diff audit
+
+The divergent supervisor-engine and production-validation code was reviewed at behavior level, not just by file name.
+
+- Restored the branch's ChatGPT-export path into the current Python connector CLI. The existing provider-neutral ChatGPT parser is now reachable via `--provider chatgpt` and `--conversation-id`; explicit authenticated artifact import and response persistence are exposed through `--import-to-axon` and `--persist-response`. Added CLI regression coverage for selecting a ChatGPT conversation. The current master DeepSeek transfer and bounded context behavior were retained.
+- Restored the missing `execute command` high-risk phrase in supervisor task risk classification, with a regression assertion. This keeps command-execution work from being classified as ordinary low-risk work solely because it omitted terms such as shell or production.
+- Made resume briefs consistently emit empty-state values for Decisions, Open tasks, and Next / constraints, preserving the current master implementation's workspace-aware cache transaction and approved-memory filtering. Added regression assertions for the empty-state headings.
+
+These are selective ports of branch behavior into the current master architecture; no historical branch snapshot was copied over the newer implementation.
