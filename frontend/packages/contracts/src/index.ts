@@ -261,6 +261,87 @@ export type ChatMessage = {
   answered_by: string | null;
 };
 
+export type ImportedMessage = {
+  id: string | null;
+  role: "user" | "assistant" | "system";
+  content: string;
+  created_at: string | null;
+};
+
+export type ConversationImport = {
+  id: string;
+  workspace_id: string;
+  provider: string;
+  conversation_id: string;
+  title: string;
+  messages: ImportedMessage[];
+  content_sha256: string;
+  message_count: number;
+  imported_at: string;
+};
+
+export type ImportConversationRequest = {
+  provider: string;
+  conversation_id: string;
+  title: string;
+  messages: ImportedMessage[];
+};
+
+export type MemoryKind =
+  | "semantic"
+  | "episodic"
+  | "project"
+  | "decision"
+  | "preference"
+  | "procedural";
+
+export type MemoryStatus = "proposed" | "active" | "rejected" | "superseded";
+export type MemoryReviewDecision = "approve" | "reject" | "supersede";
+
+export type MemorySource = {
+  provider: string;
+  conversation_id: string;
+  import_id: string;
+  message_ids: string[];
+  captured_at: string;
+  source_content_sha256: string;
+};
+
+export type MemoryRecord = {
+  id: string;
+  workspace_id: string;
+  kind: MemoryKind;
+  title: string;
+  content: string;
+  summary: string;
+  tags: string[];
+  source: MemorySource;
+  confidence: number;
+  status: MemoryStatus;
+  version: number;
+  content_sha256: string;
+  superseded_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateMemoryRequest = {
+  kind: MemoryKind;
+  title: string;
+  content: string;
+  summary: string;
+  tags?: string[];
+  import_id: string;
+  message_ids?: string[];
+  confidence: number;
+};
+
+export type ReviewMemoryRequest = {
+  expected_version: number;
+  decision: MemoryReviewDecision;
+  superseded_by_id: string | null;
+};
+
 export type ProjectMemoryEntry = {
   id: string;
   chat_id: string;

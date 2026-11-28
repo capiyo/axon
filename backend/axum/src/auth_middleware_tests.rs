@@ -161,6 +161,13 @@ mod tests {
             ("GET", format!("/api/v1/workspaces/{workspace_id}/tasks")),
             ("POST", format!("/api/v1/workspaces/{workspace_id}/tasks")),
             ("POST", format!("/api/v1/workspaces/{workspace_id}/memory/imports")),
+            (
+                "GET",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/memory/imports/{}",
+                    Uuid::new_v4()
+                ),
+            ),
             ("GET", format!("/api/v1/workspaces/{workspace_id}/memories")),
             ("POST", format!("/api/v1/workspaces/{workspace_id}/memories")),
             ("GET", format!("/api/v1/workspaces/{workspace_id}/memory/context")),
@@ -609,6 +616,10 @@ mod tests {
             format!("/api/v1/workspaces/{workspace_id}/artifacts"),
             format!("/api/v1/workspaces/{workspace_id}/tasks"),
             format!("/api/v1/workspaces/{workspace_id}/memory/context"),
+            format!(
+                "/api/v1/workspaces/{workspace_id}/memory/imports/{}",
+                Uuid::new_v4()
+            ),
             format!("/api/v1/workspaces/{workspace_id}/capability-polls"),
             format!("/api/v1/workspaces/{workspace_id}/supervisor-runs"),
             format!("/api/v1/workspaces/{workspace_id}/memory/documents"),
@@ -620,7 +631,11 @@ mod tests {
             ),
         ];
         for path in paths {
-            let method = if path.contains("/capability-polls")
+            let method = if path.ends_with("/memory/context")
+                || path.contains("/memory/imports/")
+            {
+                "GET"
+            } else if path.contains("/capability-polls")
                 || path.contains("/supervisor-runs")
                 || path.contains("/messages")
                 || path.contains("/memory")

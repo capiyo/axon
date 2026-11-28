@@ -124,3 +124,7 @@ Migration reconciliation is by schema identity, not filename: the historical tas
 - Finalized the legacy MongoDB-backed memory connector integration with the current API: authenticated conversation imports, proposed memory creation, active-only context retrieval, and versioned memory review now have registered endpoints. `axon-memory` persists through those endpoints only after both provider-transfer and persistence approval; `axon-route` uses the same Firebase bearer client for capability polls and only includes active memory when explicitly requested.
 
 - Hardened the Python capability router's workspace identifier validation before API calls; the connector regression test now exercises the Firebase-token requirement with a valid workspace UUID.
+
+- Completed the memory connector's full route surface, including retrieving the original conversation import and status-filtered memory listing. Reused the repository's canonical import/memory validators rather than duplicating looser route-level validation.
+- Restored the historical uniqueness invariant for `users.personal_workspace_id` with master migration `0021_unique_personal_workspace_id.sql` and a storage regression test. The current schema's later-added nullable column had not inherited the old branch migration's UNIQUE constraint.
+- Restored TypeScript contracts for imported conversations and MongoDB-backed memory records/review requests so the authenticated API surface is represented in the shared frontend contract package.

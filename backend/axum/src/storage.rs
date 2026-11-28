@@ -1836,4 +1836,27 @@ mod tests {
             matches!(stored.as_slice(), [StoredEntity::SupervisorRun(item)] if item.id == run.id)
         );
     }
+    #[tokio::test]
+    async fn personal_workspace_ids_are_unique_across_users() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let first = storage
+            .ensure_firebase_user("axon-project", "personal-workspace-owner-a")
+            .await
+            .unwrap();
+        let second = storage
+            .ensure_firebase_user("axon-project", "personal-workspace-owner-b")
+            .await
+            .unwrap();
+        assert_ne!(first.workspace.id, second.workspace.id);
+
+        let duplicate = sqlx::query("UPDATE users SET personal_workspace_id = ? WHERE id = ?")
+            .bind(first.workspace.id.to_string())
+            .bind(second.user_id.to_string())
+            .execute(&storage.pool)
+            .await;
+        assert!(
+            duplicate.is_err(),
+            "a personal workspace must not be assigned to two users"
+        );
+    }
 }

@@ -1,8 +1,8 @@
 use crate::{
     auth_middleware::AuthenticatedUser,
     memory::{
-        CreateMemoryRequest, ImportConversationRequest, MemoryRecord, MemoryRepository,
-        MemoryStatus, ReviewMemoryRequest,
+        validate_import, validate_memory, CreateMemoryRequest, ImportConversationRequest,
+        MemoryRecord, MemoryRepository, MemoryStatus, ReviewMemoryRequest,
     },
     AppState,
 };
@@ -58,39 +58,8 @@ pub async fn import_conversation(
     Json(input): Json<ImportConversationRequest>,
 ) -> ApiResult<(StatusCode, Json<crate::memory::ConversationImport>)> {
     require_member(&state, &user, workspace_id).await?;
-    if !["chatgpt", "claude"].contains(&input.provider.trim().to_ascii_lowercase().as_str())
-        || input.provider.len() > 32
-        || input.conversation_id.trim().is_empty()
-        || input.conversation_id.len() > 200
-        || input.title.trim().is_empty()
-        || input.title.len() > 160
-        || input.messages.is_empty()
-        || input.messages.len() > 2_000
-    {
-        return Err(error(
-            StatusCode::BAD_REQUEST,
-            "Conversation import metadata or message count is invalid.",
-        ));
-    }
-    let mut total_bytes = 0usize;
-    for message in &input.messages {
-        if !["user", "assistant", "system"].contains(&message.role.as_str())
-            || message.content.trim().is_empty()
-            || message.content.len() > 256_000
-        {
-            return Err(error(
-                StatusCode::BAD_REQUEST,
-                "Conversation message role or content is invalid.",
-            ));
-        }
-        total_bytes = total_bytes.saturating_add(message.content.len());
-        if total_bytes > 512_000 {
-            return Err(error(
-                StatusCode::PAYLOAD_TOO_LARGE,
-                "Conversation import exceeds 512000 bytes.",
-            ));
-        }
-    }
+    validate_import(&input)
+        .map_err(|message| error(StatusCode::BAD_REQUEST, message))?;
     let imported = repository(&state)?
         .import_conversation(workspace_id, input)
         .await
@@ -110,40 +79,26 @@ pub async fn create_memory(
     Json(input): Json<CreateMemoryRequest>,
 ) -> ApiResult<(StatusCode, Json<MemoryRecord>)> {
     require_member(&state, &user, workspace_id).await?;
-    if input.title.trim().is_empty()
-        || input.title.len() > 240
-        || input.content.trim().is_empty()
-        || input.content.len() > 20_000
-        || input.summary.trim().is_empty()
-        || input.summary.len() > 2_000
-        || input.tags.len() > 30
-        || input
-            .tags
-            .iter()
-            .any(|tag| tag.trim().is_empty() || tag.len() > 60)
-        || !input.confidence.is_finite()
-        || !(0.0..=1.0).contains(&input.confidence)
-        || input.message_ids.len() > 200
-    {
-        return Err(error(
-            StatusCode::BAD_REQUEST,
-            "Proposed memory fields exceed supported limits.",
-        ));
-    }
+    validate_memory(&input)
+        .map_err(|message| error(StatusCode::BAD_REQUEST, message))?;
     let record = repository(&state)?
         .create_memory(workspace_id, input)
         .await
-        .map_err(|_| {
-            error(
-                StatusCode::BAD_REQUEST,
-                "Memory source import or message references are invalid.",
-            )
+        .map_err(|cause| {
+            let message = cause.to_string();
+            let status = if message.contains("Source conversation import was not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            error(status, &message)
         })?;
     Ok((StatusCode::CREATED, Json(record)))
 }
 
 #[derive(Debug, Deserialize)]
 pub struct MemoryContextQuery {
+    pub status: Option<MemoryStatus>,
     pub q: Option<String>,
     pub limit: Option<i64>,
 }
@@ -164,7 +119,7 @@ pub async fn list_memories(
     let records = repository(&state)?
         .list_memories(
             workspace_id,
-            None,
+            query.status,
             query.q.as_deref(),
             query.limit.unwrap_or(50).clamp(1, 200),
         )
@@ -176,6 +131,24 @@ pub async fn list_memories(
             )
         })?;
     Ok(Json(records))
+}
+
+pub async fn get_import(
+    State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
+    Path((workspace_id, import_id)): Path<(Uuid, Uuid)>,
+) -> ApiResult<Json<crate::memory::ConversationImport>> {
+    require_member(&state, &user, workspace_id).await?;
+    let record = repository(&state)?
+        .get_import(workspace_id, import_id)
+        .await
+        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not retrieve conversation import."))?;
+    record.map(Json).ok_or_else(|| {
+        error(
+            StatusCode::NOT_FOUND,
+            "Conversation import was not found in this workspace.",
+        )
+    })
 }
 
 pub async fn memory_context(
@@ -196,7 +169,7 @@ pub async fn memory_context(
             workspace_id,
             Some(MemoryStatus::Active),
             query.q.as_deref(),
-            query.limit.unwrap_or(10).clamp(1, 50),
+            query.limit.unwrap_or(20).clamp(1, 50),
         )
         .await
         .map_err(|_| {
