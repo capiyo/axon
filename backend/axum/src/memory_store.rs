@@ -496,7 +496,7 @@ mod tests {
             .ensure_firebase_user("memory-test", "memory-store-expiry-user")
             .await
             .unwrap();
-        let store = MemoryStore::new(storage.chat_memory_store().sqlite_pool());
+        let store = MemoryStore::new(storage.sqlite_pool());
         let agent_id = Uuid::new_v4();
         let mut record = agent_memory(account.workspace.id, agent_id);
         record.expires_at = Some(Utc::now() - Duration::seconds(1));
@@ -531,7 +531,7 @@ mod tests {
             .ensure_firebase_user("memory-test", "memory-store-user-2")
             .await
             .unwrap();
-        let store = MemoryStore::new(storage.chat_memory_store().sqlite_pool());
+        let store = MemoryStore::new(storage.sqlite_pool());
         let record = agent_memory(account.workspace.id, Uuid::new_v4());
         store.put(record.clone(), "human:test").await.unwrap();
         assert!(matches!(
