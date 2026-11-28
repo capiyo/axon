@@ -123,3 +123,5 @@ Simulator routes require authentication and are hidden unless AXON_ENABLE_SIMULA
 Mutations record the authenticated internal user as the audit actor. Entity writes and audit rows commit in the same transaction. Audit rows are append-only at the SQLite layer.
 
 Account/data deletion is design-only; no deletion route or job exists. See docs/ACCOUNT_AND_DATA_DELETION_DESIGN.md before implementing destructive account workflows.
+
+The optional `axon-memory` and `axon-route` Python connector commands use the same Firebase-authenticated API boundary as the web and mobile clients. Conversation imports, memory proposals/reviews, active-memory context reads, and capability-poll operations are restricted to workspace members. MongoDB must be configured for the legacy conversation-import and capability-poll repository; without it these endpoints return service unavailable rather than silently falling back to in-memory storage.
