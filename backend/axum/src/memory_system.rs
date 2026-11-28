@@ -67,7 +67,8 @@ impl MemoryRecord {
         {
             return Err(MemoryError::InvalidRecord);
         }
-        if !self.confidence.is_finite() || !self.authority.is_finite()
+        if !self.confidence.is_finite()
+            || !self.authority.is_finite()
             || !(0.0..=1.0).contains(&self.confidence)
             || !(0.0..=1.0).contains(&self.authority)
         {
@@ -166,15 +167,16 @@ fn sensitivity_rank(value: MemorySensitivity) -> u8 {
 
 pub fn can_read(record: &MemoryRecord, context: &RetrievalContext) -> bool {
     if record.workspace_id != context.workspace_id
-        || record.expires_at.is_some_and(|expiry| expiry <= context.now)
+        || record
+            .expires_at
+            .is_some_and(|expiry| expiry <= context.now)
         || sensitivity_rank(record.sensitivity) > sensitivity_rank(context.allowed_sensitivity)
         || record.verification == Verification::Rejected
     {
         return false;
     }
     if record.verification != Verification::Verified
-        && !(record.scope == MemoryScope::Agent
-            && record.owner_agent_id == Some(context.agent_id))
+        && !(record.scope == MemoryScope::Agent && record.owner_agent_id == Some(context.agent_id))
     {
         return false;
     }
@@ -186,8 +188,7 @@ pub fn can_read(record: &MemoryRecord, context: &RetrievalContext) -> bool {
                 || context.granted_memory_ids.contains(&record.id)
         }
         MemoryScope::Execution => {
-            record.scope_id == context.task_id
-                && context.granted_memory_ids.contains(&record.id)
+            record.scope_id == context.task_id && context.granted_memory_ids.contains(&record.id)
         }
     }
 }
@@ -219,7 +220,10 @@ pub fn lexical_relevance(query: &str, content: &str) -> f64 {
 }
 
 pub fn score_memory(record: &MemoryRecord, relevance: f64, now: DateTime<Utc>) -> MemoryVector {
-    let age_seconds = now.signed_duration_since(record.created_at).num_seconds().max(0) as f64;
+    let age_seconds = now
+        .signed_duration_since(record.created_at)
+        .num_seconds()
+        .max(0) as f64;
     let freshness = 1.0 / (1.0 + age_seconds / (30.0 * 24.0 * 60.0 * 60.0));
     let verification = match record.verification {
         Verification::Verified => 1.0,
@@ -384,8 +388,16 @@ mod tests {
     #[test]
     fn allocation_never_exceeds_budget_and_is_deterministic() {
         let workspace = Uuid::new_v4();
-        let first = record(workspace, MemoryScope::Workspace, MemorySensitivity::Internal);
-        let mut second = record(workspace, MemoryScope::Workspace, MemorySensitivity::Internal);
+        let first = record(
+            workspace,
+            MemoryScope::Workspace,
+            MemorySensitivity::Internal,
+        );
+        let mut second = record(
+            workspace,
+            MemoryScope::Workspace,
+            MemorySensitivity::Internal,
+        );
         second.token_cost = 250;
         let context = RetrievalContext {
             workspace_id: workspace,
@@ -396,22 +408,19 @@ mod tests {
             now: Utc::now(),
         };
         let relevance = vec![(first.id, 1.0), (second.id, 0.9)];
-        let a = allocate_context(
-            &[first.clone(), second.clone()],
-            &context,
-            &relevance,
-            200,
-        )
-        .unwrap();
+        let a =
+            allocate_context(&[first.clone(), second.clone()], &context, &relevance, 200).unwrap();
         let b = allocate_context(&[second, first], &context, &relevance, 200).unwrap();
         assert!(a.tokens_allocated <= a.token_budget);
         assert_eq!(a, b);
     }
 
-
     #[test]
     fn lexical_relevance_excludes_unrelated_memory_and_rewards_exact_phrases() {
-        assert_eq!(lexical_relevance("portfolio risk model", "football fixture commentary"), 0.0);
+        assert_eq!(
+            lexical_relevance("portfolio risk model", "football fixture commentary"),
+            0.0
+        );
         assert!(lexical_relevance("portfolio risk model", "portfolio risk model design") > 0.7);
     }
 
@@ -420,7 +429,11 @@ mod tests {
     #[test]
     fn proposed_shared_memory_waits_for_human_verification() {
         let workspace = Uuid::new_v4();
-        let mut item = record(workspace, MemoryScope::Workspace, MemorySensitivity::Internal);
+        let mut item = record(
+            workspace,
+            MemoryScope::Workspace,
+            MemorySensitivity::Internal,
+        );
         item.verification = Verification::Proposed;
         let context = RetrievalContext {
             workspace_id: workspace,
@@ -467,7 +480,11 @@ mod tests {
 
     #[test]
     fn invalid_scores_are_rejected() {
-        let mut item = record(Uuid::new_v4(), MemoryScope::Workspace, MemorySensitivity::Public);
+        let mut item = record(
+            Uuid::new_v4(),
+            MemoryScope::Workspace,
+            MemorySensitivity::Public,
+        );
         item.confidence = f64::NAN;
         assert_eq!(item.validate(), Err(MemoryError::InvalidScore));
     }
