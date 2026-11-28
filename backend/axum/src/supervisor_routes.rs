@@ -99,6 +99,7 @@ fn task_risk_score(title: &str, objective: &str) -> f64 {
         "financial",
         "medical",
         "legal",
+        "execute command",
         "shell",
         "database",
         "credential",
