@@ -216,52 +216,261 @@ mod tests {
             ("POST", "/api/v1/admin/flags/flag-1/clear".into()),
             ("GET", "/api/v1/admin/assignments".into()),
             ("GET", "/api/v1/explore/agents".into()),
-            ("GET", format!("/api/v1/workspaces/{workspace_id}/agents/{}/publish", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/agents/{}/publish", Uuid::new_v4())),
-            ("DELETE", format!("/api/v1/workspaces/{workspace_id}/agents/{}/publish", Uuid::new_v4())),
-            ("GET", format!("/api/v1/explore/agents/{}/comments", Uuid::new_v4())),
-            ("POST", format!("/api/v1/explore/agents/{}/comments", Uuid::new_v4())),
-            ("PATCH", format!("/api/v1/explore/comments/{}", Uuid::new_v4())),
-            ("DELETE", format!("/api/v1/explore/comments/{}", Uuid::new_v4())),
-            ("POST", format!("/api/v1/explore/agents/{}/like", Uuid::new_v4())),
-            ("POST", format!("/api/v1/explore/agents/{}/follow", Uuid::new_v4())),
-            ("POST", format!("/api/v1/explore/comments/{}/like", Uuid::new_v4())),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/publish",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "DELETE",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/publish",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "GET",
+                format!("/api/v1/explore/agents/{}/comments", Uuid::new_v4()),
+            ),
+            (
+                "POST",
+                format!("/api/v1/explore/agents/{}/comments", Uuid::new_v4()),
+            ),
+            (
+                "PATCH",
+                format!("/api/v1/explore/comments/{}", Uuid::new_v4()),
+            ),
+            (
+                "DELETE",
+                format!("/api/v1/explore/comments/{}", Uuid::new_v4()),
+            ),
+            (
+                "POST",
+                format!("/api/v1/explore/agents/{}/like", Uuid::new_v4()),
+            ),
+            (
+                "POST",
+                format!("/api/v1/explore/agents/{}/follow", Uuid::new_v4()),
+            ),
+            (
+                "POST",
+                format!("/api/v1/explore/comments/{}/like", Uuid::new_v4()),
+            ),
             ("POST", "/api/v1/explore/reports".into()),
-            ("GET", format!("/api/v1/explore/agents/{}/reports", Uuid::new_v4())),
-            ("POST", format!("/api/v1/explore/reports/{}/resolve", Uuid::new_v4())),
+            (
+                "GET",
+                format!("/api/v1/explore/agents/{}/reports", Uuid::new_v4()),
+            ),
+            (
+                "POST",
+                format!("/api/v1/explore/reports/{}/resolve", Uuid::new_v4()),
+            ),
             ("GET", "/api/v1/notifications".into()),
             ("POST", "/api/v1/notifications/read-all".into()),
-            ("POST", format!("/api/v1/notifications/{}/read", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/memory/documents")),
-            ("GET", format!("/api/v1/workspaces/{workspace_id}/memory/reconciliation")),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/memory/documents/{}/1/approve", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/memory/documents/{}/1/archive", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/memory/documents/{}/1/restore", Uuid::new_v4())),
-            ("DELETE", format!("/api/v1/workspaces/{workspace_id}/memory/documents/{}/1", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/memory/documents/{}/1/retry-sync", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/agents/{}/credentials", Uuid::new_v4())),
-            ("DELETE", format!("/api/v1/workspaces/{workspace_id}/agents/{}/credentials/{}", Uuid::new_v4(), Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/agents/{}/credentials/{}/rotate", Uuid::new_v4(), Uuid::new_v4())),
-            ("GET", format!("/api/v1/workspaces/{workspace_id}/agents/{}/memory-documents/{}/1", Uuid::new_v4(), Uuid::new_v4())),
-            ("GET", format!("/api/v1/workspaces/{workspace_id}/agents/{}/memory-documents/{}/versions/history", Uuid::new_v4(), Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/agents/{}/memory-documents/search", Uuid::new_v4())),
-            ("GET", format!("/api/v1/workspaces/{workspace_id}/agents/{}/memory-sessions/{}/documents", Uuid::new_v4(), Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/memory/index")),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/chats/{}/messages/{}/memory-index", Uuid::new_v4(), Uuid::new_v4())),
-            ("GET", format!("/api/v1/workspaces/{workspace_id}/memory/epoch")),
-            ("GET", format!("/api/v1/workspaces/{workspace_id}/memory/qoin-vector")),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/chats/{}/memory-index/{}/qoin", Uuid::new_v4(), Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/chats/{}/messages/{}/qoin-index", Uuid::new_v4(), Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/agents/{}/memory-context", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/agents/{}/memory-sessions/{}/retrieve", Uuid::new_v4(), Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/agents/{}/memory-sessions/{}/context", Uuid::new_v4(), Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/agents/{}/memory-sessions/{}/feedback", Uuid::new_v4(), Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/members")),
-            ("DELETE", format!("/api/v1/workspaces/{workspace_id}/members/{}", Uuid::new_v4())),
-            ("GET", format!("/api/v1/workspaces/{workspace_id}/projects")),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/projects")),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/projects/{}/members", Uuid::new_v4())),
-            ("DELETE", format!("/api/v1/workspaces/{workspace_id}/projects/{}/members/{}", Uuid::new_v4(), Uuid::new_v4())),
+            (
+                "POST",
+                format!("/api/v1/notifications/{}/read", Uuid::new_v4()),
+            ),
+            (
+                "POST",
+                format!("/api/v1/workspaces/{workspace_id}/memory/documents"),
+            ),
+            (
+                "GET",
+                format!("/api/v1/workspaces/{workspace_id}/memory/reconciliation"),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/memory/documents/{}/1/approve",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/memory/documents/{}/1/archive",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/memory/documents/{}/1/restore",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "DELETE",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/memory/documents/{}/1",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/memory/documents/{}/1/retry-sync",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/credentials",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "DELETE",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/credentials/{}",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/credentials/{}/rotate",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "GET",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/memory-documents/{}/1",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "GET",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/memory-documents/{}/versions/history",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/memory-documents/search",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "GET",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/memory-sessions/{}/documents",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!("/api/v1/workspaces/{workspace_id}/memory/index"),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/chats/{}/messages/{}/memory-index",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "GET",
+                format!("/api/v1/workspaces/{workspace_id}/memory/epoch"),
+            ),
+            (
+                "GET",
+                format!("/api/v1/workspaces/{workspace_id}/memory/qoin-vector"),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/chats/{}/memory-index/{}/qoin",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/chats/{}/messages/{}/qoin-index",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/memory-context",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/memory-sessions/{}/retrieve",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/memory-sessions/{}/context",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agents/{}/memory-sessions/{}/feedback",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!("/api/v1/workspaces/{workspace_id}/members"),
+            ),
+            (
+                "DELETE",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/members/{}",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "GET",
+                format!("/api/v1/workspaces/{workspace_id}/projects"),
+            ),
+            (
+                "POST",
+                format!("/api/v1/workspaces/{workspace_id}/projects"),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/projects/{}/members",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "DELETE",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/projects/{}/members/{}",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
         ];
         for (method, path) in routes {
             let missing = app
