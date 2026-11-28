@@ -1705,6 +1705,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn workspace_membership_requires_an_existing_workspace_entity() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let account = storage
+            .ensure_firebase_user("axon-project", "membership-integrity-user")
+            .await
+            .unwrap();
+        let missing_workspace_id = Uuid::new_v4();
+
+        let result = sqlx::query(
+            "INSERT INTO workspace_memberships (workspace_id, user_id, role, created_at) VALUES (?, ?, 'member', ?)",
+        )
+        .bind(missing_workspace_id.to_string())
+        .bind(account.user_id.to_string())
+        .bind(Utc::now().to_rfc3339())
+        .execute(&storage.pool)
+        .await;
+
+        assert!(result.is_err());
+        assert!(storage
+            .is_workspace_member(account.user_id, missing_workspace_id)
+            .await
+            .unwrap()
+            == false);
+    }
+
+    #[tokio::test]
     async fn task_execution_lease_is_exclusive_and_owner_scoped() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let task_id = Uuid::new_v4();
