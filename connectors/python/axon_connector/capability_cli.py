@@ -11,6 +11,7 @@ import sys
 
 import httpx
 
+from .api import AxonApiError
 from .capability_router import (
     CapabilityRoutingError,
     load_model_catalog,
@@ -39,6 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--api-url",
         default=os.getenv("AXON_API_URL", "http://127.0.0.1:8080"),
+    )
+    parser.add_argument(
+        "--firebase-id-token",
+        default=os.getenv("AXON_FIREBASE_ID_TOKEN"),
+        help="Firebase ID token; prefer AXON_FIREBASE_ID_TOKEN to avoid shell history.",
     )
     parser.add_argument(
         "--include-memory",
@@ -108,12 +114,16 @@ async def _run(args: argparse.Namespace) -> int:
             )
             return 0
 
+        if not args.firebase_id_token:
+            raise ValueError("Set AXON_FIREBASE_ID_TOKEN before running a capability poll.")
+
         outcome = await run_majority_route(
             workspace_id=args.workspace_id,
             capability=args.capability,
             task_brief=args.task,
             models=available_models,
             api_url=args.api_url,
+            firebase_id_token=args.firebase_id_token,
             include_memory=args.include_memory,
             provider_sharing_approved=args.approve_provider_sharing,
             max_cost_per_1k_tokens=args.max_cost_per_1k_tokens,
@@ -142,6 +152,7 @@ async def _run(args: argparse.Namespace) -> int:
         ValueError,
         CapabilityRoutingError,
         ModelProviderError,
+        AxonApiError,
         httpx.HTTPError,
     ) as exc:
         print(f"axon-route: {exc}", file=sys.stderr)

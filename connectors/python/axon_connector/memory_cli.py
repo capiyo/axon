@@ -10,6 +10,7 @@ import sys
 
 import httpx
 
+from .api import AxonApiError
 from .memory import extract_memory_candidates, persist_memory_candidates
 from .models import AxonEnvelope
 from .providers.chatgpt import load_chatgpt_export
@@ -33,6 +34,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--model", default=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"))
     parser.add_argument("--api-url", default=os.getenv("AXON_API_URL", "http://127.0.0.1:8080"))
+    parser.add_argument(
+        "--firebase-id-token",
+        default=os.getenv("AXON_FIREBASE_ID_TOKEN"),
+        help="Firebase ID token; prefer AXON_FIREBASE_ID_TOKEN to avoid shell history.",
+    )
     parser.add_argument("--max-context-chars", type=int, default=120_000)
     parser.add_argument(
         "--approve-provider-transfer",
@@ -56,6 +62,8 @@ async def _run(args: argparse.Namespace) -> int:
             raise ValueError("--max-context-chars must be greater than zero.")
         if args.approve_persist and not args.approve_provider_transfer:
             raise ValueError("--approve-persist also requires --approve-provider-transfer.")
+        if args.approve_persist and not args.firebase_id_token:
+            raise ValueError("--approve-persist requires AXON_FIREBASE_ID_TOKEN.")
 
         if args.provider == "chatgpt":
             conversation = load_chatgpt_export(
@@ -124,6 +132,7 @@ async def _run(args: argparse.Namespace) -> int:
             candidates,
             workspace_id=args.workspace_id,
             approved=args.approve_persist,
+            firebase_id_token=args.firebase_id_token,
             api_url=args.api_url,
         )
         print(
@@ -135,6 +144,7 @@ async def _run(args: argparse.Namespace) -> int:
         OSError,
         ValueError,
         DeepSeekError,
+        AxonApiError,
         httpx.HTTPError,
         json.JSONDecodeError,
     ) as exc:

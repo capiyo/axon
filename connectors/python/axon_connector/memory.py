@@ -6,10 +6,10 @@ import json
 import math
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlparse
+from uuid import UUID
 
-import httpx
 
+from .api import AxonApiClient
 from .models import AxonEnvelope, ImportedConversation
 from .transfer import transfer_to_deepseek
 
@@ -179,81 +179,86 @@ async def persist_memory_candidates(
     *,
     workspace_id: str,
     approved: bool,
+    firebase_id_token: str,
     api_url: str = "http://127.0.0.1:8080",
 ) -> tuple[str, tuple[dict[str, Any], ...]]:
-    """Persist the source import and proposed candidates after explicit approval."""
+    """Persist the source export and proposed memories after explicit approval."""
     if not approved:
         raise PermissionError("Memory persistence requires explicit user approval.")
-    parsed = urlparse(api_url)
-    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
-        raise ValueError("Memory persistence is restricted to a local HTTP Axon API.")
-    base_url = api_url.rstrip("/")
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        import_response = await client.post(
-            f"{base_url}/api/v1/workspaces/{workspace_id}/memory/imports",
-            json={
-                "provider": conversation.provider,
-                "conversation_id": conversation.conversation_id,
-                "title": conversation.title,
-                "messages": [
-                    {
-                        "id": message.message_id,
-                        "role": message.role,
-                        "content": message.content,
-                        "created_at": message.created_at,
-                    }
-                    for message in conversation.messages
-                ],
+    try:
+        workspace_id = str(UUID(workspace_id))
+    except (ValueError, AttributeError):
+        raise ValueError("Workspace ID must be a valid UUID.") from None
+
+    client = AxonApiClient(api_url, firebase_id_token)
+    imported = await client.request_json(
+        "POST",
+        f"/api/v1/workspaces/{workspace_id}/memory/imports",
+        {
+            "provider": conversation.provider,
+            "conversation_id": conversation.conversation_id,
+            "title": conversation.title,
+            "messages": [
+                {
+                    "id": message.message_id,
+                    "role": message.role,
+                    "content": message.content,
+                    "created_at": message.created_at,
+                }
+                for message in conversation.messages
+            ],
+        },
+    )
+    if not isinstance(imported, dict) or not isinstance(imported.get("id"), str):
+        raise TypeError("Axon did not return a valid conversation import.")
+    import_id = imported["id"]
+
+    stored: list[dict[str, Any]] = []
+    for candidate in candidates:
+        response = await client.request_json(
+            "POST",
+            f"/api/v1/workspaces/{workspace_id}/memories",
+            {
+                "kind": candidate.kind,
+                "title": candidate.title,
+                "content": candidate.content,
+                "summary": candidate.summary,
+                "tags": list(candidate.tags),
+                "import_id": import_id,
+                "message_ids": list(candidate.message_ids),
+                "confidence": candidate.confidence,
             },
         )
-        import_response.raise_for_status()
-        import_id = import_response.json()["id"]
-
-        stored: list[dict[str, Any]] = []
-        for candidate in candidates:
-            response = await client.post(
-                f"{base_url}/api/v1/workspaces/{workspace_id}/memories",
-                json={
-                    "kind": candidate.kind,
-                    "title": candidate.title,
-                    "content": candidate.content,
-                    "summary": candidate.summary,
-                    "tags": list(candidate.tags),
-                    "import_id": import_id,
-                    "message_ids": list(candidate.message_ids),
-                    "confidence": candidate.confidence,
-                },
-            )
-            response.raise_for_status()
-            stored.append(response.json())
+        if not isinstance(response, dict):
+            raise TypeError("Axon returned an invalid proposed memory.")
+        stored.append(response)
     return import_id, tuple(stored)
-
 
 
 async def fetch_active_memory_context(
     workspace_id: str,
     task_brief: str,
     *,
+    firebase_id_token: str,
     api_url: str = "http://127.0.0.1:8080",
     limit: int = 10,
 ) -> tuple[dict[str, Any], ...]:
-    """Retrieve only approved active memories relevant to a task from local Axon."""
-    parsed = urlparse(api_url)
-    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
-        raise ValueError("Memory retrieval is restricted to a local HTTP Axon API.")
+    """Retrieve approved active memories from the authenticated workspace API."""
+    try:
+        workspace_id = str(UUID(workspace_id))
+    except (ValueError, AttributeError):
+        raise ValueError("Workspace ID must be a valid UUID.") from None
     if not task_brief.strip() or len(task_brief) > 10_000:
         raise ValueError("Task brief must contain 1–10000 characters.")
     if not 1 <= limit <= 50:
         raise ValueError("Memory retrieval limit must be between 1 and 50.")
 
-    base_url = api_url.rstrip("/")
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.get(
-            f"{base_url}/api/v1/workspaces/{workspace_id}/memory/context",
-            params={"q": task_brief[:120], "limit": limit},
-        )
-        response.raise_for_status()
-        records = response.json()
+    client = AxonApiClient(api_url, firebase_id_token)
+    records = await client.request_json(
+        "GET",
+        f"/api/v1/workspaces/{workspace_id}/memory/context",
+        params={"q": task_brief[:120], "limit": limit},
+    )
     if not isinstance(records, list):
         raise TypeError("Axon memory context endpoint returned an invalid response.")
     return tuple(

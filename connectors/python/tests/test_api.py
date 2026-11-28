@@ -73,3 +73,37 @@ def test_workspace_id_must_be_a_uuid():
     client = AxonApiClient("https://axon.example", "token")
     with pytest.raises(ValueError, match="valid UUID"):
         asyncio.run(client.create_artifact("../other-workspace", "Title", "Content"))
+
+
+def test_generic_request_uses_firebase_bearer_and_query_parameters():
+    observed: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        observed["authorization"] = request.headers.get("Authorization")
+        observed["query"] = request.url.params.get("q")
+        return httpx.Response(200, json=[{"status": "active"}])
+
+    client = AxonApiClient(
+        "https://axon.example",
+        "firebase-id-token",
+        transport=httpx.MockTransport(handler),
+    )
+    result = asyncio.run(
+        client.request_json(
+            "GET",
+            f"/api/v1/workspaces/{uuid4()}/memory/context",
+            params={"q": "project state", "limit": 5},
+        )
+    )
+
+    assert result == [{"status": "active"}]
+    assert observed == {
+        "authorization": "Bearer firebase-id-token",
+        "query": "project state",
+    }
+
+
+def test_generic_request_rejects_paths_outside_api_v1():
+    client = AxonApiClient("https://axon.example", "token")
+    with pytest.raises(ValueError, match="relative /api/v1/ path"):
+        asyncio.run(client.request_json("GET", "/admin/secrets"))

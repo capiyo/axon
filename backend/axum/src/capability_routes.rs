@@ -1,14 +1,16 @@
 use crate::{
+    auth_middleware::AuthenticatedUser,
     capability::{CapabilityPoll, CapabilityVoteResult, ModelCandidate},
     memory::MemoryRepository,
     AppState,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
@@ -28,6 +30,22 @@ fn api_error(
             error: message.into(),
         }),
     )
+}
+
+async fn require_member(
+    state: &AppState,
+    user: &AuthenticatedUser,
+    workspace_id: Uuid,
+) -> ApiResult<()> {
+    let member = state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be checked."))?;
+    if member {
+        Ok(())
+    } else {
+        Err(api_error(StatusCode::NOT_FOUND, "Workspace not found."))
+    }
 }
 
 fn repository(state: &AppState) -> ApiResult<&MemoryRepository> {
@@ -52,9 +70,11 @@ pub struct CreateCapabilityPollRequest {
 
 pub async fn create_poll(
     State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path(workspace_id): Path<Uuid>,
     Json(input): Json<CreateCapabilityPollRequest>,
 ) -> ApiResult<(StatusCode, Json<CapabilityPoll>)> {
+    require_member(&state, &user, workspace_id).await?;
     if input.capability.trim().is_empty()
         || input.capability.len() > 120
         || input.task_brief.trim().is_empty()
@@ -102,9 +122,11 @@ pub struct SubmitNominationRequest {
 
 pub async fn submit_nomination(
     State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, poll_id)): Path<(Uuid, Uuid)>,
     Json(input): Json<SubmitNominationRequest>,
 ) -> ApiResult<Json<CapabilityPoll>> {
+    require_member(&state, &user, workspace_id).await?;
     if input.voter_model_id.trim().is_empty()
         || input.voter_model_id.len() > 160
         || input.nominated_model_id.trim().is_empty()
@@ -150,8 +172,10 @@ pub struct FinalizedCapabilityPoll {
 
 pub async fn finalize_poll(
     State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, poll_id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<Json<FinalizedCapabilityPoll>> {
+    require_member(&state, &user, workspace_id).await?;
     let (poll, result) = repository(&state)?
         .finalize_capability_poll(workspace_id, poll_id)
         .await
@@ -171,8 +195,10 @@ pub async fn finalize_poll(
 
 pub async fn get_poll(
     State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path((workspace_id, poll_id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<Json<CapabilityPoll>> {
+    require_member(&state, &user, workspace_id).await?;
     let poll = repository(&state)?
         .get_capability_poll(workspace_id, poll_id)
         .await

@@ -20,6 +20,7 @@ mod memory_document_routes;
 pub mod memory_documents;
 pub mod memory_intelligence;
 pub mod memory_outbox;
+mod memory_import_routes;
 mod memory_routes;
 pub mod memory_store;
 pub mod memory_system;
@@ -182,6 +183,22 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/v1/workspaces/:workspace_id/chats/:chat_id/memory/:entry_id/:action",
             post(chat_memory_routes::mutate_memory_entry),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memory/imports",
+            post(memory_import_routes::import_conversation),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memories",
+            get(memory_import_routes::list_memories).post(memory_import_routes::create_memory),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memory/context",
+            get(memory_import_routes::memory_context),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/memories/:memory_id/review",
+            post(memory_import_routes::review_memory),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/agent-memories",

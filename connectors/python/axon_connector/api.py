@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -37,6 +38,48 @@ class AxonApiClient:
         self._token = firebase_id_token.strip()
         self._timeout = timeout_seconds
         self._transport = transport
+
+    async def request_json(
+        self,
+        method: str,
+        path: str,
+        payload: dict[str, object] | None = None,
+        *,
+        params: dict[str, str | int] | None = None,
+    ) -> dict[str, Any] | list[Any]:
+        """Send an authenticated request to an Axon API v1 endpoint."""
+        if (
+            not path.startswith("/api/v1/")
+            or path.startswith("//")
+            or any(part == ".." for part in path.split("/"))
+        ):
+            raise ValueError("Axon API path must be a relative /api/v1/ path.")
+        try:
+            async with httpx.AsyncClient(
+                timeout=self._timeout, transport=self._transport
+            ) as client:
+                response = await client.request(
+                    method.upper(),
+                    f"{self._base_url}{path}",
+                    headers={"Authorization": f"Bearer {self._token}"},
+                    json=payload,
+                    params=params,
+                )
+                response.raise_for_status()
+                if response.status_code == 204 or not response.content:
+                    return {}
+                result = response.json()
+        except httpx.HTTPStatusError as exc:
+            raise AxonApiError(
+                f"Axon rejected the request (HTTP {exc.response.status_code})."
+            ) from None
+        except httpx.HTTPError as exc:
+            raise AxonApiError(f"Axon API request failed: {type(exc).__name__}.") from None
+        except ValueError:
+            raise AxonApiError("Axon returned an invalid JSON response.") from None
+        if not isinstance(result, (dict, list)):
+            raise AxonApiError("Axon returned an invalid API response.")
+        return result
 
     async def create_artifact(
         self,

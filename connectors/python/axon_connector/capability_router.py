@@ -10,8 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-import httpx
-
+from .api import AxonApiClient
 from .memory import fetch_active_memory_context
 from .providers.openai_compatible import (
     ModelConfig,
@@ -166,13 +165,6 @@ async def _execute_task(config: ModelConfig, task_brief: str, capability: str) -
     return await OpenAICompatibleClient(config).complete(messages, max_tokens=4_000)
 
 
-def _require_local_api(api_url: str) -> str:
-    parsed = urlparse(api_url)
-    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
-        raise ValueError("Capability poll persistence is restricted to a local HTTP Axon API.")
-    return api_url.rstrip("/")
-
-
 async def run_majority_route(
     *,
     workspace_id: str,
@@ -180,6 +172,7 @@ async def run_majority_route(
     task_brief: str,
     models: tuple[ModelConfig, ...],
     api_url: str = "http://127.0.0.1:8080",
+    firebase_id_token: str | None = None,
     include_memory: bool = False,
     provider_sharing_approved: bool = False,
     max_cost_per_1k_tokens: float | None = None,
@@ -191,7 +184,9 @@ async def run_majority_route(
         not math.isfinite(max_cost_per_1k_tokens) or max_cost_per_1k_tokens < 0
     ):
         raise ValueError("Maximum model cost must be a finite non-negative number.")
-    base_url = _require_local_api(api_url)
+    if not firebase_id_token or not firebase_id_token.strip():
+        raise ValueError("Capability routing requires AXON_FIREBASE_ID_TOKEN.")
+    api_client = AxonApiClient(api_url, firebase_id_token)
     routed_task = task_brief
     memory_ids: list[str] = []
     if include_memory:
@@ -199,6 +194,7 @@ async def run_majority_route(
             workspace_id,
             task_brief,
             api_url=api_url,
+            firebase_id_token=firebase_id_token,
             limit=10,
         )
         remaining_chars = max(0, 9_000 - len(task_brief))
@@ -288,37 +284,35 @@ async def run_majority_route(
             f"Unavailable or invalid voters: {', '.join(failures) or 'none'}."
         )
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        poll_response = await client.post(
-            f"{base_url}/api/v1/workspaces/{workspace_id}/capability-polls",
-            json={
-                "capability": capability,
-                "task_brief": routed_task,
-                "external_sharing_approved": provider_sharing_approved,
-                "context_memory_ids": memory_ids,
-                "electorate": [item["voter_model_id"] for item in nominations],
-                "candidates": candidates,
-            },
-        )
-        poll_response.raise_for_status()
-        poll = poll_response.json()
-        poll_id = poll["id"]
+    poll = await api_client.request_json(
+        "POST",
+        f"/api/v1/workspaces/{workspace_id}/capability-polls",
+        {
+            "capability": capability,
+            "task_brief": routed_task,
+            "external_sharing_approved": provider_sharing_approved,
+            "context_memory_ids": memory_ids,
+            "electorate": [item["voter_model_id"] for item in nominations],
+            "candidates": candidates,
+        },
+    )
+    if not isinstance(poll, dict) or not isinstance(poll.get("id"), str):
+        raise CapabilityRoutingError("Axon returned an invalid capability poll.")
+    poll_id = poll["id"]
 
-        for nomination in nominations:
-            response = await client.post(
-                (
-                    f"{base_url}/api/v1/workspaces/{workspace_id}/capability-polls/"
-                    f"{poll_id}/nominations"
-                ),
-                json=nomination,
-            )
-            response.raise_for_status()
-
-        final_response = await client.post(
-            f"{base_url}/api/v1/workspaces/{workspace_id}/capability-polls/{poll_id}/finalize"
+    for nomination in nominations:
+        await api_client.request_json(
+            "POST",
+            f"/api/v1/workspaces/{workspace_id}/capability-polls/{poll_id}/nominations",
+            nomination,
         )
-        final_response.raise_for_status()
-        finalized = final_response.json()
+
+    finalized = await api_client.request_json(
+        "POST",
+        f"/api/v1/workspaces/{workspace_id}/capability-polls/{poll_id}/finalize",
+    )
+    if not isinstance(finalized, dict):
+        raise CapabilityRoutingError("Axon returned an invalid finalized capability poll.")
 
     result = finalized["result"]
     winner_id = result.get("winner_model_id")
