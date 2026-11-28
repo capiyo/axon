@@ -1106,7 +1106,7 @@ function AuthGate() {
     googleIdToken = null;
     setUser(null);
     setAuthError("");
-    void AsyncStorage.removeItem("axon.google.id_token");
+    void SecureStore.deleteItemAsync("axon.google.id_token");
   };
 
   if (!ready) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><ActivityIndicator/><Text style={styles.muted}>Restoring your secure session…</Text></View></SafeAreaView>;
