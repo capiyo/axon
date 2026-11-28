@@ -560,7 +560,7 @@ mod tests {
                 || path.contains("/projects/")
             {
                 "POST"
-            } else if path.ends_with("/archive") || path.ends_with("/projects") {
+            } else if path.ends_with("/archive") {
                 "PATCH"
             } else {
                 "GET"
