@@ -81,3 +81,16 @@ def test_capability_router_requires_explicit_provider_sharing() -> None:
                 models=(),
             )
         )
+
+
+def test_capability_router_requires_firebase_auth_for_persistence() -> None:
+    with pytest.raises(ValueError, match="AXON_FIREBASE_ID_TOKEN"):
+        asyncio.run(
+            run_majority_route(
+                workspace_id="workspace-1",
+                capability="visual_design",
+                task_brief="Design a dashboard.",
+                models=(),
+                provider_sharing_approved=True,
+            )
+        )

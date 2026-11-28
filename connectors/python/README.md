@@ -113,3 +113,62 @@ Response persistence requires `AXON_FIREBASE_ID_TOKEN` (or `--axon-id-token`) an
 - The AXP SHA-256 digest detects payload changes; it is not a signature or proof of origin.
 - Attachments, images, tool-use blocks and very large conversations are not transferred by this connector.
 - Never put provider API keys or Firebase ID tokens in source code, Vite/Expo client variables, or committed files.
+
+
+## Persistent memory extraction (ChatGPT or Claude)
+
+The `axon-memory` command imports a user-authorized conversation export, asks DeepSeek to extract durable memory candidates, validates the output and source message references, and can persist the source import plus proposed memories in Axon's MongoDB-backed memory repository. Proposed memories remain inactive until reviewed.
+
+Configure the API origin and a Firebase ID token for a member of the target workspace:
+
+```powershell
+$env:AXON_API_URL="https://your-axon-api.example"
+$env:AXON_FIREBASE_ID_TOKEN="your-firebase-id-token"
+$env:DEEPSEEK_API_KEY="your-deepseek-key"
+```
+
+```bash
+export AXON_API_URL="https://your-axon-api.example"
+export AXON_FIREBASE_ID_TOKEN="your-firebase-id-token"
+export DEEPSEEK_API_KEY="your-deepseek-key"
+```
+
+Preview a ChatGPT conversation without contacting a provider or writing data:
+
+```bash
+axon-memory ./conversations.json --provider chatgpt --conversation-id CHAT_ID --workspace-id WORKSPACE_UUID
+```
+
+Approve extraction and inspect proposed candidates:
+
+```bash
+axon-memory ./conversations.json --provider chatgpt --conversation-id CHAT_ID --workspace-id WORKSPACE_UUID --approve-provider-transfer
+```
+
+Approve both provider transfer and persistence:
+
+```bash
+axon-memory ./conversations.json --provider chatgpt --conversation-id CHAT_ID --workspace-id WORKSPACE_UUID --approve-provider-transfer --approve-persist
+```
+
+Persistence requires `AXON_FIREBASE_ID_TOKEN` and workspace membership. The source export is stored as a conversation import; extracted records are stored with `proposed` status and are not active context until reviewed through Axon's memory review endpoint. The API rejects source-message IDs that do not belong to the imported conversation.
+
+## Multi-model capability majority routing
+
+The `axon-route` command asks configured OpenAI-compatible models to nominate a specialist, persists a workspace-scoped capability poll, and executes the task only on a strict-majority winner. Configure up to 30 models in a private copy of `models.example.json`. Each entry includes its provider, endpoint, capability tags, and the environment variable containing its API key. Never put provider keys in the JSON file.
+
+Set each model's key environment variable, plus `AXON_API_URL` and `AXON_FIREBASE_ID_TOKEN`. Preview does not send the task to a provider or create a poll:
+
+```bash
+axon-route --task "Design a responsive dashboard" --capability visual_design --workspace-id WORKSPACE_UUID --models ./models.json
+```
+
+After reviewing the eligible voters, explicitly approve provider sharing:
+
+```bash
+axon-route --task "Design a responsive dashboard" --capability visual_design --workspace-id WORKSPACE_UUID --models ./models.json --approve-provider-sharing
+```
+
+Use `--max-cost-per-1k-tokens` to impose an estimated USD cost ceiling. Use `--include-memory` to retrieve active workspace memories relevant to the task; selected memory context is also shared with eligible voters after explicit approval. Provider keys remain in environment variables, while Axon API writes and reads use the Firebase bearer token and enforce workspace membership. A tie or plurality does not select a winner; only a strict majority dispatches the task to the selected model.
+
+The backend requires MongoDB configuration for durable memory imports and capability polls. Keep provider credentials and Firebase ID tokens out of source files, shell history, and public logs.

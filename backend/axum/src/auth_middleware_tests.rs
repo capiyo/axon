@@ -160,6 +160,17 @@ mod tests {
             ),
             ("GET", format!("/api/v1/workspaces/{workspace_id}/tasks")),
             ("POST", format!("/api/v1/workspaces/{workspace_id}/tasks")),
+            ("POST", format!("/api/v1/workspaces/{workspace_id}/memory/imports")),
+            ("GET", format!("/api/v1/workspaces/{workspace_id}/memories")),
+            ("POST", format!("/api/v1/workspaces/{workspace_id}/memories")),
+            ("GET", format!("/api/v1/workspaces/{workspace_id}/memory/context")),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/memories/{}/review",
+                    Uuid::new_v4()
+                ),
+            ),
             ("POST", format!("/api/v1/workspaces/{workspace_id}/capability-polls")),
             (
                 "GET",
@@ -597,6 +608,7 @@ mod tests {
             format!("/api/v1/workspaces/{workspace_id}/agents"),
             format!("/api/v1/workspaces/{workspace_id}/artifacts"),
             format!("/api/v1/workspaces/{workspace_id}/tasks"),
+            format!("/api/v1/workspaces/{workspace_id}/memory/context"),
             format!("/api/v1/workspaces/{workspace_id}/capability-polls"),
             format!("/api/v1/workspaces/{workspace_id}/supervisor-runs"),
             format!("/api/v1/workspaces/{workspace_id}/memory/documents"),
@@ -685,6 +697,82 @@ mod tests {
                 "cross-user task access: {path}"
             );
         }
+
+        let capability_read = app
+            .clone()
+            .oneshot(request(
+                "GET",
+                &format!(
+                    "/api/v1/workspaces/{workspace_id}/capability-polls/{}",
+                    Uuid::new_v4()
+                ),
+                Some(other_user_token.clone()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(capability_read.status(), StatusCode::NOT_FOUND);
+
+        let memory_import = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("/api/v1/workspaces/{workspace_id}/memory/imports"),
+                Some(other_user_token.clone()),
+                serde_json::json!({
+                    "provider": "chatgpt",
+                    "conversation_id": "private-conversation",
+                    "title": "Private import",
+                    "messages": [{
+                        "id": "message-1",
+                        "role": "user",
+                        "content": "Private source text",
+                        "created_at": null
+                    }]
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(memory_import.status(), StatusCode::NOT_FOUND);
+
+        let memory_create = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("/api/v1/workspaces/{workspace_id}/memories"),
+                Some(other_user_token.clone()),
+                serde_json::json!({
+                    "kind": "project",
+                    "title": "Private memory",
+                    "content": "Must not be stored",
+                    "summary": "Unauthorized",
+                    "tags": [],
+                    "import_id": Uuid::new_v4(),
+                    "message_ids": [],
+                    "confidence": 0.9
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(memory_create.status(), StatusCode::NOT_FOUND);
+
+        let memory_review = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!(
+                    "/api/v1/workspaces/{workspace_id}/memories/{}/review",
+                    Uuid::new_v4()
+                ),
+                Some(other_user_token),
+                serde_json::json!({
+                    "expected_version": 1,
+                    "decision": "approve",
+                    "superseded_by_id": null
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(memory_review.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
