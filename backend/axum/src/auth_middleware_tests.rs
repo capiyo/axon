@@ -2,23 +2,30 @@
 mod tests {
     use crate::{
         firebase_auth::FirebaseVerifier,
-        model::{Task, TaskStatus},
+        memory_store::MemoryStore,
+        model::{Agent, ConnectionMode, Task, TaskStatus},
         storage::SqliteStorage,
         AppState,
     };
     use axum::{
-        body::Body,
-        http::{header::AUTHORIZATION, Request, StatusCode},
+        body::{to_bytes, Body},
+        http::{
+            header::{AUTHORIZATION, CONTENT_TYPE},
+            Request, StatusCode,
+        },
     };
     use chrono::Utc;
     use tower::ServiceExt;
     use uuid::Uuid;
 
     async fn test_app() -> (axum::Router, AppState, Uuid) {
-        let storage = SqliteStorage::connect_in_memory().await.unwrap().shared();
+        let sqlite = SqliteStorage::connect_in_memory().await.unwrap();
+        let memory_store = MemoryStore::new(sqlite.sqlite_pool());
+        let storage = sqlite.shared();
         let state = AppState::with_storage(storage)
             .await
             .unwrap()
+            .with_agent_memory_store(Some(memory_store))
             .with_firebase_verifier(FirebaseVerifier::test_verifier(), true);
         let first = state
             .ensure_firebase_user("axon-test-project", "owner-user")
@@ -48,6 +55,22 @@ mod tests {
             },
         );
         (crate::app(state.clone()), state, task_id)
+    }
+
+    fn json_request(
+        method: &str,
+        path: &str,
+        token: Option<String>,
+        body: serde_json::Value,
+    ) -> Request<Body> {
+        let mut builder = Request::builder()
+            .method(method)
+            .uri(path)
+            .header(CONTENT_TYPE, "application/json");
+        if let Some(token) = token {
+            builder = builder.header(AUTHORIZATION, format!("Bearer {token}"));
+        }
+        builder.body(Body::from(body.to_string())).unwrap()
     }
 
     fn request(method: &str, path: &str, token: Option<String>) -> Request<Body> {
