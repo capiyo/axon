@@ -8,7 +8,7 @@ import ProfileModal from "../modals/ProfileModal";
 import SessionCard from "../views/SessionCard";
 type GoogleUser = { uid: string; displayName: string | null; email: string | null; photoURL: string | null };
 let googleIdToken: string | null = null;
-declare global { interface Window { google?: { accounts: { id: { initialize: (options: { client_id: string; callback: (response: { credential?: string }) => void; auto_select?: boolean }) => void; renderButton: (element: HTMLElement, options: Record<string, unknown>) => void } } } } 
+declare global { interface Window { google?: any } }
 function parseGoogleUser(token: string): GoogleUser {
   const payload = token.split(".")[1]?.replace(/-/g, "+").replace(/_/g, "/");
   if (!payload) throw new Error("Google returned an invalid identity token.");
