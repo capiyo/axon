@@ -12,6 +12,8 @@ use crate::{
         Agent, Artifact, Project, ProjectMembership, ProjectRole, Task, Workspace,
         WorkspaceMembership,
     },
+    model_registry::{DeterministicModelAssigner, ModelAssigner},
+    supervisor::SupervisorRun,
     qoin_vectors::QoinVectorClient,
     robotics::TelemetryEvent,
     storage::{
@@ -40,6 +42,9 @@ pub struct AppState {
     pub agents: Arc<RwLock<HashMap<Uuid, Agent>>>,
     pub artifacts: Arc<RwLock<HashMap<Uuid, Artifact>>>,
     pub tasks: Arc<RwLock<HashMap<Uuid, Task>>>,
+    pub supervisor_runs: Arc<RwLock<HashMap<Uuid, SupervisorRun>>>,
+    pub supervisor_run_lock: Arc<tokio::sync::Mutex<()>>,
+    assignment_engine: Option<Arc<dyn ModelAssigner>>,
     /// Bounded in-memory simulator stream; never treated as durable device telemetry.
     pub telemetry: Arc<RwLock<TelemetryStore>>,
     /// Runtime cache backed by the append-only audit table when SQLite is configured.
@@ -107,6 +112,14 @@ impl AppState {
                 _ => return Err(StorageError::InvalidStoredEntityKind),
             }
         }
+        for entity in storage.list_entities(EntityKind::SupervisorRun, None).await? {
+            match entity {
+                StoredEntity::SupervisorRun(item) => {
+                    state.supervisor_runs.write().await.insert(item.id, item);
+                }
+                _ => return Err(StorageError::InvalidStoredEntityKind),
+            }
+        }
 
         let workspace_ids: Vec<_> = state.workspaces.read().await.keys().copied().collect();
         let mut audit_events = Vec::new();
@@ -129,6 +142,18 @@ impl AppState {
     pub fn with_memory_outbox(mut self, outbox: Option<MemoryOutbox>) -> Self {
         self.memory_outbox = outbox;
         self
+    }
+
+    pub fn assignment_engine(&self) -> Arc<dyn ModelAssigner> {
+        self.assignment_engine.clone().unwrap_or_else(|| Arc::new(DeterministicModelAssigner))
+    }
+
+    pub async fn daily_model_spend(&self, user_id: Uuid, usage_date: &str) -> Result<u64, StorageError> {
+        match &self.storage { Some(storage) => storage.daily_model_spend(user_id, usage_date).await, None => Ok(0) }
+    }
+
+    pub async fn reserve_model_spend(&self, user_id: Uuid, usage_date: &str, amount_micros: u64, daily_limit_micros: u64) -> Result<bool, StorageError> {
+        match &self.storage { Some(storage) => storage.reserve_model_spend(user_id, usage_date, amount_micros, daily_limit_micros).await, None => Ok(false) }
     }
 
     pub async fn list_entities(
