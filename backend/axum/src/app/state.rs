@@ -316,7 +316,7 @@ impl AppState {
         avatar_url: Option<&str>,
     ) -> Result<UserWorkspace, StorageError> {
         match &self.storage {
-            Some(storage) => storage.ensure_firebase_user(project_id, uid).await,
+            Some(storage) => storage.ensure_google_user(subject, email, display_name, avatar_url).await,
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }

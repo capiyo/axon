@@ -104,13 +104,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn firebase_first_login_is_idempotent_under_concurrent_requests() {
+    async fn google_first_login_is_idempotent_under_concurrent_requests() {
         let database_path =
             std::env::temp_dir().join(format!("axon-identity-{}.db", Uuid::new_v4()));
         let database_url = format!("sqlite://{}", database_path.display());
         let storage = SqliteStorage::connect(&database_url).await.unwrap();
         let (first, second) = tokio::join!(
-            storage.ensure_google_user("same-firebase-uid", "same-firebase-uid@example.com", None, None),
+            storage.ensure_google_user("same-google-sub", "same-firebase-uid@example.com", None, None),
             storage.ensure_google_user("same-firebase-uid", "same-firebase-uid@example.com", None, None),
         );
         let first = first.unwrap();
