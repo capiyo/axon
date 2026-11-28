@@ -226,6 +226,19 @@ pub trait Storage: Send + Sync {
     fn memory_epoch_coordinator(&self) -> MemoryEpochCoordinator;
     async fn apply(&self, mutation: StorageMutation) -> Result<(), StorageError>;
 
+    async fn claim_task_execution(
+        &self,
+        task_id: Uuid,
+        owner_token: Uuid,
+        lease_seconds: u64,
+    ) -> Result<bool, StorageError>;
+
+    async fn release_task_execution(
+        &self,
+        task_id: Uuid,
+        owner_token: Uuid,
+    ) -> Result<(), StorageError>;
+
     async fn list_entities(
         &self,
         kind: EntityKind,
@@ -455,6 +468,57 @@ impl Storage for SqliteStorage {
         .await?;
 
         transaction.commit().await?;
+        Ok(())
+    }
+
+    async fn claim_task_execution(
+        &self,
+        task_id: Uuid,
+        owner_token: Uuid,
+        lease_seconds: u64,
+    ) -> Result<bool, StorageError> {
+        let now = Utc::now();
+        let lease_seconds = i64::try_from(lease_seconds.clamp(30, 600)).unwrap_or(240);
+        let expires_at = now + ChronoDuration::seconds(lease_seconds);
+        let now_text = now.to_rfc3339();
+        let mut transaction = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM task_execution_leases WHERE lease_expires_at <= ?")
+            .bind(&now_text)
+            .execute(&mut *transaction)
+            .await?;
+
+        let result = sqlx::query(
+            "INSERT INTO task_execution_leases (task_id, owner_token, lease_expires_at, created_at) \
+             VALUES (?, ?, ?, ?) \
+             ON CONFLICT(task_id) DO UPDATE SET \
+                 owner_token = excluded.owner_token, \
+                 lease_expires_at = excluded.lease_expires_at, \
+                 created_at = excluded.created_at \
+             WHERE task_execution_leases.lease_expires_at <= ?",
+        )
+        .bind(task_id.to_string())
+        .bind(owner_token.to_string())
+        .bind(expires_at.to_rfc3339())
+        .bind(&now_text)
+        .bind(&now_text)
+        .execute(&mut *transaction)
+        .await?;
+
+        transaction.commit().await?;
+        Ok(result.rows_affected() == 1)
+    }
+
+    async fn release_task_execution(
+        &self,
+        task_id: Uuid,
+        owner_token: Uuid,
+    ) -> Result<(), StorageError> {
+        sqlx::query("DELETE FROM task_execution_leases WHERE task_id = ? AND owner_token = ?")
+            .bind(task_id.to_string())
+            .bind(owner_token.to_string())
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
