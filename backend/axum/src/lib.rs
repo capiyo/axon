@@ -6,12 +6,15 @@ pub mod auth_middleware;
 #[cfg(test)]
 mod auth_middleware_tests;
 pub mod chat_memory;
+pub mod capability;
+mod capability_routes;
 mod chat_memory_routes;
 pub mod config;
 pub mod explore;
 pub mod firebase_auth;
 pub mod identity;
 pub mod memory_architecture;
+pub mod memory;
 mod memory_document_routes;
 pub mod memory_documents;
 pub mod memory_intelligence;
@@ -86,6 +89,22 @@ pub fn app(state: AppState) -> Router {
         .route("/api/v1/admin/flags", get(model_registry_routes::list_flags))
         .route("/api/v1/admin/flags/:flag_id/clear", post(model_registry_routes::clear_flag))
         .route("/api/v1/admin/assignments", get(model_registry_routes::list_assignments))
+        .route(
+            "/api/v1/workspaces/:workspace_id/capability-polls",
+            post(capability_routes::create_poll),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/capability-polls/:poll_id",
+            get(capability_routes::get_poll),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/capability-polls/:poll_id/nominations",
+            post(capability_routes::submit_nomination),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/capability-polls/:poll_id/finalize",
+            post(capability_routes::finalize_poll),
+        )
         .route(
             "/api/v1/workspaces/:workspace_id/supervisor-runs",
             get(supervisor_routes::list_runs).post(supervisor_routes::create_run),
