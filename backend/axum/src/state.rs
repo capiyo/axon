@@ -3,9 +3,9 @@ use crate::{
     chat_memory::ChatMemoryStore,
     explore::ExploreStore,
     firebase_auth::FirebaseVerifier,
+    memory::MemoryRepository,
     memory_architecture::MemoryEpochCoordinator,
     memory_documents::MemoryDocumentRepository,
-    memory::MemoryRepository,
     memory_intelligence::QoinScoringConfig,
     memory_outbox::MemoryOutbox,
     memory_vector_provider::MemoryVectorProvider,
@@ -14,13 +14,13 @@ use crate::{
         WorkspaceMembership,
     },
     model_registry::{DeterministicModelAssigner, ModelAssigner},
-    supervisor::SupervisorRun,
     qoin_vectors::QoinVectorClient,
     robotics::TelemetryEvent,
     storage::{
         AgentCredentialIdentity, EntityKind, IssuedAgentCredential, Storage, StorageError,
         StorageMutation, StoredEntity, UserWorkspace,
     },
+    supervisor::SupervisorRun,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -116,7 +116,10 @@ impl AppState {
                 _ => return Err(StorageError::InvalidStoredEntityKind),
             }
         }
-        for entity in storage.list_entities(EntityKind::SupervisorRun, None).await? {
+        for entity in storage
+            .list_entities(EntityKind::SupervisorRun, None)
+            .await?
+        {
             match entity {
                 StoredEntity::SupervisorRun(item) => {
                     state.supervisor_runs.write().await.insert(item.id, item);
@@ -208,7 +211,9 @@ impl AppState {
         owner_token: Uuid,
     ) -> Result<bool, StorageError> {
         if let Some(storage) = &self.storage {
-            storage.claim_task_execution(task_id, owner_token, 240).await
+            storage
+                .claim_task_execution(task_id, owner_token, 240)
+                .await
         } else {
             {
                 let mut claims = self.execution_claims.lock().await;
