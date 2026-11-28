@@ -122,3 +122,5 @@ Migration reconciliation is by schema identity, not filename: the historical tas
 - Added API-client tests for bearer authentication/query parameters and cross-user route tests for conversation imports, memory writes/reviews, and capability-poll reads.
 
 - Finalized the legacy MongoDB-backed memory connector integration with the current API: authenticated conversation imports, proposed memory creation, active-only context retrieval, and versioned memory review now have registered endpoints. `axon-memory` persists through those endpoints only after both provider-transfer and persistence approval; `axon-route` uses the same Firebase bearer client for capability polls and only includes active memory when explicitly requested.
+
+- Hardened the Python capability router's workspace identifier validation before API calls; the connector regression test now exercises the Firebase-token requirement with a valid workspace UUID.
