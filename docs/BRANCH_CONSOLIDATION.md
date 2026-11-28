@@ -130,3 +130,11 @@ Migration reconciliation is by schema identity, not filename: the historical tas
 - Restored TypeScript contracts for imported conversations and MongoDB-backed memory records/review requests so the authenticated API surface is represented in the shared frontend contract package.
 
 - Tightened linked-task privacy after the source-chat port: source conversations must belong to the authenticated creator, and only that creator may execute a task that injects its private chat context. The shared contract now exposes the optional creator metadata and a typed `CreateTaskRequest` with `source_chat_id`.
+
+
+## Historical branch ancestry consolidation (2026-11-28)
+
+After the recursive tree/path and behavior reconciliation above, the current `master` history was advanced with a single multi-parent consolidation commit `15cd3e1bc314bf30497c72ead936959a5c02d5f2`. Its first parent is the prior master commit `cd98453a453bf175ca7607a4efa8cd70d9299de3`; its additional parents are the exact tips of all 13 historical non-master branches listed in this record. The commit deliberately preserves the reviewed master tree unchanged: this records all historical branch histories as ancestors of master without reintroducing stale branch snapshots. The branch-by-branch three-dot comparisons were rerun after the update and all 13 historical refs report `ahead_by=0` and `total_commits=0` against master. Their remaining `behind_by` counts are expected; they are historical refs, not active development targets.
+
+This is ancestry consolidation, not a claim that every old line of code was copied verbatim. Unique historical paths are handled by the migration/auth/protocol rename dispositions above, and behavior-level ports are documented in the sections above. Current master code remains authoritative. Historical branches remain available as read-only recovery refs; all new work must go directly to master.
+
