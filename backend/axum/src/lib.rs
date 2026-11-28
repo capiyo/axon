@@ -17,6 +17,7 @@ pub mod config;
 pub mod explore;
 #[path = "auth/google.rs"]
 pub mod google_auth;
+pub(crate) mod handlers;
 #[path = "auth/identity.rs"]
 pub mod identity;
 #[path = "memory/repository.rs"]
@@ -45,7 +46,6 @@ pub mod supervisor;
 pub mod supervisor_roles;
 #[path = "vectors/decision.rs"]
 pub mod vector_decision;
-pub(crate) mod handlers;
 
 #[cfg(test)]
 #[path = "model_registry/routes_tests.rs"]
@@ -54,8 +54,10 @@ mod model_registry_routes_tests;
 #[path = "supervisor/run_tests.rs"]
 mod supervisor_run_tests;
 
-pub use state::AppState;
 pub use routes::app;
+pub use state::AppState;
 #[path = "app/state.rs"]
 mod state;
-pub mod model { pub use crate::models::*; }
+pub mod model {
+    pub use crate::models::*;
+}

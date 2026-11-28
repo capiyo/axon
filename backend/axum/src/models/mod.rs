@@ -17,8 +17,8 @@ pub use workspace::*;
 #[cfg(test)]
 mod agent_ownership_tests {
     use super::*;
-    use uuid::Uuid;
     use chrono::Utc;
+    use uuid::Uuid;
 
     #[test]
     fn legacy_agent_records_deserialize_without_owner_metadata() {
