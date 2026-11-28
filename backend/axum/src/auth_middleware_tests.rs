@@ -106,17 +106,71 @@ mod tests {
             ("GET", format!("/api/v1/workspaces/{workspace_id}/tasks")),
             ("POST", format!("/api/v1/workspaces/{workspace_id}/tasks")),
             ("POST", format!("/api/v1/workspaces/{workspace_id}/capability-polls")),
-            ("GET", format!("/api/v1/workspaces/{workspace_id}/capability-polls/{}", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/capability-polls/{}/nominations", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/capability-polls/{}/finalize", Uuid::new_v4())),
+            (
+                "GET",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/capability-polls/{}",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/capability-polls/{}/nominations",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/capability-polls/{}/finalize",
+                    Uuid::new_v4()
+                ),
+            ),
             ("GET", format!("/api/v1/workspaces/{workspace_id}/supervisor-runs")),
             ("POST", format!("/api/v1/workspaces/{workspace_id}/supervisor-runs")),
-            ("GET", format!("/api/v1/workspaces/{workspace_id}/supervisor-runs/{}", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/supervisor-runs/{}/checklists", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/supervisor-runs/{}/workers", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/supervisor-runs/{}/checks", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/supervisor-runs/{}/reviews", Uuid::new_v4())),
-            ("POST", format!("/api/v1/workspaces/{workspace_id}/supervisor-runs/{}/repair", Uuid::new_v4())),
+            (
+                "GET",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/supervisor-runs/{}",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/supervisor-runs/{}/checklists",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/supervisor-runs/{}/workers",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/supervisor-runs/{}/checks",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/supervisor-runs/{}/reviews",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/supervisor-runs/{}/repair",
+                    Uuid::new_v4()
+                ),
+            ),
             ("POST", format!("/api/v1/tasks/{task_id}/submit")),
             ("POST", format!("/api/v1/tasks/{task_id}/execute")),
             ("POST", format!("/api/v1/tasks/{task_id}/transition")),
@@ -170,7 +224,11 @@ mod tests {
             format!("/api/v1/tasks/{task_id}/transitions"),
         ];
         for path in paths {
-            let method = if path.contains("/submit") || path.contains("/transitions") || path.contains("/capability-polls") || path.contains("/supervisor-runs") {
+            let method = if path.contains("/submit")
+                || path.contains("/transitions")
+                || path.contains("/capability-polls")
+                || path.contains("/supervisor-runs")
+            {
                 "POST"
             } else {
                 "GET"
