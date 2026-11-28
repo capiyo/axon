@@ -1723,11 +1723,10 @@ mod tests {
         .await;
 
         assert!(result.is_err());
-        assert!(storage
+        assert!(!storage
             .is_workspace_member(account.user_id, missing_workspace_id)
             .await
-            .unwrap()
-            == false);
+            .unwrap());
     }
 
     #[tokio::test]
