@@ -129,3 +129,5 @@ The optional `axon-memory` and `axon-route` Python connector commands use the sa
 The MongoDB-backed memory import API is versioned and workspace-scoped: `POST /api/v1/workspaces/:workspace_id/memory/imports` stores an imported conversation, `GET /memory/imports/:import_id` retrieves it, `POST /memories` creates proposed candidates tied to that import, `GET /memories` lists records with optional status filtering, `GET /memory/context` returns active records only, and `POST /memories/:memory_id/review` performs version-checked approve/reject/supersede transitions. All of these routes require a verified Firebase identity and workspace membership.
 
 Migration `0021_unique_personal_workspace_id.sql` preserves the original one-user-per-personal-workspace invariant after the personal workspace column was added to the normalized Firebase identity schema.
+
+Conversation import retrieval and memory listing preserve workspace scoping: import lookup never crosses workspaces, and memory listing supports an optional lifecycle-status filter while the context endpoint is restricted to active records.
