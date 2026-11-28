@@ -6,8 +6,16 @@ import SessionPanel from "./ChatsScreen";
 import ExploreScreen from "./ExploreScreen";
 import ProfileModal from "../modals/ProfileModal";
 import SessionCard from "../views/SessionCard";
-import { auth } from "../firebase";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
+type GoogleUser = { uid: string; displayName: string | null; email: string | null; photoURL: string | null };
+let googleIdToken: string | null = null;
+declare global { interface Window { google?: { accounts: { id: { initialize: (options: { client_id: string; callback: (response: { credential?: string }) => void; auto_select?: boolean }) => void; renderButton: (element: HTMLElement, options: Record<string, unknown>) => void } } } } 
+function parseGoogleUser(token: string): GoogleUser {
+  const payload = token.split(".")[1]?.replace(/-/g, "+").replace(/_/g, "/");
+  if (!payload) throw new Error("Google returned an invalid identity token.");
+  const claims = JSON.parse(atob(payload)) as { sub: string; name?: string; email?: string; picture?: string; exp: number };
+  if (!claims.sub || claims.exp * 1000 <= Date.now()) throw new Error("Google identity token has expired. Please sign in again.");
+  return { uid: claims.sub, displayName: claims.name ?? null, email: claims.email ?? null, photoURL: claims.picture ?? null };
+}
 
 import type {
   Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage,
@@ -19,7 +27,7 @@ import type {
 const API_BASE_URL = (import.meta.env.VITE_AXON_API_URL ?? "").replace(/\/$/, "");
 
 const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = googleIdToken;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init?.headers }
@@ -46,7 +54,7 @@ function taskProgress(status: string): number {
   }
 }
 
-function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
+function WorkspaceApp({ user, onSignOut }: { user: GoogleUser; onSignOut: () => void }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selected, setSelected] = useState<Workspace | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -745,7 +753,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         <div className="profile-section"><span className="profile-section-label">EXECUTION & HEALTH</span><div className="profile-metric"><span>Awaiting review</span><strong>{tasks.filter(task => task.status === "review_required" || task.status === "submitted").length}</strong></div><div className="profile-metric"><span>Rejected / cancelled</span><strong>{tasks.filter(task => task.status === "rejected" || task.status === "cancelled").length}</strong></div><div className="profile-metric"><span>API status</span><strong>{health?.status === "ok" ? "Connected" : "Unavailable"}</strong></div><div className="profile-metric"><span>Storage</span><strong>{health?.storage === "persistent" ? "Persistent" : health?.storage ?? "Unknown"}</strong></div></div>
         <div className="profile-section"><span className="profile-section-label">WORKSPACE RESOURCES</span><div className="profile-metric"><span>Captured artifacts</span><strong>{artifacts.length}</strong></div><div className="profile-metric"><span>Total tasks</span><strong>{tasks.length}</strong></div><div className="profile-metric"><span>Active sessions</span><strong>{chats.length} active</strong></div></div>
         <div className="profile-section profile-activity"><span className="profile-section-label">RECENT WORK</span>{tasks.slice().sort((a,b)=>b.updated_at.localeCompare(a.updated_at)).slice(0,4).map(task => <div className="profile-activity-row" key={task.id}><span className={`activity-dot activity-${task.status}`} /><div><strong>{task.title}</strong><small>{task.status.replaceAll("_"," ")} · {new Date(task.updated_at).toLocaleDateString()}</small></div></div>)}{tasks.length === 0 && <p className="profile-empty">Task activity will appear here as work is assigned.</p>}</div>
-        <div className="profile-bottom"><span>AXON WORKSPACE</span><small>Private · Firebase authenticated</small></div>
+        <div className="profile-bottom"><span>AXON WORKSPACE</span><small>Private · Google authenticated</small></div>
       </aside>
       <section className="content">
         <header className="topbar">
@@ -972,7 +980,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
         )}
 
         {error && <div className="error" role="alert">{error} <button className="retry" onClick={() => selected ? void refreshWorkspace(selected) : void refreshWorkspaces()}>Retry</button></div>}
-        {profileOpen && <ProfileModal user={user} selected={selected} agents={agents} chats={chats} tasks={tasks} artifacts={artifacts} onClose={() => setProfileOpen(false)} onSignOut={() => { if (auth) void signOut(auth); }} /> }
+        {profileOpen && <ProfileModal user={user} selected={selected} agents={agents} chats={chats} tasks={tasks} artifacts={artifacts} onClose={() => setProfileOpen(false)} onSignOut={onSignOut} /> }
         <footer><span>AXON</span><span>Context should travel with the work.</span><span>FOUNDATION BUILD · 0.1</span></footer>
         {health && health.storage !== "persistent" && (
           <p className="dev-warning">Development mode: data is temporary and this API has no authentication. Do not use sensitive or production data.</p>
@@ -984,33 +992,60 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
 
 
 function AuthGate() {
-  const [user, setUser] = useState<import("firebase/auth").User | null>(null);
+  const [user, setUser] = useState<GoogleUser | null>(null);
   const [ready, setReady] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [working, setWorking] = useState(false);
+  const [clientReady, setClientReady] = useState(false);
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
   useEffect(() => {
-    if (!auth) { setReady(true); return; }
-    return onAuthStateChanged(auth, current => { setUser(current); setReady(true); });
-  }, []);
+    const saved = sessionStorage.getItem("axon.google.id_token");
+    if (saved) {
+      try { googleIdToken = saved; setUser(parseGoogleUser(saved)); }
+      catch { googleIdToken = null; sessionStorage.removeItem("axon.google.id_token"); }
+    }
+    setReady(true);
+    if (!clientId) return;
+    const init = () => {
+      if (!window.google || !document.getElementById("google-signin-button")) return;
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        auto_select: false,
+        callback: ({ credential }) => {
+          if (!credential) { setAuthError("Google did not return an identity token."); return; }
+          try {
+            const nextUser = parseGoogleUser(credential);
+            googleIdToken = credential;
+            sessionStorage.setItem("axon.google.id_token", credential);
+            setUser(nextUser);
+            setAuthError("");
+          } catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Google sign-in failed."); }
+        }
+      });
+      const target = document.getElementById("google-signin-button");
+      if (target) window.google.accounts.id.renderButton(target, { theme: "filled_black", size: "large", shape: "pill", text: "continue_with", width: 320 });
+      setClientReady(true);
+    };
+    if (window.google) { init(); return; }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = init;
+    script.onerror = () => setAuthError("Google sign-in could not load. Check your connection and try again.");
+    document.head.appendChild(script);
+  }, [clientId]);
 
-  async function continueWithGoogle() {
-    if (!auth || working) return;
-    setWorking(true);
+  const signOutGoogle = () => {
+    googleIdToken = null;
+    sessionStorage.removeItem("axon.google.id_token");
+    setUser(null);
     setAuthError("");
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      await signInWithPopup(auth, provider);
-    } catch (cause) {
-      setAuthError(cause instanceof Error ? cause.message : "Google sign-in failed. Please try again.");
-    } finally { setWorking(false); }
-  }
+  };
 
   if (!ready) return <main className="auth-shell"><section className="auth-card"><p>Restoring your secure session…</p></section></main>;
-  if (!auth) return <main className="auth-shell"><section className="auth-card"><h1>Google Sign-In is not configured</h1><p>Configure the Axon identity project and Google OAuth provider, then restart the web app.</p></section></main>;
-  if (user) return <WorkspaceApp user={user} />;
-  return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><span className="auth-mark">A</span><span>AXON</span></div><p className="eyebrow">YOUR WORK, IN ONE PLACE</p><h1>Welcome to Axon</h1><p className="auth-description">Continue securely with your Google account. No separate Axon password required.</p><button className="auth-primary" disabled={working} onClick={()=>void continueWithGoogle()}>{working ? "Connecting to Google…" : "Continue with Google"}</button>{authError && <p className="auth-error" role="alert">{authError}</p>}<p className="auth-footnote">By continuing, you agree to the Terms &amp; Conditions and Privacy Policy.</p></section></main>;
+  if (user) return <WorkspaceApp user={user} onSignOut={signOutGoogle} />;
+  if (!clientId) return <main className="auth-shell"><section className="auth-card"><h1>Google Sign-In is not configured</h1><p>Set VITE_GOOGLE_CLIENT_ID to the Google OAuth web client ID.</p></section></main>;
+  return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><span className="auth-mark">A</span><span>AXON</span></div><p className="eyebrow">YOUR WORK, IN ONE PLACE</p><h1>Welcome to Axon</h1><p className="auth-description">Continue securely with your Google account. No separate Axon password required.</p><div id="google-signin-button" aria-label="Continue with Google" />{authError && <p className="auth-error" role="alert">{authError}</p>}{!clientReady && <p className="auth-footnote">Loading secure Google sign-in…</p>}<p className="auth-footnote">By continuing, you agree to the Terms &amp; Conditions and Privacy Policy.</p></section></main>;
 }
-
 export default function App() { return <AuthGate />; }

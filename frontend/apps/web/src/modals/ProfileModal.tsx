@@ -1,9 +1,9 @@
-import type { User } from "firebase/auth";
+type GoogleUser = { displayName: string | null; email: string | null; photoURL: string | null };
 import type { Agent, Artifact, Chat, Task, Workspace } from "../../../../packages/contracts/src";
 import ModalFrame from "./ModalFrame";
 
 interface ProfileModalProps {
-  user: User;
+  user: GoogleUser;
   selected: Workspace | null;
   agents: Agent[];
   chats: Chat[];
