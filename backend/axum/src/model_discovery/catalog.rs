@@ -1,3 +1,4 @@
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CatalogModel {
     pub model_name: String,
     #[serde(default)]
