@@ -8,7 +8,7 @@ import json
 import os
 import sys
 
-from .api import AxonApiClient, AxonApiError
+from .api import AxonApiClient
 from .models import AxonEnvelope
 from .providers.chatgpt import load_chatgpt_export
 from .providers.claude import load_claude_export
@@ -121,6 +121,14 @@ async def _run(args: argparse.Namespace) -> int:
         )
         print("\n--- DeepSeek response ---\n")
         print(result)
+
+        if args.persist_response:
+            saved = await _persist_artifact(
+                args,
+                f"DeepSeek response: {conversation.title}",
+                result,
+            )
+            print(f"Saved provider response to Axon artifact {saved['id']}.")
         return 0
     except (OSError, ValueError, PermissionError, DeepSeekError, json.JSONDecodeError) as exc:
         print(f"axon-bridge: {exc}", file=sys.stderr)
