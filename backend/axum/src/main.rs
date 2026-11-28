@@ -4,6 +4,7 @@ use axon_api::{
     explore::ExploreStore,
     firebase_auth::FirebaseVerifier,
     memory::MemoryRepository,
+    memory_store::MemoryStore,
     memory_documents::{MemoryDocumentRepository, MongoMemoryDocumentRepository},
     memory_vector_provider::LexicalMemoryVectorProvider,
     model_discovery::run_discovery_scheduler,
@@ -104,6 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AppState::with_storage(storage.shared())
         .await?
         .with_explore_store(explore_store)
+        .with_agent_memory_store(Some(MemoryStore::new(storage.sqlite_pool())))
         .with_memory_document_repository(memory_documents)
         .with_memory_repository(capability_memory)
         .with_memory_outbox(Some(memory_outbox))
