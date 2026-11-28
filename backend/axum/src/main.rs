@@ -3,6 +3,7 @@ use axon_api::{
     config::BackendConfig,
     explore::ExploreStore,
     firebase_auth::FirebaseVerifier,
+    memory::{MemoryRepository},
     memory_documents::{MemoryDocumentRepository, MongoMemoryDocumentRepository},
     memory_vector_provider::LexicalMemoryVectorProvider,
     model_discovery::run_discovery_scheduler,
@@ -48,8 +49,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let epoch_worker = tokio::spawn(memory_epochs.run_hourly_until(shutdown_rx.clone()));
     let memory_outbox = storage.memory_outbox();
 
+    let mut capability_memory: Option<Arc<MemoryRepository>> = None;
     let memory_documents: Option<Arc<dyn MemoryDocumentRepository>> = match config.mongo {
         Some(settings) => {
+            capability_memory = Some(Arc::new(
+                MemoryRepository::connect(&settings.uri, &settings.database).await
+                    .map_err(|_| "MongoDB capability and imported-memory repository failed its connection check")?,
+            ));
             let repository = MongoMemoryDocumentRepository::connect_with_options(
                     &settings.uri,
                     &settings.database,
@@ -97,6 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?
         .with_explore_store(explore_store)
         .with_memory_document_repository(memory_documents)
+        .with_memory_repository(capability_memory)
         .with_memory_outbox(Some(memory_outbox))
         .with_qoin_vector_client(qoin_vectors)
         .with_qoin_memory_scoring_config(config.qoin_memory_scoring)
