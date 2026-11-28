@@ -430,8 +430,7 @@ mod tests {
             .ensure_firebase_user("memory-test", "memory-store-user")
             .await
             .unwrap();
-        let chat_store = storage.chat_memory_store();
-        let store = MemoryStore::new(chat_store.sqlite_pool());
+        let store = MemoryStore::new(storage.sqlite_pool());
         let owner = Uuid::new_v4();
         let recipient = Uuid::new_v4();
         let record = agent_memory(account.workspace.id, owner);
@@ -460,7 +459,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(visible.selected.len(), 1);
-        assert_eq!(visible.selected[0].content, record.content);
+        assert_eq!(visible.selected[0].memory_id, record.id);
         assert!(visible.tokens_allocated <= visible.token_budget);
     }
 
@@ -471,7 +470,7 @@ mod tests {
             .ensure_firebase_user("memory-test", "memory-store-review-user")
             .await
             .unwrap();
-        let store = MemoryStore::new(storage.chat_memory_store().sqlite_pool());
+        let store = MemoryStore::new(storage.sqlite_pool());
         let mut record = agent_memory(account.workspace.id, Uuid::new_v4());
         record.verification = Verification::Proposed;
         store.put(record.clone(), "human:proposer").await.unwrap();
