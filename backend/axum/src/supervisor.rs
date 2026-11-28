@@ -1,16 +1,10 @@
+use crate::model_registry::AssignmentDecision;
+pub use crate::model_registry::TaskLevel;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
 use uuid::Uuid;
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum TaskLevel {
-    Quick,
-    Normal,
-    Important,
-}
 
 pub const REQUIRED_WORKER_COUNT: usize = 2;
 pub const REQUIRED_SUPERVISOR_COUNT: usize = 2;
@@ -125,6 +119,8 @@ pub struct SupervisorRun {
     pub reviews: Vec<SupervisorReview>,
     pub decision: Option<SupervisionDecision>,
     #[serde(default)]
+    pub assignment_decisions: Vec<AssignmentDecision>,
+    #[serde(default)]
     pub assignment_level: Option<TaskLevel>,
     #[serde(default)]
     pub assignment_category: Option<String>,
@@ -207,6 +203,7 @@ impl SupervisorRun {
             deterministic_checks: Vec::new(),
             reviews: Vec::new(),
             decision: None,
+            assignment_decisions: Vec::new(),
             assignment_level: None,
             assignment_category: None,
             assignment_notice: None,
