@@ -346,11 +346,8 @@ pub trait Storage: Send + Sync {
         actor_user_id: Uuid,
         target_user_id: Uuid,
     ) -> Result<bool, StorageError>;
-    async fn daily_model_spend(
-        &self,
-        user_id: Uuid,
-        usage_date: &str,
-    ) -> Result<u64, StorageError>;
+    async fn daily_model_spend(&self, user_id: Uuid, usage_date: &str)
+        -> Result<u64, StorageError>;
     async fn reserve_model_spend(
         &self,
         user_id: Uuid,
@@ -1714,40 +1711,32 @@ mod tests {
         let first_owner = Uuid::new_v4();
         let second_owner = Uuid::new_v4();
 
-        assert!(
-            storage
-                .claim_task_execution(task_id, first_owner, 60)
-                .await
-                .unwrap()
-        );
-        assert!(
-            !storage
-                .claim_task_execution(task_id, second_owner, 60)
-                .await
-                .unwrap()
-        );
+        assert!(storage
+            .claim_task_execution(task_id, first_owner, 60)
+            .await
+            .unwrap());
+        assert!(!storage
+            .claim_task_execution(task_id, second_owner, 60)
+            .await
+            .unwrap());
 
         storage
             .release_task_execution(task_id, second_owner)
             .await
             .unwrap();
-        assert!(
-            !storage
-                .claim_task_execution(task_id, second_owner, 60)
-                .await
-                .unwrap()
-        );
+        assert!(!storage
+            .claim_task_execution(task_id, second_owner, 60)
+            .await
+            .unwrap());
 
         storage
             .release_task_execution(task_id, first_owner)
             .await
             .unwrap();
-        assert!(
-            storage
-                .claim_task_execution(task_id, second_owner, 60)
-                .await
-                .unwrap()
-        );
+        assert!(storage
+            .claim_task_execution(task_id, second_owner, 60)
+            .await
+            .unwrap());
     }
 
     #[tokio::test]
@@ -1763,18 +1752,14 @@ mod tests {
                 .unwrap(),
             0
         );
-        assert!(
-            storage
-                .reserve_model_spend(user_id, workspace_id, "2026-11-28", 60, 100)
-                .await
-                .unwrap()
-        );
-        assert!(
-            !storage
-                .reserve_model_spend(user_id, workspace_id, "2026-11-28", 50, 100)
-                .await
-                .unwrap()
-        );
+        assert!(storage
+            .reserve_model_spend(user_id, workspace_id, "2026-11-28", 60, 100)
+            .await
+            .unwrap());
+        assert!(!storage
+            .reserve_model_spend(user_id, workspace_id, "2026-11-28", 50, 100)
+            .await
+            .unwrap());
         assert_eq!(
             storage
                 .daily_model_spend(user_id, "2026-11-28")
@@ -1782,12 +1767,10 @@ mod tests {
                 .unwrap(),
             60
         );
-        assert!(
-            !storage
-                .reserve_model_spend(user_id, workspace_id, "2026-11-28", u64::MAX, 100)
-                .await
-                .unwrap()
-        );
+        assert!(!storage
+            .reserve_model_spend(user_id, workspace_id, "2026-11-28", u64::MAX, 100)
+            .await
+            .unwrap());
         let audit = storage.list_audit_events(workspace_id).await.unwrap();
         assert_eq!(audit.len(), 1);
         assert_eq!(audit[0].event_type, "assignment_budget.reserved");
@@ -1828,5 +1811,4 @@ mod tests {
             matches!(stored.as_slice(), [StoredEntity::SupervisorRun(item)] if item.id == run.id)
         );
     }
-
 }
