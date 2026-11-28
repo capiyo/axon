@@ -1436,8 +1436,12 @@ impl Storage for SqliteStorage {
         amount_micros: u64,
         daily_limit_micros: u64,
     ) -> Result<bool, StorageError> {
-        let amount = i64::try_from(amount_micros).unwrap_or(i64::MAX);
-        let limit = i64::try_from(daily_limit_micros).unwrap_or(i64::MAX);
+        let Ok(amount) = i64::try_from(amount_micros) else {
+            return Ok(false);
+        };
+        let Ok(limit) = i64::try_from(daily_limit_micros) else {
+            return Ok(false);
+        };
         let mut tx = self.pool.begin().await?;
         let now = Utc::now().to_rfc3339();
 
@@ -1666,6 +1670,12 @@ mod tests {
                 .await
                 .unwrap(),
             60
+        );
+        assert!(
+            !storage
+                .reserve_model_spend(user_id, "2026-11-28", u64::MAX, 100)
+                .await
+                .unwrap()
         );
     }
 
