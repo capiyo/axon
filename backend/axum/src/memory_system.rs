@@ -295,7 +295,7 @@ pub fn allocate_context(
     });
     let mut tokens_allocated = 0usize;
     let mut selected = Vec::new();
-    for (id, cost, utility, content, source, verification) in ranked {
+    for (id, cost, utility, _, _, _) in ranked {
         if cost > token_budget.saturating_sub(tokens_allocated) {
             excluded.push(id);
             continue;
