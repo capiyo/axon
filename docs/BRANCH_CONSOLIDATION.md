@@ -128,3 +128,5 @@ Migration reconciliation is by schema identity, not filename: the historical tas
 - Completed the memory connector's full route surface, including retrieving the original conversation import and status-filtered memory listing. Reused the repository's canonical import/memory validators rather than duplicating looser route-level validation.
 - Restored the historical uniqueness invariant for `users.personal_workspace_id` with master migration `0021_unique_personal_workspace_id.sql` and a storage regression test. The current schema's later-added nullable column had not inherited the old branch migration's UNIQUE constraint.
 - Restored TypeScript contracts for imported conversations and MongoDB-backed memory records/review requests so the authenticated API surface is represented in the shared frontend contract package.
+
+- Tightened linked-task privacy after the source-chat port: source conversations must belong to the authenticated creator, and only that creator may execute a task that injects its private chat context. The shared contract now exposes the optional creator metadata and a typed `CreateTaskRequest` with `source_chat_id`.

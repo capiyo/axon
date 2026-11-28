@@ -97,14 +97,14 @@ pub async fn create_task(
     if let Some(source_chat_id) = input.source_chat_id {
         let chat_store = state.chat_memory.as_ref().ok_or_else(storage_failure)?;
         if chat_store
-            .get_chat(workspace_id, source_chat_id)
+            .get_chat_for_user(workspace_id, source_chat_id, user.user_id)
             .await
             .map_err(|_| storage_failure())?
             .is_none()
         {
             return Err(error(
                 StatusCode::BAD_REQUEST,
-                "Source conversation must belong to the target workspace.",
+                "Source conversation must belong to the authenticated user and target workspace.",
             ));
         }
     }
@@ -216,17 +216,24 @@ pub async fn execute_task(
     Path(task_id): Path<Uuid>,
     request: Option<Json<ExecuteTaskRequest>>,
 ) -> TaskResult<Json<TaskSubmission>> {
-    let workspace_id = state
+    let (workspace_id, created_by, has_source_chat) = state
         .tasks
         .read()
         .await
         .get(&task_id)
-        .map(|task| task.workspace_id)
+        .map(|task| {
+            (
+                task.workspace_id,
+                task.created_by,
+                task.source_chat_id.is_some(),
+            )
+        })
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Task not found."))?;
     if !state
         .is_workspace_member(user.user_id, workspace_id)
         .await
         .map_err(|_| storage_failure())?
+        || (has_source_chat && created_by != user.user_id)
     {
         return Err(error(StatusCode::NOT_FOUND, "Task not found."));
     }

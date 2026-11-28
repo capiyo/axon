@@ -48,6 +48,7 @@ export type TaskTransition = {
 export type Task = {
   id: string;
   workspace_id: string;
+  created_by?: string;
   title: string;
   objective: string;
   assignee_agent_id: string;
@@ -59,6 +60,14 @@ export type Task = {
   created_at: string;
   updated_at: string;
   transitions: TaskTransition[];
+};
+
+export type CreateTaskRequest = {
+  title: string;
+  objective: string;
+  assignee_agent_id: string;
+  source_chat_id?: string | null;
+  context_artifact_ids?: string[];
 };
 
 export type Health = {
