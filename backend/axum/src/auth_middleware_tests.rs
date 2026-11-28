@@ -204,6 +204,36 @@ mod tests {
             ("POST", format!("/api/v1/tasks/{task_id}/submit")),
             ("POST", format!("/api/v1/tasks/{task_id}/execute")),
             ("POST", format!("/api/v1/tasks/{task_id}/transition")),
+            (
+                "POST",
+                format!("/api/v1/workspaces/{workspace_id}/agent-memories"),
+            ),
+            (
+                "POST",
+                format!("/api/v1/workspaces/{workspace_id}/agent-memories/allocate"),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agent-memories/{}/review",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agent-memories/{}/share",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "DELETE",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/agent-memories/{}/share/{}",
+                    Uuid::new_v4(),
+                    Uuid::new_v4()
+                ),
+            ),
             ("GET", "/api/v1/admin/providers".into()),
             ("POST", "/api/v1/admin/providers".into()),
             ("POST", "/api/v1/admin/providers/provider-1/terms-review".into()),
@@ -276,6 +306,7 @@ mod tests {
             (
                 "POST",
                 format!("/api/v1/workspaces/{workspace_id}/memory/documents"),
+            format!("/api/v1/workspaces/{workspace_id}/agent-memories"),
             ),
             (
                 "GET",
