@@ -60,21 +60,16 @@ impl MemoryStore {
 
     /// Save a new proposal or a verified memory revision. The complete
     /// previous version is retained for provenance and conflict inspection.
-    pub async fn put(
-        &self,
-        record: MemoryRecord,
-        actor: &str,
-    ) -> Result<(), MemoryStoreError> {
+    pub async fn put(&self, record: MemoryRecord, actor: &str) -> Result<(), MemoryStoreError> {
         record.validate()?;
         let payload = serde_json::to_string(&record)?;
         let now = Utc::now().to_rfc3339();
         let mut tx = self.pool.begin().await?;
-        let existing_row = sqlx::query(
-            "SELECT workspace_id, version FROM agent_memories WHERE id = ?",
-        )
-        .bind(record.id.to_string())
-        .fetch_optional(&mut *tx)
-        .await?;
+        let existing_row =
+            sqlx::query("SELECT workspace_id, version FROM agent_memories WHERE id = ?")
+                .bind(record.id.to_string())
+                .fetch_optional(&mut *tx)
+                .await?;
         if let Some(row) = &existing_row {
             let existing_workspace: String = row.try_get("workspace_id")?;
             let existing_version: i64 = row.try_get("version")?;
@@ -204,13 +199,12 @@ impl MemoryStore {
     ) -> Result<bool, MemoryStoreError> {
         let now = Utc::now().to_rfc3339();
         let mut tx = self.pool.begin().await?;
-        let exists: Option<i64> = sqlx::query_scalar(
-            "SELECT 1 FROM agent_memories WHERE id = ? AND workspace_id = ?",
-        )
-        .bind(memory_id.to_string())
-        .bind(workspace_id.to_string())
-        .fetch_optional(&mut *tx)
-        .await?;
+        let exists: Option<i64> =
+            sqlx::query_scalar("SELECT 1 FROM agent_memories WHERE id = ? AND workspace_id = ?")
+                .bind(memory_id.to_string())
+                .bind(workspace_id.to_string())
+                .fetch_optional(&mut *tx)
+                .await?;
         if exists.is_none() {
             return Err(MemoryStoreError::NotFound);
         }
@@ -322,7 +316,8 @@ impl MemoryStore {
         query: &str,
         token_budget: usize,
     ) -> Result<MemoryAllocation, MemoryStoreError> {
-        self.purge_expired(context.workspace_id, context.now).await?;
+        self.purge_expired(context.workspace_id, context.now)
+            .await?;
         let rows = sqlx::query("SELECT v.payload_json FROM agent_memory_versions v JOIN (SELECT memory_id, MAX(version) AS version FROM agent_memory_versions GROUP BY memory_id) latest ON latest.memory_id=v.memory_id AND latest.version=v.version JOIN agent_memories m ON m.id=v.memory_id WHERE m.workspace_id = ? AND (m.expires_at IS NULL OR m.expires_at > ?)")
             .bind(context.workspace_id.to_string())
             .bind(context.now.to_rfc3339())
@@ -333,10 +328,12 @@ impl MemoryStore {
             let payload: String = row.try_get("payload_json")?;
             records.push(serde_json::from_str::<MemoryRecord>(&payload)?);
         }
-        let grants = sqlx::query("SELECT memory_id FROM agent_memory_grants WHERE agent_id = ? AND revoked_at IS NULL")
-            .bind(context.agent_id.to_string())
-            .fetch_all(&self.pool)
-            .await?;
+        let grants = sqlx::query(
+            "SELECT memory_id FROM agent_memory_grants WHERE agent_id = ? AND revoked_at IS NULL",
+        )
+        .bind(context.agent_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
         let mut scoped_context = context.clone();
         for row in grants {
             let id: String = row.try_get("memory_id")?;
@@ -344,18 +341,23 @@ impl MemoryStore {
                 scoped_context.granted_memory_ids.insert(id);
             }
         }
-        let relevance = records.iter().map(|record| {
-            (record.id, lexical_relevance(query, &record.content))
-        }).collect::<Vec<_>>();
+        let relevance = records
+            .iter()
+            .map(|record| (record.id, lexical_relevance(query, &record.content)))
+            .collect::<Vec<_>>();
         let allocation = allocate_context(&records, &scoped_context, &relevance, token_budget)?;
-        let selected_audit = allocation.selected.iter().map(|item| {
-            json!({
-                "memory_id": item.memory_id,
-                "token_cost": item.token_cost,
-                "utility": item.utility,
-                "rank": item.rank
+        let selected_audit = allocation
+            .selected
+            .iter()
+            .map(|item| {
+                json!({
+                    "memory_id": item.memory_id,
+                    "token_cost": item.token_cost,
+                    "utility": item.utility,
+                    "rank": item.rank
+                })
             })
-        }).collect::<Vec<_>>();
+            .collect::<Vec<_>>();
         let allocation_id = Uuid::new_v4();
         let occurred_at = Utc::now().to_rfc3339();
         let mut tx = self.pool.begin().await?;
@@ -449,7 +451,10 @@ mod tests {
             .unwrap();
         assert!(hidden.selected.is_empty());
 
-        store.grant(account.workspace.id, record.id, recipient, "human:test").await.unwrap();
+        store
+            .grant(account.workspace.id, record.id, recipient, "human:test")
+            .await
+            .unwrap();
         let visible = store
             .allocate(&context, "deterministic evidence-first process", 128)
             .await
@@ -458,7 +463,6 @@ mod tests {
         assert_eq!(visible.selected[0].content, record.content);
         assert!(visible.tokens_allocated <= visible.token_budget);
     }
-
 
     #[tokio::test]
     async fn review_promotes_a_proposal_as_a_new_immutable_version() {
@@ -479,7 +483,9 @@ mod tests {
         assert_eq!(reviewed.version, 2);
         assert_eq!(reviewed.verification, Verification::Verified);
         assert!(matches!(
-            store.review(account.workspace.id, record.id, false, "human:reviewer").await,
+            store
+                .review(account.workspace.id, record.id, false, "human:reviewer")
+                .await,
             Err(MemoryStoreError::Policy(_))
         ));
     }
@@ -511,11 +517,12 @@ mod tests {
             .await
             .unwrap();
         assert!(allocation.selected.is_empty());
-        let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM agent_memory_versions WHERE memory_id = ?")
-            .bind(record.id.to_string())
-            .fetch_one(&store.pool)
-            .await
-            .unwrap();
+        let remaining: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM agent_memory_versions WHERE memory_id = ?")
+                .bind(record.id.to_string())
+                .fetch_one(&store.pool)
+                .await
+                .unwrap();
         assert_eq!(remaining, 0);
     }
 
@@ -530,7 +537,9 @@ mod tests {
         let record = agent_memory(account.workspace.id, Uuid::new_v4());
         store.put(record.clone(), "human:test").await.unwrap();
         assert!(matches!(
-            store.grant(Uuid::new_v4(), record.id, Uuid::new_v4(), "human:test").await,
+            store
+                .grant(Uuid::new_v4(), record.id, Uuid::new_v4(), "human:test")
+                .await,
             Err(MemoryStoreError::NotFound)
         ));
     }
