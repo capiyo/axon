@@ -37,3 +37,9 @@ The brief is deterministic and bounded to 190 words. It includes the latest conv
 Each chat/message mutation and its audit record are committed in one SQLite transaction. Each memory mutation appends a memory event, increments the chat memory version, purges the derived brief cache and writes its audit event in one transaction. Audit metadata contains IDs, roles, types and statuses only; message and memory text is not copied into audit metadata or request logs. Memory-event update/delete triggers reject attempts to rewrite history.
 
 The web and mobile clients expose chat creation, message history, resume briefs and memory proposal/approval. Axon does not fabricate an assistant response: assistant messages are persisted only when a real agent/provider response is supplied to the message API.
+
+## Linked task context
+
+A task may optionally include `source_chat_id`. The API verifies that the conversation belongs to the task's workspace when the task is created. During explicit agent execution, Axon retrieves that conversation for the authenticated user and supplies bounded context: up to 20 approved memory entries, a 6,000-character resume brief, and the latest 16 messages (up to 3,000 characters each). These are labelled as reference data, not instructions; the agent's task objective and system policy remain authoritative. The task also records its creator. Legacy serialized task records without creator or source-chat metadata remain readable through serde defaults.
+
+This link does not trigger provider execution at task creation. Provider execution still requires the explicit task execution endpoint and its existing owner-scoped execution lease.
