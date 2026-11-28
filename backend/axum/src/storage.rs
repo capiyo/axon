@@ -1792,7 +1792,7 @@ mod tests {
                 entity: StoredEntity::SupervisorRun(run.clone()),
                 related_entities: Vec::new(),
                 audit: AuditEvent::attributed(
-                    "human:test".into(),
+                    "human:test",
                     Some(workspace_id),
                     "supervisor_run.created",
                     "supervisor_run",
