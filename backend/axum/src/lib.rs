@@ -20,6 +20,7 @@ mod memory_routes;
 pub mod memory_vector_provider;
 mod model;
 pub mod model_registry;
+pub mod model_discovery;
 mod model_registry_routes;
 mod project_routes;
 pub mod qoin_vectors;
