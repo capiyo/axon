@@ -27,11 +27,11 @@
 - [x] Development simulator telemetry remains bounded and in-memory; it is not treated as durable physical-device telemetry.
 
 ### Phase A authentication and authorization
-- [x] Firebase ID-token verification using RS256 and Google's Firebase Secure Token JWKS.
+- [x] Verified bearer-token authentication using RS256 and Google's Firebase Secure Token JWKS (Firebase is currently the token/session bridge for Google sign-in).
 - [x] Project-specific issuer and audience validation, expiry validation, and a 60-second clock-skew allowance.
 - [x] JWKS caching using the upstream cache lifetime, refresh on unknown key IDs for key rotation, and a short forced-refresh cooldown.
-- [x] Persistent `users` and `workspace_memberships` tables; Firebase UID maps to an internal Axon user ID.
-- [x] One personal workspace per Firebase UID, created idempotently on first successful authentication; uniqueness is enforced by provider + subject and creation is transactional.
+- [x] Persistent `users` and `workspace_memberships` tables; the Google-authenticated Firebase UID maps to an internal Axon user ID.
+- [x] One personal workspace per Google-authenticated identity, created idempotently on first successful authentication; uniqueness is enforced by provider + subject and creation is transactional.
 - [x] Workspace membership is checked at the HTTP boundary. Requests for another user's workspace or task resources return not-found rather than forbidden.
 - [x] All registered API routes require a verified bearer token except `GET /health`.
 - [x] Simulator routes require authentication and are hidden unless `AXON_ENABLE_SIMULATOR=true`.
@@ -89,7 +89,7 @@
 
 ## Not implemented / production gates
 
-- Live Firebase project validation for web and Expo mobile authentication, including confirmation that email/password sign-in is enabled in the Axon Firebase project, configured app-specific public Firebase environment variables, verified-email behavior, account creation, session restoration, sign-out, and authenticated API calls. The web and mobile clients already implement email/password sign-in and account creation, verification-email sending/resending, terms acceptance at registration, auth-state restoration, sign-out, and Firebase ID-token injection on API requests. No Firebase credentials are committed. Google, email-link and phone-first sign-in providers remain outside the current email/password implementation.
+- Google Sign-In is now the only user-facing web/mobile authentication option. Web uses the Google provider popup; mobile uses Expo AuthSession to obtain a Google ID token and exchange it for a Firebase session credential. The API continues to verify Firebase ID tokens. Remaining gates: configure the Google provider and OAuth client IDs in the identity project, add authorized domains and Android signing fingerprints, install/resolve the new Expo dependencies, and run web/mobile builds plus real-device sign-in tests.
 - Provider-side sign-in abuse controls and any client-specific phone/SMS quota configuration. Axon currently exposes no password/SMS sign-in endpoint; credentials should go directly through Firebase Auth, not through Axon's API.
 - Invitations, workspace membership management UI, role/capability grant persistence and management APIs.
 - A news consumer and provider/model-driven assistant response generation. Chat messages are persisted, but Axon does not invent assistant replies.
@@ -103,11 +103,11 @@
 
 ## Runtime and security notes
 
-- The Axum process refuses to start unless `FIREBASE_PROJECT_ID` is configured.
+- The Axum process currently refuses to start unless `FIREBASE_PROJECT_ID` is configured; this reflects the Firebase token/session bridge used for Google sign-in.
 - `AXON_DATABASE_URL` defaults to `sqlite://axon.db`. Production deployment must mount a persistent volume or use a separately reviewed durable database adapter; ephemeral container filesystems are not sufficient.
 - `AXON_ENABLE_SIMULATOR` defaults to false. Do not enable simulator ingress in production.
 - Firebase tokens are never written to logs. Request bodies and user message text are not logged by the authentication middleware.
-- The backend has no sign-in endpoint. Firebase Auth handles sign-in directly; the API accepts only verified Firebase ID tokens.
+- The backend has no password sign-in endpoint. Google sign-in is initiated by the clients through the configured Google provider; the API accepts only verified Firebase ID tokens from the identity bridge.
 - Audit records are append-only. Simulator telemetry is still process-local and bounded to 500 events per device, so its deduplication window is not durable replay protection.
 - Account deletion is a design only. Do not implement a hard-delete endpoint until workspace ownership, retention, audit pseudonymization and legal-hold rules are approved.
 - The Firebase client application must use a separate Axon Firebase project, not Funspot's Firebase project.
