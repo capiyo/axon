@@ -60,3 +60,28 @@ A recursive Git tree comparison was performed for all 13 non-master branches aga
 | `contracts/qep/v1/envelope.schema.json` | Renamed and updated as `contracts/axp/v1/envelope.schema.json`; the current schema identifies Axon and uses the current protocol namespace. |
 
 The remaining branch-tree paths already exist on master. Their blob hashes differ in many cases because master contains later revisions; historical versions were not copied over newer code. This is the safe content-level consolidation result: no unique executable source file remains absent from the master tree, and migration history is not duplicated.
+
+
+## Recursive branch-diff audit (2026-11-28)
+
+A second audit used GitHub three-dot commit comparisons (master...branch) for every historical branch. This is a merge-base diff, not a filename-only comparison. Divergent branch heads still contain commits not reachable from master; aggregate merge-base diffs must not be mistaken for missing features because many files are older snapshots of code that master has since evolved.
+
+| Branch | Branch-only commits reported | Files in merge-base diff | Changed lines |
+|---|---:|---:|---:|
+| feature/axon-memory-consensus-routing | 181 | 34 | 3,782 |
+| feature/funspot-ui-parity | 17 | 5 | 620 |
+| feature/memory-vector-reconstruction-v1 | 73 | 19 | 2,270 |
+| feature/qoin-memory-fullstack-integration | 63 | 12 | 1,081 |
+| feature/supervisor-engine-bridge | 278 | 47 | 9,228 |
+| foundation/axon-desktop-shell | 49 | 19 | 405 |
+| foundation/axum-web-skeleton | 59 | 15 | 1,234 |
+| implementation/axon-social-workspace | 196 | 28 | 5,006 |
+| production/phase-b-validation | 1 | 13 | 1,722 |
+| refactor/axon-funspot-screen-architecture | 255 | 49 | 10,014 |
+| main | 0 | 0 | 0 |
+| production/phase-a-firebase-auth | 0 | 0 | 0 |
+| production/phase-b-chats-memory | 0 | 0 | 0 |
+
+These are comparison metadata, not a statement that every line is absent from master. Targeted blob checks confirmed exact master/branch matches for capability routing (capability.rs, memory.rs), Qoin vectors (qoin_vectors.rs), agent runtime (agent_runtime.rs), and the desktop Tauri host (src-tauri/src/main.rs). Targeted checks also found evolved differences in memory architecture/intelligence, supervisor/model registry, and Explore. In those cases master contains newer additions, including Qoin scoring-version validation, epoch publication/lifecycle safeguards, and Explore agent-detail retrieval, while the historical branch has older implementations. Those older files must not overwrite master.
+
+**Correction:** the earlier tree-path reconciliation was not a recursive commit/content consolidation. It only established path coverage and migration/auth path disposition. It did not cherry-pick every historical commit or prove complete behavioral equivalence. This three-dot audit records actual divergence; code-level reconciliation and CI validation must decide each differing behavior. Do not describe every branch commit as merged merely because its file paths exist.
