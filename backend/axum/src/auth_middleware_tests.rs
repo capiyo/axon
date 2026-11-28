@@ -674,4 +674,191 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
+    #[tokio::test]
+    async fn scoped_agent_memory_requires_review_and_explicit_cross_agent_grants() {
+        let (app, state, _) = test_app().await;
+        let owner = state
+            .ensure_firebase_user("axon-test-project", "owner-user")
+            .await
+            .unwrap();
+        let owner_agent_id = Uuid::new_v4();
+        let recipient_agent_id = Uuid::new_v4();
+        for (id, name) in [
+            (owner_agent_id, "Owner agent"),
+            (recipient_agent_id, "Recipient agent"),
+        ] {
+            state.agents.write().await.insert(
+                id,
+                Agent {
+                    id,
+                    workspace_id: owner.workspace.id,
+                    created_by_user_id: Some(owner.user_id),
+                    display_name: name.into(),
+                    provider: "test".into(),
+                    connection_mode: ConnectionMode::Manual,
+                    created_at: Utc::now(),
+                },
+            );
+        }
+        let token = FirebaseVerifier::test_token("owner-user", false);
+        let base = format!(
+            "/api/v1/workspaces/{}/agent-memories",
+            owner.workspace.id
+        );
+
+        let proposed = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &base,
+                Some(token.clone()),
+                serde_json::json!({
+                    "scope": "agent",
+                    "scope_id": null,
+                    "owner_agent_id": owner_agent_id,
+                    "content": "The worker uses an evidence first deterministic review process.",
+                    "source": "reviewed supervisor note",
+                    "sensitivity": "internal",
+                    "expires_at": null
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(proposed.status(), StatusCode::CREATED);
+        let proposal_body = to_bytes(proposed.into_body(), usize::MAX).await.unwrap();
+        let proposal: serde_json::Value = serde_json::from_slice(&proposal_body).unwrap();
+        let memory_id = Uuid::parse_str(proposal["memory_id"].as_str().unwrap()).unwrap();
+
+        let owner_allocation = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("{base}/allocate"),
+                Some(token.clone()),
+                serde_json::json!({
+                    "task_id": null,
+                    "agent_id": owner_agent_id,
+                    "token_budget": 500,
+                    "query": "evidence first deterministic review process"
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(owner_allocation.status(), StatusCode::OK);
+        let body = to_bytes(owner_allocation.into_body(), usize::MAX).await.unwrap();
+        let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(allocation["selected"].as_array().unwrap().is_empty());
+
+        let reviewed = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("{base}/{memory_id}/review"),
+                Some(token.clone()),
+                serde_json::json!({"decision": "approve"}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(reviewed.status(), StatusCode::OK);
+
+        let owner_allocation = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("{base}/allocate"),
+                Some(token.clone()),
+                serde_json::json!({
+                    "task_id": null,
+                    "agent_id": owner_agent_id,
+                    "token_budget": 500,
+                    "query": "evidence first deterministic review process"
+                }),
+            ))
+            .await
+            .unwrap();
+        let body = to_bytes(owner_allocation.into_body(), usize::MAX).await.unwrap();
+        let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(allocation["selected"].as_array().unwrap().len(), 1);
+
+        let recipient_allocation = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("{base}/allocate"),
+                Some(token.clone()),
+                serde_json::json!({
+                    "task_id": null,
+                    "agent_id": recipient_agent_id,
+                    "token_budget": 500,
+                    "query": "evidence first deterministic review process"
+                }),
+            ))
+            .await
+            .unwrap();
+        let body = to_bytes(recipient_allocation.into_body(), usize::MAX).await.unwrap();
+        let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(allocation["selected"].as_array().unwrap().is_empty());
+
+        let shared = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("{base}/{memory_id}/share"),
+                Some(token.clone()),
+                serde_json::json!({"agent_id": recipient_agent_id}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(shared.status(), StatusCode::NO_CONTENT);
+
+        let recipient_allocation = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("{base}/allocate"),
+                Some(token.clone()),
+                serde_json::json!({
+                    "task_id": null,
+                    "agent_id": recipient_agent_id,
+                    "token_budget": 500,
+                    "query": "evidence first deterministic review process"
+                }),
+            ))
+            .await
+            .unwrap();
+        let body = to_bytes(recipient_allocation.into_body(), usize::MAX).await.unwrap();
+        let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(allocation["selected"].as_array().unwrap().len(), 1);
+
+        let revoked = app
+            .clone()
+            .oneshot(request(
+                "DELETE",
+                &format!("{base}/{memory_id}/share/{recipient_agent_id}"),
+                Some(token.clone()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(revoked.status(), StatusCode::NO_CONTENT);
+
+        let recipient_allocation = app
+            .oneshot(json_request(
+                "POST",
+                &format!("{base}/allocate"),
+                Some(token),
+                serde_json::json!({
+                    "task_id": null,
+                    "agent_id": recipient_agent_id,
+                    "token_budget": 500,
+                    "query": "evidence first deterministic review process"
+                }),
+            ))
+            .await
+            .unwrap();
+        let body = to_bytes(recipient_allocation.into_body(), usize::MAX).await.unwrap();
+        let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(allocation["selected"].as_array().unwrap().is_empty());
+    }
+
+
 }
