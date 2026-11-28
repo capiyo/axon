@@ -25,6 +25,8 @@ pub mod memory_outbox;
 mod memory_routes;
 pub mod memory_vector_provider;
 mod model;
+pub mod memory_store;
+pub mod memory_system;
 pub mod model_registry;
 pub mod model_discovery;
 mod model_registry_routes;
