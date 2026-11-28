@@ -75,6 +75,7 @@ mod tests {
             ("POST", "/api/v1/sim/devices/simulator-1/telemetry".into()),
             ("GET", format!("/api/v1/workspaces/{workspace_id}/agents")),
             ("GET", format!("/api/v1/workspaces/{workspace_id}/chats")),
+            ("POST", format!("/api/v1/workspaces/{workspace_id}/chats")),
             (
                 "GET",
                 format!("/api/v1/workspaces/{workspace_id}/chats/{}", Uuid::new_v4()),
@@ -90,6 +91,35 @@ mod tests {
                 "POST",
                 format!(
                     "/api/v1/workspaces/{workspace_id}/chats/{}/like",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/chats/{}/messages",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "PATCH",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/chats/{}/archive",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/chats/{}/memory",
+                    Uuid::new_v4()
+                ),
+            ),
+            (
+                "POST",
+                format!(
+                    "/api/v1/workspaces/{workspace_id}/chats/{}/memory/{}/approve",
+                    Uuid::new_v4(),
                     Uuid::new_v4()
                 ),
             ),
@@ -212,9 +242,30 @@ mod tests {
             .unwrap()
             .workspace
             .id;
+        let owner = state
+            .ensure_firebase_user("axon-test-project", "owner-user")
+            .await
+            .unwrap();
+        let chat = state
+            .chat_memory
+            .as_ref()
+            .unwrap()
+            .create_chat(
+                workspace_id,
+                owner.user_id,
+                &format!("human:{}", owner.user_id),
+                "Private chat".into(),
+            )
+            .await
+            .unwrap();
         let other_user_token = FirebaseVerifier::test_token("other-user", false);
         let paths = [
             format!("/api/v1/workspaces/{workspace_id}/audit"),
+            format!("/api/v1/workspaces/{workspace_id}/chats"),
+            format!("/api/v1/workspaces/{workspace_id}/chats/{}", chat.id),
+            format!("/api/v1/workspaces/{workspace_id}/chats/{}/messages", chat.id),
+            format!("/api/v1/workspaces/{workspace_id}/chats/{}/archive", chat.id),
+            format!("/api/v1/workspaces/{workspace_id}/chats/{}/memory", chat.id),
             format!("/api/v1/workspaces/{workspace_id}/agents"),
             format!("/api/v1/workspaces/{workspace_id}/artifacts"),
             format!("/api/v1/workspaces/{workspace_id}/tasks"),
@@ -228,8 +279,12 @@ mod tests {
                 || path.contains("/transitions")
                 || path.contains("/capability-polls")
                 || path.contains("/supervisor-runs")
+                || path.contains("/messages")
+                || path.contains("/memory")
             {
                 "POST"
+            } else if path.ends_with("/archive") {
+                "PATCH"
             } else {
                 "GET"
             };
