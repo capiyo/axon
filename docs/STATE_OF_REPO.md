@@ -1,6 +1,6 @@
 # State of Repository
 
-**Last updated:** 2026-11-27
+**Last updated:** 2026-11-28
 
 **Product identity:** Axon (working name; public trademark/domain clearance remains outstanding).
 
@@ -10,7 +10,7 @@
 - GitHub default branch setting: `main` (must be changed to `master` in repository settings; the connected GitHub operations available here cannot change this setting).
 - Authoritative development branch: `master` (all implementation, fixes, tests, documentation, configuration, and integration changes are committed directly here).
 - Other branches are legacy consolidation inputs only; do not use them for new development. Port verified, non-duplicate changes to `master` without overwriting unrelated work.
-- At this update, `master` is 1,018 commits ahead of `main`; `main` is stale and must not replace `master`.
+- At this update, `master` is 1,046 commits ahead of `main`; `main` is stale and must not replace `master`.
 - Repository: [github.com/capiyo/axon](https://github.com/capiyo/axon)
 - License: MIT (see [LICENSE](../LICENSE))
 
@@ -33,7 +33,7 @@
 - [x] Persistent `users` and `workspace_memberships` tables; the Google-authenticated Firebase UID maps to an internal Axon user ID.
 - [x] One personal workspace per Google-authenticated identity, created idempotently on first successful authentication; uniqueness is enforced by provider + subject and creation is transactional.
 - [x] Workspace membership is checked at the HTTP boundary. Requests for another user's workspace or task resources return not-found rather than forbidden.
-- [x] All registered API routes require a verified bearer token except `GET /health`.
+- [x] All registered API routes require a verified bearer token except `GET /health` and `GET /ready`.
 - [x] Simulator routes require authentication and are hidden unless `AXON_ENABLE_SIMULATOR=true`.
 - [x] Offline tests use locally signed RSA test keys; no external network is required for token-verification tests.
 - [x] Tests cover missing/expired tokens across registered API routes, wrong signing keys, JWKS key rotation, concurrent first-login provisioning, cross-user not-found behavior, and the public health route.
@@ -50,6 +50,18 @@
 - [x] Authenticated workspace-scoped API routes and web/mobile chat and memory interfaces.
 - [x] Backend tests cover event replay, approval/edit invalidation, workspace isolation, archive behavior and append-only enforcement.
 - [x] See [CHATS_AND_PROJECT_MEMORY.md](CHATS_AND_PROJECT_MEMORY.md) for API and data contracts.
+
+### Supervisor orchestration and model governance
+
+- [x] Persistent supervisor runs are stored through the SQLite entity repository and restored when the API starts.
+- [x] Workspace-scoped routes cover run creation/listing, checklist submission, worker results, deterministic checks, independent reviews, and bounded repair.
+- [x] The deterministic 2-2-2 supervision policy is represented in the run state machine; Quick and Normal assignments use their configured reduced stages, while Important and unassigned runs require the full independent stages.
+- [x] Model assignment decisions are persisted with their supervisor run, including candidate sets, applied filters, selected model, rationale, and estimated cost.
+- [x] Daily per-user model budget reservations are atomic in SQLite and emit audit events; a configured daily limit defaults to 10,000,000 micro-units.
+- [x] A scheduled model catalogue worker refreshes configured active providers daily. New models remain unapproved candidates; changes to approved model pricing are flagged for review rather than silently applied.
+- [x] Workspace capability-consensus polls are exposed through authenticated routes and persisted in MongoDB; memory context references must resolve to active records in the same workspace.
+- [x] Authorization tests now include all supervisor and capability routes for missing/expired tokens and cross-workspace access.
+- [ ] Live provider credentials, production catalogue endpoints, real inference execution, measured billing reconciliation, MongoDB integration tests, and production deployment verification remain environment-dependent and are not claimed as complete.
 
 ### Dual-database memory foundation (in progress)
 
