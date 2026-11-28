@@ -15,6 +15,9 @@
         "backgroundColor": "#eaf1fc"
       }
     },
-    "scheme": "axon"
+    "scheme": [
+      "axon",
+      "co.axon.mobile"
+    ]
   }
 }
