@@ -616,20 +616,35 @@ impl ChatMemoryStore {
             .unwrap_or_else(|| "No conversation activity yet.".into());
         lines.push(format!("Where left off: {where_left_off}"));
         let decisions = section("decision");
-        if !decisions.is_empty() {
-            lines.push(format!("Decisions: {}", decisions.join("; ")));
-        }
+        lines.push(format!(
+            "Decisions: {}",
+            if decisions.is_empty() {
+                "None recorded".to_owned()
+            } else {
+                decisions.join("; ")
+            }
+        ));
         let open_tasks = section("open_task");
-        if !open_tasks.is_empty() {
-            lines.push(format!("Open tasks: {}", open_tasks.join("; ")));
-        }
+        lines.push(format!(
+            "Open tasks: {}",
+            if open_tasks.is_empty() {
+                "None recorded".to_owned()
+            } else {
+                open_tasks.join("; ")
+            }
+        ));
         let next = section("note")
             .into_iter()
             .chain(section("constraint"))
             .collect::<Vec<_>>();
-        if !next.is_empty() {
-            lines.push(format!("Next / constraints: {}", next.join("; ")));
-        }
+        lines.push(format!(
+            "Next / constraints: {}",
+            if next.is_empty() {
+                "No next step recorded".to_owned()
+            } else {
+                next.join("; ")
+            }
+        ));
         let facts = section("fact");
         if !facts.is_empty() {
             lines.push(format!("Facts: {}", facts.join("; ")));
@@ -821,6 +836,15 @@ mod tests {
         assert!(!before_approval
             .resume_brief
             .contains("append-only memory events"));
+        assert!(before_approval
+            .resume_brief
+            .contains("Decisions: None recorded"));
+        assert!(before_approval
+            .resume_brief
+            .contains("Open tasks: None recorded"));
+        assert!(before_approval
+            .resume_brief
+            .contains("Next / constraints: No next step recorded"));
 
         store
             .mutate_memory_entry(
