@@ -1860,7 +1860,13 @@ mod tests {
         assert!(hidden.is_empty());
 
         let coordinator = storage.memory_epoch_coordinator();
-        assert_eq!(coordinator.publish_due_epochs().await.unwrap(), 1);
+        assert!(coordinator
+            .publish_workspace_if_due_at(
+                &account.workspace.id.to_string(),
+                chrono::Utc::now() + chrono::Duration::hours(2),
+            )
+            .await
+            .unwrap());
         let pinned = sqlx::query(
             "SELECT document_version, content_hash, source_event_sequence, qkv_version, qoin_scoring_version \
              FROM memory_document_epoch_items WHERE memory_id = ? AND document_version = 1",
