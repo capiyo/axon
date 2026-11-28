@@ -45,7 +45,7 @@ pub struct AppState {
     pub tasks: Arc<RwLock<HashMap<Uuid, Task>>>,
     pub supervisor_runs: Arc<RwLock<HashMap<Uuid, SupervisorRun>>>,
     pub supervisor_run_lock: Arc<tokio::sync::Mutex<()>>,
-    execution_claims: Arc<tokio::sync::Mutex<HashSet<Uuid>>>,
+    execution_claims: Arc<tokio::sync::Mutex<HashMap<Uuid, Uuid>>>,
     assignment_engine: Option<Arc<dyn ModelAssigner>>,
     /// Bounded in-memory simulator stream; never treated as durable device telemetry.
     pub telemetry: Arc<RwLock<TelemetryStore>>,
@@ -201,7 +201,15 @@ impl AppState {
         if let Some(storage) = &self.storage {
             storage.claim_task_execution(task_id, owner_token, 240).await
         } else {
-            Ok(self.execution_claims.lock().await.insert(task_id))
+            {
+                let mut claims = self.execution_claims.lock().await;
+                if claims.contains_key(&task_id) {
+                    Ok(false)
+                } else {
+                    claims.insert(task_id, owner_token);
+                    Ok(true)
+                }
+            }
         }
     }
 
@@ -213,8 +221,13 @@ impl AppState {
         if let Some(storage) = &self.storage {
             storage.release_task_execution(task_id, owner_token).await
         } else {
-            self.execution_claims.lock().await.remove(&task_id);
-            Ok(())
+            {
+                let mut claims = self.execution_claims.lock().await;
+                if claims.get(&task_id) == Some(&owner_token) {
+                    claims.remove(&task_id);
+                }
+                Ok(())
+            }
         }
     }
 
