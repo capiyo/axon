@@ -6,7 +6,7 @@ pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route(
             "/api/v1/workspaces/:workspace_id/supervisor-runs",
-            routing::get(handlers::supervisor::list_runs).routing::post(handlers::supervisor::create_run),
+            routing::get(handlers::supervisor::list_runs).post(handlers::supervisor::create_run),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id",
