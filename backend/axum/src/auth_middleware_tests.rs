@@ -631,9 +631,7 @@ mod tests {
             ),
         ];
         for path in paths {
-            let method = if path.ends_with("/memory/context")
-                || path.contains("/memory/imports/")
-            {
+            let method = if path.ends_with("/memory/context") || path.contains("/memory/imports/") {
                 "GET"
             } else if path.contains("/capability-polls")
                 || path.contains("/supervisor-runs")

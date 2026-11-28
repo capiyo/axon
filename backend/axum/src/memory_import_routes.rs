@@ -58,8 +58,7 @@ pub async fn import_conversation(
     Json(input): Json<ImportConversationRequest>,
 ) -> ApiResult<(StatusCode, Json<crate::memory::ConversationImport>)> {
     require_member(&state, &user, workspace_id).await?;
-    validate_import(&input)
-        .map_err(|message| error(StatusCode::BAD_REQUEST, message))?;
+    validate_import(&input).map_err(|message| error(StatusCode::BAD_REQUEST, message))?;
     let imported = repository(&state)?
         .import_conversation(workspace_id, input)
         .await
@@ -79,8 +78,7 @@ pub async fn create_memory(
     Json(input): Json<CreateMemoryRequest>,
 ) -> ApiResult<(StatusCode, Json<MemoryRecord>)> {
     require_member(&state, &user, workspace_id).await?;
-    validate_memory(&input)
-        .map_err(|message| error(StatusCode::BAD_REQUEST, message))?;
+    validate_memory(&input).map_err(|message| error(StatusCode::BAD_REQUEST, message))?;
     let record = repository(&state)?
         .create_memory(workspace_id, input)
         .await
@@ -142,7 +140,12 @@ pub async fn get_import(
     let record = repository(&state)?
         .get_import(workspace_id, import_id)
         .await
-        .map_err(|_| error(StatusCode::INTERNAL_SERVER_ERROR, "Could not retrieve conversation import."))?;
+        .map_err(|_| {
+            error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Could not retrieve conversation import.",
+            )
+        })?;
     record.map(Json).ok_or_else(|| {
         error(
             StatusCode::NOT_FOUND,
