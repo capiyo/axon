@@ -172,6 +172,33 @@ pub async fn execute_task(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path(task_id): Path<Uuid>,
 ) -> TaskResult<Json<TaskSubmission>> {
+    let execution_token = Uuid::new_v4();
+    let claimed = state
+        .claim_task_execution(task_id, execution_token)
+        .await
+        .map_err(|_| storage_failure())?;
+    if !claimed {
+        return Err(error(
+            StatusCode::CONFLICT,
+            "This task is already being executed.",
+        ));
+    }
+
+    let result = execute_task_claimed(state.clone(), user, task_id).await;
+    if let Err(release_error) = state
+        .release_task_execution(task_id, execution_token)
+        .await
+    {
+        tracing::error!(%release_error, %task_id, "could not release task execution lease");
+    }
+    result
+}
+
+async fn execute_task_claimed(
+    state: AppState,
+    user: Arc<AuthenticatedUser>,
+    task_id: Uuid,
+) -> TaskResult<Json<TaskSubmission>> {
     let mut task = state
         .tasks
         .read()
