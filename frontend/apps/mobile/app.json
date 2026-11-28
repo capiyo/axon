@@ -18,6 +18,9 @@
     "scheme": [
       "axon",
       "co.axon.mobile"
+    ],
+    "plugins": [
+      "expo-secure-store"
     ]
   }
 }

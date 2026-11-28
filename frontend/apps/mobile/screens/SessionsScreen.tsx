@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { axonTheme } from "../../../packages/theme/src";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 type GoogleUser = { uid: string; displayName: string | null; email: string | null; photoURL: string | null };
 let googleIdToken: string | null = null;
 function parseGoogleUser(token: string): GoogleUser {
@@ -1075,11 +1075,11 @@ function AuthGate() {
 
   useEffect(() => {
     let active = true;
-    void AsyncStorage.getItem("axon.google.id_token").then(saved => {
+    void SecureStore.getItemAsync("axon.google.id_token").then(saved => {
       if (!active) return;
       if (saved) {
         try { googleIdToken = saved; setUser(parseGoogleUser(saved)); }
-        catch { googleIdToken = null; void AsyncStorage.removeItem("axon.google.id_token"); }
+        catch { googleIdToken = null; void SecureStore.deleteItemAsync("axon.google.id_token"); }
       }
       setReady(true);
     }).catch(() => { if (active) setReady(true); });
@@ -1096,7 +1096,7 @@ function AuthGate() {
       const nextUser = parseGoogleUser(idToken);
       googleIdToken = idToken;
       setUser(nextUser);
-      void AsyncStorage.setItem("axon.google.id_token", idToken);
+      void SecureStore.setItemAsync("axon.google.id_token", idToken);
     } catch (cause) {
       setAuthError(cause instanceof Error ? cause.message : "Google sign-in failed.");
     } finally { setWorking(false); }
