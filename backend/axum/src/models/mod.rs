@@ -17,6 +17,7 @@ pub use workspace::*;
 #[cfg(test)]
 mod agent_ownership_tests {
     use super::*;
+    use uuid::Uuid;
     use chrono::Utc;
 
     #[test]
