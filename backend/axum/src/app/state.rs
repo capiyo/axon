@@ -320,7 +320,7 @@ impl AppState {
                 storage
                     .ensure_google_user(subject, email, display_name, avatar_url)
                     .await
-            },
+            }
             None => Err(StorageError::IdentityStorageUnavailable),
         }
     }
