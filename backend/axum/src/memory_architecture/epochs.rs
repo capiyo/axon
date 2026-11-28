@@ -1,0 +1,626 @@
+use chrono::{DateTime, Utc};
+use sqlx::{Row, SqlitePool};
+use std::time::Duration;
+
+/// SQLite-backed epoch publisher. A separate process may run this coordinator;
+/// publication is idempotent per workspace/hour through a unique epoch number.
+#[derive(Clone)]
+pub struct MemoryEpochCoordinator {
+    pool: SqlitePool,
+    qoin_scoring_version: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryEpoch {
+    pub id: Uuid,
+    pub workspace_id: Uuid,
+    pub epoch_number: i64,
+    pub published_at: DateTime<Utc>,
+    pub source_event_sequence: i64,
+    pub indexed_memory_count: i64,
+    pub snapshot_digest: String,
+}
+impl MemoryEpochCoordinator {
+    pub fn new(pool: SqlitePool) -> Self {
+        Self {
+            pool,
+            qoin_scoring_version: QoinScoringConfig::default().effective_version(),
+        }
+    }
+
+    pub fn with_qoin_scoring_version(mut self, version: String) -> Self {
+        self.qoin_scoring_version = version;
+        self
+    }
+
+    /// Publish due workspaces. Called repeatedly by the supervised hourly
+    /// worker; the one-hour guard is enforced transactionally per workspace.
+    pub async fn publish_due_epochs(&self) -> Result<usize, sqlx::Error> {
+        let workspaces: Vec<String> = sqlx::query_scalar(
+            "SELECT workspace_id FROM chats \
+             UNION SELECT workspace_id FROM memory_document_versions \
+             WHERE lifecycle_status = 'approved' AND sync_status IN ('stored', 'indexed') \
+             ORDER BY workspace_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut published = 0;
+        for workspace in workspaces {
+            if self.publish_workspace_if_due(&workspace).await? {
+                published += 1;
+            }
+        }
+        Ok(published)
+    }
+
+    async fn publish_workspace_if_due(&self, workspace_id: &str) -> Result<bool, sqlx::Error> {
+        self.publish_workspace_if_due_at(workspace_id, Utc::now())
+            .await
+    }
+
+    /// Deterministic clock seam for lifecycle and hourly-boundary tests.
+    pub(crate) async fn publish_workspace_if_due_at(
+        &self,
+        workspace_id: &str,
+        now: DateTime<Utc>,
+    ) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let latest: Option<String> = sqlx::query_scalar(
+            "SELECT published_at FROM memory_epochs WHERE workspace_id = ? ORDER BY epoch_number DESC LIMIT 1"
+        ).bind(workspace_id).fetch_optional(&mut *tx).await?;
+        if let Some(timestamp) = latest {
+            let parsed = DateTime::parse_from_rfc3339(&timestamp)
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?
+                .with_timezone(&Utc);
+            if now.signed_duration_since(parsed).num_seconds() < 3600 {
+                tx.rollback().await?;
+                return Ok(false);
+            }
+        }
+        // Keep the legacy memory-event sequence domain intact. MongoDB
+        // document source sequences are pinned separately per epoch item.
+        let max_sequence: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(sequence), 0) FROM memory_events WHERE workspace_id = ?",
+        )
+        .bind(workspace_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let max_document_sequence: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(source_event_sequence), 0) FROM memory_document_versions \
+             WHERE workspace_id = ? AND ( \
+                 lifecycle_status IN ('archived', 'deleted', 'rejected', 'superseded') \
+                 OR (lifecycle_status = 'approved' AND sync_status IN ('stored', 'indexed')) \
+             )",
+        )
+        .bind(workspace_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let indexed_vector_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved'",
+        )
+        .bind(workspace_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let indexed_document_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM memory_document_versions v WHERE v.workspace_id = ? \
+             AND v.lifecycle_status = 'approved' AND v.sync_status IN ('stored', 'indexed') \
+             AND NOT EXISTS (SELECT 1 FROM memory_document_versions newer WHERE newer.workspace_id = v.workspace_id \
+                 AND newer.memory_id = v.memory_id AND newer.version > v.version \
+                 AND (newer.lifecycle_status IN ('archived', 'deleted', 'rejected', 'superseded') \
+                      OR (newer.lifecycle_status = 'approved' AND newer.sync_status IN ('stored', 'indexed'))))",
+        )
+        .bind(workspace_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let indexed_count = indexed_vector_count + indexed_document_count;
+        let next_epoch: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(MAX(epoch_number), 0) + 1 FROM memory_epochs WHERE workspace_id = ?",
+        )
+        .bind(workspace_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        let id = Uuid::new_v4();
+        // This is a reproducibility marker, not a cryptographic integrity hash.
+        let marker = format!(
+            "memory-event-sequence:{max_sequence};document-audit-sequence:{max_document_sequence};indexed-vectors:{indexed_vector_count};indexed-documents:{indexed_document_count}"
+        );
+        sqlx::query(
+            "INSERT INTO memory_epochs (id, workspace_id, epoch_number, published_at, source_event_sequence, indexed_memory_count, snapshot_digest) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).bind(id.to_string()).bind(workspace_id).bind(next_epoch)
+            .bind(now.to_rfc3339()).bind(max_sequence).bind(indexed_count).bind(marker)
+            .execute(&mut *tx).await?;
+        sqlx::query(
+            "INSERT INTO memory_epoch_items (epoch_id, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, source_kind, indexed_at) SELECT ?, workspace_id, memory_id, chat_id, task_id, project_id, owner_agent_id, visibility, qoin_vector_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, source_kind, indexed_at FROM memory_vector_index WHERE workspace_id = ? AND status = 'approved'"
+        ).bind(id.to_string()).bind(workspace_id)
+            .execute(&mut *tx).await?;
+        sqlx::query(
+            "INSERT INTO memory_document_epoch_items \
+             (epoch_id, workspace_id, memory_id, document_version, content_hash, scope, project_id, \
+              task_id, owner_id, source_event_sequence, qkv_version, qoin_vector_version, \
+              qoin_scoring_version, snapshot_at) \
+             SELECT ?, v.workspace_id, v.memory_id, v.version, v.content_hash, v.scope, v.project_id, v.task_id, \
+                    v.owner_id, v.source_event_sequence, v.qkv_version, v.qoin_vector_version, ?, ? \
+             FROM memory_document_versions v WHERE v.workspace_id = ? AND v.lifecycle_status = 'approved' \
+                    AND v.sync_status IN ('stored', 'indexed') \
+                    AND NOT EXISTS (SELECT 1 FROM memory_document_versions newer \
+                        WHERE newer.workspace_id = v.workspace_id AND newer.memory_id = v.memory_id \
+                        AND newer.version > v.version \
+                        AND (newer.lifecycle_status IN ('archived', 'deleted', 'rejected', 'superseded') \
+                             OR (newer.lifecycle_status = 'approved' AND newer.sync_status IN ('stored', 'indexed'))))",
+        )
+        .bind(id.to_string())
+        .bind(&self.qoin_scoring_version)
+        .bind(now.to_rfc3339())
+        .bind(workspace_id)
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    pub async fn latest_epoch(
+        &self,
+        workspace_id: Uuid,
+    ) -> Result<Option<MemoryEpoch>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, workspace_id, epoch_number, published_at, source_event_sequence, indexed_memory_count, snapshot_digest FROM memory_epochs WHERE workspace_id = ? ORDER BY epoch_number DESC LIMIT 1"
+        ).bind(workspace_id.to_string()).fetch_optional(&self.pool).await?;
+        row.map(|row| {
+            let id: String = row.try_get("id")?;
+            let workspace: String = row.try_get("workspace_id")?;
+            let published_at: String = row.try_get("published_at")?;
+            Ok(MemoryEpoch {
+                id: Uuid::parse_str(&id).map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                workspace_id: Uuid::parse_str(&workspace)
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                epoch_number: row.try_get("epoch_number")?,
+                published_at: DateTime::parse_from_rfc3339(&published_at)
+                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?
+                    .with_timezone(&Utc),
+                source_event_sequence: row.try_get("source_event_sequence")?,
+                indexed_memory_count: row.try_get("indexed_memory_count")?,
+                snapshot_digest: row.try_get("snapshot_digest")?,
+            })
+        })
+        .transpose()
+    }
+
+    /// Run as a supervised Tokio task. A minute poll avoids a long-running
+    /// fixed sleep and recovers naturally after process restarts.
+    pub async fn run_hourly(self) {
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        self.run_hourly_until(shutdown_rx).await;
+    }
+
+    pub async fn run_hourly_until(self, mut shutdown: tokio::sync::watch::Receiver<bool>) {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            if *shutdown.borrow() {
+                break;
+            }
+            tokio::select! {
+                _ = interval.tick() => {
+                    match self.publish_due_epochs().await {
+                        Ok(count) if count > 0 => {
+                            tracing::info!(published_workspaces = count, "published memory epochs")
+                        }
+                        Ok(_) => {}
+                        Err(error) => {
+                            tracing::error!(%error, "memory epoch publication failed; will retry")
+                        }
+                    }
+                }
+                changed = shutdown.changed() => {
+                    if changed.is_err() || *shutdown.borrow() {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct IndexMemoryInput {
+    pub workspace_id: Uuid,
+    pub chat_id: Uuid,
+    pub memory_id: Uuid,
+    pub task_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
+    pub owner_agent_id: Option<Uuid>,
+    pub visibility: String,
+    pub vector: QoinVector,
+    pub tags: BTreeSet<String>,
+    pub dependency_ids: BTreeSet<Uuid>,
+    pub outcome_score: f32,
+    pub evidence_score: f32,
+}
+#[derive(Debug, Clone, Serialize)]
+pub struct HandoverMemory {
+    pub memory_id: Uuid,
+    pub source_kind: String,
+    pub source_event_sequence: i64,
+    pub payload_json: String,
+    pub attention_score: f64,
+}
+#[derive(Debug, Clone, Serialize)]
+pub struct HandoverContext {
+    pub session_id: Uuid,
+    pub epoch: MemoryEpoch,
+    pub initial: Vec<HandoverMemory>,
+    pub deferred_count: usize,
+    pub achieved_coverage: f64,
+    pub budget_exhausted: bool,
+}
+#[derive(Debug, Clone, Deserialize)]
+pub struct HandoverRequest {
+    pub workspace_id: Uuid,
+    pub agent_id: Uuid,
+    pub task_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
+    pub query: QoinVector,
+    pub heads: usize,
+    pub tags: BTreeSet<String>,
+    pub dependency_ids: BTreeSet<Uuid>,
+    #[serde(default)]
+    pub pareto: ParetoPolicy,
+}
+
+impl MemoryEpochCoordinator {
+    /// Read the original timestamp of a source chat message before mapping it
+    /// to the Qoin market state that existed at that moment.
+    pub async fn chat_message_context_timestamp_ms(
+        &self,
+        workspace_id: Uuid,
+        chat_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<i64, sqlx::Error> {
+        let created_at: Option<String> = sqlx::query_scalar(
+            "SELECT m.created_at FROM chat_messages m JOIN chats c ON c.id = m.chat_id WHERE c.workspace_id = ? AND m.chat_id = ? AND m.id = ?",
+        )
+        .bind(workspace_id.to_string())
+        .bind(chat_id.to_string())
+        .bind(message_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        let created_at = created_at.ok_or(sqlx::Error::RowNotFound)?;
+        let timestamp = DateTime::parse_from_rfc3339(&created_at)
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        Ok(timestamp.timestamp_millis())
+    }
+
+    /// Read the original creation time from the immutable approved-memory event.
+    /// Qoin history lookup uses this timestamp so old memories are never mapped
+    /// to the market state that happens to be current when someone indexes them.
+    pub async fn approved_memory_context_timestamp_ms(
+        &self,
+        workspace_id: Uuid,
+        chat_id: Uuid,
+        memory_id: Uuid,
+    ) -> Result<i64, sqlx::Error> {
+        let payload: Option<String> = sqlx::query_scalar(
+            "SELECT payload_json FROM memory_events WHERE workspace_id = ? AND chat_id = ? AND memory_entry_id = ? ORDER BY sequence DESC LIMIT 1",
+        )
+        .bind(workspace_id.to_string())
+        .bind(chat_id.to_string())
+        .bind(memory_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        let payload = payload.ok_or(sqlx::Error::RowNotFound)?;
+        let value: serde_json::Value =
+            serde_json::from_str(&payload).map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        if value.get("status").and_then(serde_json::Value::as_str) != Some("approved") {
+            return Err(sqlx::Error::Protocol(
+                "only approved memories can be mapped to historical Qoin vectors".into(),
+            ));
+        }
+        let context_timestamp = if let Some(source_message_id) = value
+            .get("source_message_id")
+            .and_then(serde_json::Value::as_str)
+        {
+            sqlx::query_scalar::<_, String>(
+                "SELECT created_at FROM chat_messages WHERE id = ? AND chat_id = ?",
+            )
+            .bind(source_message_id)
+            .bind(chat_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(sqlx::Error::RowNotFound)?
+        } else {
+            value
+                .get("created_at")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| {
+                    sqlx::Error::Protocol("memory creation timestamp is missing".into())
+                })?
+                .to_owned()
+        };
+        let timestamp = DateTime::parse_from_rfc3339(&context_timestamp)
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        Ok(timestamp.timestamp_millis())
+    }
+
+    /// Accept only vectors attached to an approved, existing source memory.
+    /// The original event payload remains in memory_events and is copied as a
+    /// retrieval value only for convenient hydration.
+    pub async fn index_approved_memory(&self, input: IndexMemoryInput) -> Result<(), sqlx::Error> {
+        input
+            .vector
+            .validate()
+            .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        if ![
+            "agent_private",
+            "task_shared",
+            "project_shared",
+            "workspace_shared",
+        ]
+        .contains(&input.visibility.as_str())
+            || !input.outcome_score.is_finite()
+            || !(0.0..=1.0).contains(&input.outcome_score)
+            || !input.evidence_score.is_finite()
+            || !(0.0..=1.0).contains(&input.evidence_score)
+        {
+            return Err(sqlx::Error::Protocol(
+                "invalid memory index metadata".into(),
+            ));
+        }
+        if input.visibility == "agent_private" && input.owner_agent_id.is_none()
+            || input.visibility == "task_shared" && input.task_id.is_none()
+            || input.visibility == "project_shared" && input.project_id.is_none()
+        {
+            return Err(sqlx::Error::Protocol(
+                "visibility scope identifier is required".into(),
+            ));
+        }
+        let source = sqlx::query(
+            "SELECT sequence, payload_json FROM memory_events WHERE workspace_id = ? AND chat_id = ? AND memory_entry_id = ? ORDER BY sequence DESC LIMIT 1"
+        ).bind(input.workspace_id.to_string()).bind(input.chat_id.to_string())
+            .bind(input.memory_id.to_string()).fetch_optional(&self.pool).await?;
+        let Some(source) = source else {
+            return Err(sqlx::Error::RowNotFound);
+        };
+        let payload: String = source.try_get("payload_json")?;
+        let parsed: serde_json::Value =
+            serde_json::from_str(&payload).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        if parsed.get("status").and_then(|v| v.as_str()) != Some("approved") {
+            return Err(sqlx::Error::Protocol(
+                "only approved memories may be indexed".into(),
+            ));
+        }
+        let sequence: i64 = source.try_get("sequence")?;
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "INSERT INTO memory_vector_index (memory_id, workspace_id, chat_id, task_id, project_id, owner_agent_id, visibility, status, qoin_vector_json, key_metadata_json, value_payload_json, tags_json, dependency_ids_json, outcome_score, evidence_score, source_event_sequence, model_version, indexed_at, source_kind) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'memory_entry') ON CONFLICT(memory_id) DO UPDATE SET workspace_id=excluded.workspace_id, chat_id=excluded.chat_id, task_id=excluded.task_id, project_id=excluded.project_id, owner_agent_id=excluded.owner_agent_id, visibility=excluded.visibility, status='approved', qoin_vector_json=excluded.qoin_vector_json, key_metadata_json=excluded.key_metadata_json, value_payload_json=excluded.value_payload_json, tags_json=excluded.tags_json, dependency_ids_json=excluded.dependency_ids_json, outcome_score=excluded.outcome_score, evidence_score=excluded.evidence_score, source_event_sequence=excluded.source_event_sequence, model_version=excluded.model_version, indexed_at=excluded.indexed_at, source_kind='memory_entry'"
+        ).bind(input.memory_id.to_string()).bind(input.workspace_id.to_string())
+            .bind(input.chat_id.to_string()).bind(input.task_id.map(|v| v.to_string()))
+            .bind(input.project_id.map(|v| v.to_string())).bind(input.owner_agent_id.map(|v| v.to_string()))
+            .bind(input.visibility).bind(serde_json::to_string(&input.vector).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
+            .bind(serde_json::json!({"tags": &input.tags, "dependencies": &input.dependency_ids}).to_string())
+            .bind(payload).bind(serde_json::to_string(&input.tags).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
+            .bind(serde_json::to_string(&input.dependency_ids).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
+            .bind(input.outcome_score).bind(input.evidence_score).bind(sequence)
+            .bind(input.vector.model_version).bind(now).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    pub async fn prepare_handover(
+        &self,
+        request: HandoverRequest,
+    ) -> Result<HandoverContext, sqlx::Error> {
+        request
+            .query
+            .validate()
+            .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let epoch = self
+            .latest_epoch(request.workspace_id)
+            .await?
+            .ok_or(sqlx::Error::RowNotFound)?;
+        let rows = sqlx::query(
+            "SELECT e.memory_id, e.source_kind, e.qoin_vector_json, e.value_payload_json, e.tags_json, e.dependency_ids_json, e.outcome_score, e.evidence_score, e.source_event_sequence FROM memory_epoch_items e JOIN memory_vector_index live ON live.memory_id = e.memory_id AND live.status = 'approved' AND live.workspace_id = e.workspace_id AND live.source_kind = e.source_kind AND live.source_event_sequence = e.source_event_sequence AND live.visibility = e.visibility AND live.task_id IS e.task_id AND live.project_id IS e.project_id AND live.owner_agent_id IS e.owner_agent_id AND live.workspace_id = e.workspace_id AND live.source_kind = e.source_kind AND live.source_event_sequence = e.source_event_sequence AND live.visibility = e.visibility AND live.task_id IS e.task_id AND live.project_id IS e.project_id AND live.owner_agent_id IS e.owner_agent_id WHERE e.epoch_id = ? AND e.workspace_id = ? AND (e.visibility = 'workspace_shared' OR (e.visibility = 'agent_private' AND e.owner_agent_id = ?) OR (e.visibility = 'task_shared' AND e.task_id = ?) OR (e.visibility = 'project_shared' AND e.project_id = ?)) ORDER BY e.source_event_sequence DESC"
+        ).bind(epoch.id.to_string()).bind(request.workspace_id.to_string()).bind(request.agent_id.to_string())
+            .bind(request.task_id.map(|v| v.to_string())).bind(request.project_id.map(|v| v.to_string()))
+            .fetch_all(&self.pool).await?;
+        let mut memories = Vec::with_capacity(rows.len());
+        let mut payloads = std::collections::HashMap::new();
+        for row in rows {
+            let id_text: String = row.try_get("memory_id")?;
+            let id = Uuid::parse_str(&id_text).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let source_kind: String = row.try_get("source_kind")?;
+            let vector_json: String = row.try_get("qoin_vector_json")?;
+            let vector: QoinVector =
+                serde_json::from_str(&vector_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            if vector.model_version != request.query.model_version {
+                continue;
+            }
+            let tags_json: String = row.try_get("tags_json")?;
+            let tags: BTreeSet<String> =
+                serde_json::from_str(&tags_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let deps_json: String = row.try_get("dependency_ids_json")?;
+            let deps_vec: Vec<Uuid> =
+                serde_json::from_str(&deps_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let dependencies = deps_vec.into_iter().collect::<BTreeSet<_>>();
+            let value: String = row.try_get("value_payload_json")?;
+            let outcome: f32 = row.try_get("outcome_score")?;
+            let evidence: f32 = row.try_get("evidence_score")?;
+            let sequence: i64 = row.try_get("source_event_sequence")?;
+            payloads.insert(id, (value, sequence));
+            memories.push(AttentionMemory {
+                memory_id: id,
+                source_kind,
+                key: vector,
+                value: id.to_string(),
+                outcome_score: outcome,
+                evidence_score: evidence,
+                source_event_sequence: sequence,
+                tags,
+                dependency_ids: dependencies,
+            });
+        }
+        let query = AttentionQuery {
+            query: request.query,
+            heads: request.heads,
+            tags: request.tags,
+            dependency_ids: request.dependency_ids,
+        };
+        let ranked =
+            qkv_attention(&query, &memories).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let selection = pareto_select(&ranked, &request.pareto)
+            .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let session_id = Uuid::new_v4();
+        let initial_ids = selection
+            .initial
+            .iter()
+            .map(|s| s.memory_id)
+            .collect::<Vec<_>>();
+        sqlx::query(
+            "INSERT INTO agent_memory_sessions (session_id, workspace_id, agent_id, task_id, memory_epoch_id, initial_memory_ids_json, retrieved_memory_ids_json, created_at, project_id) VALUES (?, ?, ?, ?, ?, ?, '[]', ?, ?)"
+        ).bind(session_id.to_string()).bind(request.workspace_id.to_string())
+            .bind(request.agent_id.to_string()).bind(request.task_id.map(|v| v.to_string()))
+            .bind(epoch.id.to_string()).bind(serde_json::to_string(&initial_ids).map_err(|e| sqlx::Error::Encode(Box::new(e)))?)
+            .bind(Utc::now().to_rfc3339()).bind(request.project_id.map(|v| v.to_string())).execute(&self.pool).await?;
+        let initial = selection
+            .initial
+            .iter()
+            .filter_map(|score| {
+                payloads
+                    .get(&score.memory_id)
+                    .map(|(payload, sequence)| HandoverMemory {
+                        memory_id: score.memory_id,
+                        source_kind: memories
+                            .iter()
+                            .find(|memory| memory.memory_id == score.memory_id)
+                            .map(|memory| memory.source_kind.clone())
+                            .unwrap_or_else(|| "memory_entry".into()),
+                        source_event_sequence: *sequence,
+                        payload_json: payload.clone(),
+                        attention_score: score.total,
+                    })
+            })
+            .collect();
+        Ok(HandoverContext {
+            session_id,
+            epoch,
+            initial,
+            deferred_count: selection.deferred.len(),
+            achieved_coverage: selection.achieved_coverage,
+            budget_exhausted: selection.budget_exhausted,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProgressiveRetrievalRequest {
+    pub query: QoinVector,
+    pub heads: usize,
+    pub tags: BTreeSet<String>,
+    pub dependency_ids: BTreeSet<Uuid>,
+    pub limit: usize,
+}
+#[derive(Debug, Clone, Serialize)]
+pub struct ProgressiveRetrieval {
+    pub session_id: Uuid,
+    pub memories: Vec<HandoverMemory>,
+    pub remaining_candidates: usize,
+}
+
+impl MemoryEpochCoordinator {
+    /// Fetch additional context from the agent's pinned epoch. Results are
+    /// recorded in a separate append-only table and never rewrite initial
+    /// context or the global memory snapshot.
+    pub async fn retrieve_progressive(
+        &self,
+        workspace_id: Uuid,
+        agent_id: Uuid,
+        session_id: Uuid,
+        request: ProgressiveRetrievalRequest,
+    ) -> Result<ProgressiveRetrieval, sqlx::Error> {
+        request
+            .query
+            .validate()
+            .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let session = sqlx::query(
+            "SELECT memory_epoch_id, task_id, project_id FROM agent_memory_sessions WHERE session_id = ? AND workspace_id = ? AND agent_id = ?"
+        ).bind(session_id.to_string()).bind(workspace_id.to_string()).bind(agent_id.to_string())
+            .fetch_optional(&self.pool).await?.ok_or(sqlx::Error::RowNotFound)?;
+        let epoch_id: String = session.try_get("memory_epoch_id")?;
+        let task_id: Option<String> = session.try_get("task_id")?;
+        let project_id: Option<String> = session.try_get("project_id")?;
+        let rows = sqlx::query(
+            "SELECT e.memory_id, e.source_kind, e.qoin_vector_json, e.value_payload_json, e.tags_json, e.dependency_ids_json, e.outcome_score, e.evidence_score, e.source_event_sequence FROM memory_epoch_items e JOIN memory_vector_index live ON live.memory_id = e.memory_id AND live.status = 'approved' AND live.workspace_id = e.workspace_id AND live.source_kind = e.source_kind AND live.source_event_sequence = e.source_event_sequence AND live.visibility = e.visibility AND live.task_id IS e.task_id AND live.project_id IS e.project_id AND live.owner_agent_id IS e.owner_agent_id WHERE e.epoch_id = ? AND e.workspace_id = ? AND (e.visibility = 'workspace_shared' OR (e.visibility = 'agent_private' AND e.owner_agent_id = ?) OR (e.visibility = 'task_shared' AND e.task_id = ?) OR (e.visibility = 'project_shared' AND e.project_id = ?)) AND NOT EXISTS (SELECT 1 FROM agent_memory_sessions s, json_each(s.initial_memory_ids_json) j WHERE s.session_id = ? AND j.value = e.memory_id) AND NOT EXISTS (SELECT 1 FROM agent_memory_session_retrievals r WHERE r.session_id = ? AND r.memory_id = e.memory_id) ORDER BY e.source_event_sequence DESC"
+        ).bind(&epoch_id).bind(workspace_id.to_string()).bind(agent_id.to_string())
+            .bind(task_id).bind(project_id).bind(session_id.to_string()).bind(session_id.to_string())
+            .fetch_all(&self.pool).await?;
+        let mut candidates = Vec::with_capacity(rows.len());
+        let mut payloads = std::collections::HashMap::new();
+        for row in rows {
+            let id_text: String = row.try_get("memory_id")?;
+            let id = Uuid::parse_str(&id_text).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let source_kind: String = row.try_get("source_kind")?;
+            let vector_json: String = row.try_get("qoin_vector_json")?;
+            let vector: QoinVector =
+                serde_json::from_str(&vector_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            if vector.model_version != request.query.model_version {
+                continue;
+            }
+            let tags_json: String = row.try_get("tags_json")?;
+            let tags: BTreeSet<String> =
+                serde_json::from_str(&tags_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let deps_json: String = row.try_get("dependency_ids_json")?;
+            let dependencies: Vec<Uuid> =
+                serde_json::from_str(&deps_json).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let payload: String = row.try_get("value_payload_json")?;
+            let outcome: f32 = row.try_get("outcome_score")?;
+            let evidence: f32 = row.try_get("evidence_score")?;
+            let sequence: i64 = row.try_get("source_event_sequence")?;
+            payloads.insert(id, (payload, sequence));
+            candidates.push(AttentionMemory {
+                memory_id: id,
+                source_kind,
+                key: vector,
+                value: id.to_string(),
+                outcome_score: outcome,
+                evidence_score: evidence,
+                source_event_sequence: sequence,
+                tags,
+                dependency_ids: dependencies.into_iter().collect(),
+            });
+        }
+        let ranked = qkv_attention(
+            &AttentionQuery {
+                query: request.query,
+                heads: request.heads,
+                tags: request.tags,
+                dependency_ids: request.dependency_ids,
+            },
+            &candidates,
+        )
+        .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+        let limit = request.limit.max(1);
+        let remaining_candidates = ranked.len().saturating_sub(limit);
+        let selected = ranked.into_iter().take(limit).collect::<Vec<_>>();
+        let mut memories = Vec::with_capacity(selected.len());
+        for score in selected {
+            if let Some((payload, sequence)) = payloads.get(&score.memory_id) {
+                sqlx::query("INSERT OR IGNORE INTO agent_memory_session_retrievals (session_id, memory_id, retrieved_at) VALUES (?, ?, ?)")
+                    .bind(session_id.to_string()).bind(score.memory_id.to_string())
+                    .bind(Utc::now().to_rfc3339()).execute(&self.pool).await?;
+                memories.push(HandoverMemory {
+                    memory_id: score.memory_id,
+                    source_kind: candidates
+                        .iter()
+                        .find(|memory| memory.memory_id == score.memory_id)
+                        .map(|memory| memory.source_kind.clone())
+                        .unwrap_or_else(|| "memory_entry".into()),
+                    source_event_sequence: *sequence,
+                    payload_json: payload.clone(),
+                    attention_score: score.total,
+                });
+            }
+        }
+        Ok(ProgressiveRetrieval {
+            session_id,
+            memories,
+            remaining_candidates,
+        })
+    }
+}
+
