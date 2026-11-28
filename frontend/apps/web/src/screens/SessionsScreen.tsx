@@ -6,7 +6,7 @@ import ExploreScreen from "./ExploreScreen";
 import ProfileModal from "../modals/ProfileModal";
 import SessionCard from "../views/SessionCard";
 import { auth } from "../firebase";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup } from "firebase/auth";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 
 import type {
   Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage,
