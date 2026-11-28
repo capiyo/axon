@@ -171,6 +171,7 @@ impl AppState {
     pub async fn reserve_model_spend(
         &self,
         user_id: Uuid,
+        workspace_id: Uuid,
         usage_date: &str,
         amount_micros: u64,
         daily_limit_micros: u64,
@@ -178,7 +179,7 @@ impl AppState {
         match &self.storage {
             Some(storage) => {
                 storage
-                    .reserve_model_spend(user_id, usage_date, amount_micros, daily_limit_micros)
+                    .reserve_model_spend(user_id, workspace_id, usage_date, amount_micros, daily_limit_micros)
                     .await
             }
             None => Ok(false),
