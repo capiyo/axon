@@ -916,6 +916,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn memory_event_and_audit_write_share_one_transaction() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let account = storage
+            .ensure_firebase_user("axon-test", "memory-atomicity-user")
+            .await
+            .unwrap();
+        let store = storage.chat_memory_store();
+        let workspace_id = account.workspace.id;
+        let chat = store
+            .create_chat(
+                workspace_id,
+                account.user_id,
+                "human:test",
+                "Atomic memory writes".into(),
+            )
+            .await
+            .unwrap();
+
+        sqlx::query("CREATE TRIGGER fail_memory_audit BEFORE INSERT ON audit_events WHEN NEW.event_type = 'memory.created' BEGIN SELECT RAISE(ABORT, 'test audit failure'); END")
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        let failed = store
+            .create_memory_entry(
+                workspace_id,
+                chat.id,
+                "human:test",
+                CreateMemoryEntry {
+                    entry_type: "note".into(),
+                    text: "This event must roll back with its audit failure.".into(),
+                    reason: None,
+                    source_message_id: None,
+                },
+            )
+            .await;
+        assert!(failed.is_err());
+
+        let event_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM memory_events WHERE chat_id = ?")
+                .bind(chat.id.to_string())
+                .fetch_one(&store.pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            event_count, 0,
+            "memory event and audit write share one transaction"
+        );
+
+        sqlx::query("DROP TRIGGER fail_memory_audit")
+            .execute(&store.pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
     async fn chat_reads_are_workspace_scoped_and_archived_chats_disappear_from_list() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let account = storage
