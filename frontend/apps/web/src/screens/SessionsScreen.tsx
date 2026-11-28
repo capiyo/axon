@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import WorkspaceView from "../views/WorkspaceView";
 import HomeScreen from "./HomeScreen";
 import SessionPanel from "./ChatsScreen";
