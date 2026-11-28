@@ -81,14 +81,28 @@ fn is_low_risk_quick(level: &TaskLevel, title: &str, objective: &str) -> bool {
     !high_risk_terms.iter().any(|term| text.contains(term))
 }
 
-
 fn task_risk_score(title: &str, objective: &str) -> f64 {
     let text = format!("{title} {objective}").to_ascii_lowercase();
     let high_risk_terms = [
-        "delete", "drop table", "truncate", "migration", "deploy", "production",
-        "security", "authentication", "authorization", "password", "secret",
-        "payment", "financial", "medical", "legal", "shell", "database",
-        "credential", "account access",
+        "delete",
+        "drop table",
+        "truncate",
+        "migration",
+        "deploy",
+        "production",
+        "security",
+        "authentication",
+        "authorization",
+        "password",
+        "secret",
+        "payment",
+        "financial",
+        "medical",
+        "legal",
+        "shell",
+        "database",
+        "credential",
+        "account access",
     ];
     if high_risk_terms.iter().any(|term| text.contains(term)) {
         0.95
@@ -108,7 +122,10 @@ fn task_ambiguity(title: &str, objective: &str) -> f64 {
         "make it better",
         "figure it out",
     ];
-    let vague_count = vague_terms.iter().filter(|term| text.contains(**term)).count();
+    let vague_count = vague_terms
+        .iter()
+        .filter(|term| text.contains(**term))
+        .count();
     if vague_count >= 2 || objective.len() > 8_000 {
         0.85
     } else if vague_count == 1 || objective.len() > 4_000 {
@@ -390,8 +407,8 @@ pub async fn create_run(
     run.assignment_category = Some(profile.category.clone());
     let risk = task_risk_score(&run.title, &run.objective);
     let ambiguity = task_ambiguity(&run.title, &run.objective);
-    let policy_escalated = (risk >= 0.80 || ambiguity >= 0.75)
-        && profile.level != TaskLevel::Important;
+    let policy_escalated =
+        (risk >= 0.80 || ambiguity >= 0.75) && profile.level != TaskLevel::Important;
     if policy_escalated {
         // Quick tasks with material risk or ambiguity require the checklist and
         // independent review stages rather than bypassing supervision.
@@ -451,13 +468,17 @@ pub async fn create_run(
         }
     }
     if policy_escalated
-        && assignment.as_ref().is_ok_and(|plan| plan.level != TaskLevel::Important)
+        && assignment
+            .as_ref()
+            .is_ok_and(|plan| plan.level != TaskLevel::Important)
     {
         // Do not silently trade away mandatory supervision to satisfy a budget.
         assignment = Err(crate::model_registry::AssignmentError::BudgetExceeded);
     }
     let has_alternative = assignment.as_ref().is_ok_and(|plan| {
-        plan.decisions.iter().any(|decision| decision.candidates_considered.len() > 1)
+        plan.decisions
+            .iter()
+            .any(|decision| decision.candidates_considered.len() > 1)
     });
     let capability_fit = assignment
         .as_ref()
@@ -513,20 +534,20 @@ pub async fn create_run(
     let action_notice = match action {
         crate::vector_decision::AgentAction::Execute => {
             Some("Vector policy selected execution.".to_string())
-        },
+        }
         crate::vector_decision::AgentAction::Delegate => {
             Some("Vector policy recommends delegation.".to_string())
-        },
+        }
         crate::vector_decision::AgentAction::Split => Some(
             "Vector policy requires task decomposition in the checklist before workers proceed."
                 .to_string(),
         ),
         crate::vector_decision::AgentAction::RequestEvidence => {
             Some("Vector policy requires more evidence before execution.".to_string())
-        },
+        }
         crate::vector_decision::AgentAction::Escalate => {
             Some("Vector policy escalated this task to higher supervision.".to_string())
-        },
+        }
         crate::vector_decision::AgentAction::Abstain => Some(
             "Vector policy abstained because no eligible agent assignment was available."
                 .to_string(),
@@ -548,7 +569,11 @@ pub async fn create_run(
             if let Some(notice) = action_notice.clone() {
                 notices.push(notice);
             }
-            run.assignment_notice = if notices.is_empty() { None } else { Some(notices.join(" ")) };
+            run.assignment_notice = if notices.is_empty() {
+                None
+            } else {
+                Some(notices.join(" "))
+            };
             run.assignment_decisions = plan.decisions;
         }
         Err(error) => {
@@ -871,10 +896,9 @@ mod vector_policy_tests {
 
     #[test]
     fn vague_objectives_are_flagged_for_decomposition() {
-        assert!(task_ambiguity(
-            "Build feature",
-            "Figure it out somehow and handle the rest"
-        ) >= 0.75);
+        assert!(
+            task_ambiguity("Build feature", "Figure it out somehow and handle the rest") >= 0.75
+        );
         assert!(task_ambiguity("Summarize", "Summarize the supplied paragraph") < 0.75);
     }
 }
