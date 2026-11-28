@@ -403,6 +403,7 @@ pub async fn create_run(
         let reserved = state
             .reserve_model_spend(
                 user.user_id,
+                workspace_id,
                 &usage_date,
                 plan.estimated_cost_micros,
                 daily_budget_limit,
