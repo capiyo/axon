@@ -25,7 +25,12 @@ struct ApiError {
 type ApiResult<T> = Result<T, (StatusCode, Json<ApiError>)>;
 
 fn error(status: StatusCode, message: impl Into<String>) -> (StatusCode, Json<ApiError>) {
-    (status, Json(ApiError { error: message.into() }))
+    (
+        status,
+        Json(ApiError {
+            error: message.into(),
+        }),
+    )
 }
 
 fn store_error(err: MemoryStoreError) -> (StatusCode, Json<ApiError>) {
