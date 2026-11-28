@@ -1011,7 +1011,7 @@ function AuthGate() {
       window.google.accounts.id.initialize({
         client_id: clientId,
         auto_select: false,
-        callback: ({ credential }) => {
+        callback: ({ credential }: { credential?: string }) => {
           if (!credential) { setAuthError("Google did not return an identity token."); return; }
           try {
             const nextUser = parseGoogleUser(credential);

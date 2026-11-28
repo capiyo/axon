@@ -26,8 +26,16 @@ pub struct AuthenticatedAgent {
 }
 
 fn platform_admin_allowed(email: Option<&str>) -> bool {
-    let Some(email) = email else { return false; };
-    std::env::var("AXON_PLATFORM_ADMIN_EMAILS").ok().is_some_and(|items| items.split(',').any(|item| item.trim().eq_ignore_ascii_case(email)))
+    let Some(email) = email else {
+        return false;
+    };
+    std::env::var("AXON_PLATFORM_ADMIN_EMAILS")
+        .ok()
+        .is_some_and(|items| {
+            items
+                .split(',')
+                .any(|item| item.trim().eq_ignore_ascii_case(email))
+        })
 }
 
 pub async fn authenticate(
@@ -110,7 +118,12 @@ pub async fn authenticate(
         Err(_) => return response(StatusCode::UNAUTHORIZED),
     };
     let account = match state
-        .ensure_google_user(&identity.sub, &identity.email, identity.name.as_deref(), identity.picture.as_deref())
+        .ensure_google_user(
+            &identity.sub,
+            &identity.email,
+            identity.name.as_deref(),
+            identity.picture.as_deref(),
+        )
         .await
     {
         Ok(account) => account,

@@ -26,8 +26,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let client_ids = env::var("GOOGLE_OAUTH_CLIENT_IDS").map_err(|_| "GOOGLE_OAUTH_CLIENT_IDS must be configured")?;
-    let client_ids = client_ids.split(',').map(str::trim).filter(|id| !id.is_empty()).map(str::to_owned).collect();
+    let client_ids = env::var("GOOGLE_OAUTH_CLIENT_IDS")
+        .map_err(|_| "GOOGLE_OAUTH_CLIENT_IDS must be configured")?;
+    let client_ids = client_ids
+        .split(',')
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
+        .collect();
     let verifier = GoogleVerifier::new(client_ids)?;
     let platform_port = env::var("PORT").ok();
     let host = env::var("AXON_HOST").unwrap_or_else(|_| {
