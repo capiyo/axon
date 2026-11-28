@@ -6,7 +6,7 @@ pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route(
             "/api/v1/admin/providers",
-            routing::get(handlers::model_registry::list_providers).routing::post(handlers::model_registry::create_provider),
+            routing::get(handlers::model_registry::list_providers).post(handlers::model_registry::create_provider),
         )
         .route(
             "/api/v1/admin/providers/:provider_id/terms-review",
@@ -14,7 +14,7 @@ pub(super) fn router() -> Router<AppState> {
         )
         .route(
             "/api/v1/admin/models",
-            routing::get(handlers::model_registry::list_models).routing::post(handlers::model_registry::create_model),
+            routing::get(handlers::model_registry::list_models).post(handlers::model_registry::create_model),
         )
         .route(
             "/api/v1/admin/models/:model_id/review",
