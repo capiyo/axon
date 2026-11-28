@@ -131,3 +131,5 @@ The MongoDB-backed memory import API is versioned and workspace-scoped: `POST /a
 Migration `0021_unique_personal_workspace_id.sql` preserves the original one-user-per-personal-workspace invariant after the personal workspace column was added to the normalized Firebase identity schema.
 
 Conversation import retrieval and memory listing preserve workspace scoping: import lookup never crosses workspaces, and memory listing supports an optional lifecycle-status filter while the context endpoint is restricted to active records.
+
+A task's optional source conversation is private to its creator: only the creator can execute a linked task that injects that conversation into agent context. Workspace membership alone does not grant access to another member's source chat.
