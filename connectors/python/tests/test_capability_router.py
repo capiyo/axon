@@ -75,7 +75,7 @@ def test_capability_router_requires_explicit_provider_sharing() -> None:
     with pytest.raises(PermissionError, match="explicit provider-sharing approval"):
         asyncio.run(
             run_majority_route(
-                workspace_id="workspace-1",
+                workspace_id=str(uuid4()),
                 capability="visual_design",
                 task_brief="Design a dashboard.",
                 models=(),
@@ -84,6 +84,8 @@ def test_capability_router_requires_explicit_provider_sharing() -> None:
 
 
 def test_capability_router_requires_firebase_auth_for_persistence() -> None:
+    from uuid import uuid4
+
     with pytest.raises(ValueError, match="AXON_FIREBASE_ID_TOKEN"):
         asyncio.run(
             run_majority_route(

@@ -186,7 +186,10 @@ pub async fn memory_context(
 ) -> ApiResult<Json<Vec<MemoryRecord>>> {
     require_member(&state, &user, workspace_id).await?;
     if query.q.as_ref().is_some_and(|value| value.len() > 120) {
-        return Err(error(StatusCode::BAD_REQUEST, "Memory search query must not exceed 120 characters."));
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "Memory search query must not exceed 120 characters.",
+        ));
     }
     let records = repository(&state)?
         .list_memories(
@@ -234,4 +237,3 @@ pub async fn review_memory(
         )
     })
 }
-
