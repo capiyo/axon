@@ -586,6 +586,7 @@ mod tests {
                 || path.contains("/supervisor-runs")
                 || path.contains("/messages")
                 || path.contains("/memory")
+                || path.contains("/agent-memories")
                 || path.ends_with("/members")
                 || path.contains("/credentials")
                 || path.contains("/projects/")
