@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        firebase_auth::FirebaseVerifier,
+        google_auth::GoogleVerifier,
         memory_store::MemoryStore,
         model::{Agent, ConnectionMode, Task, TaskStatus},
         storage::SqliteStorage,
@@ -26,9 +26,9 @@ mod tests {
             .await
             .unwrap()
             .with_agent_memory_store(Some(memory_store))
-            .with_firebase_verifier(FirebaseVerifier::test_verifier(), true);
+            .with_google_verifier(GoogleVerifier::test_verifier(), true);
         let first = state
-            .ensure_firebase_user("axon-test-project", "owner-user")
+            .ensure_google_user("owner-user", "owner-user@example.com", None, None)
             .await
             .unwrap();
         state
@@ -87,7 +87,7 @@ mod tests {
     async fn every_registered_api_route_rejects_missing_and_expired_tokens() {
         let (app, state, task_id) = test_app().await;
         let workspace_id = state
-            .ensure_firebase_user("axon-test-project", "owner-user")
+            .ensure_google_user("owner-user", "owner-user@example.com", None, None)
             .await
             .unwrap()
             .workspace
@@ -561,7 +561,7 @@ mod tests {
                 .oneshot(request(
                     method,
                     &path,
-                    Some(FirebaseVerifier::test_token("expired-user", true)),
+                    Some(GoogleVerifier::test_token("expired-user", true)),
                 ))
                 .await
                 .unwrap();
@@ -577,13 +577,13 @@ mod tests {
     async fn another_users_workspace_and_task_resources_are_not_found() {
         let (app, state, task_id) = test_app().await;
         let workspace_id = state
-            .ensure_firebase_user("axon-test-project", "owner-user")
+            .ensure_google_user("owner-user", "owner-user@example.com", None, None)
             .await
             .unwrap()
             .workspace
             .id;
         let owner = state
-            .ensure_firebase_user("axon-test-project", "owner-user")
+            .ensure_google_user("owner-user", "owner-user@example.com", None, None)
             .await
             .unwrap();
         let chat = state
@@ -598,7 +598,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let other_user_token = FirebaseVerifier::test_token("other-user", false);
+        let other_user_token = GoogleVerifier::test_token("other-user", false);
         let paths = [
             format!("/api/v1/workspaces/{workspace_id}/audit"),
             format!("/api/v1/workspaces/{workspace_id}/chats"),
@@ -816,9 +816,9 @@ mod tests {
         let state = AppState::with_storage(storage)
             .await
             .unwrap()
-            .with_firebase_verifier(FirebaseVerifier::test_verifier(), false);
+            .with_google_verifier(GoogleVerifier::test_verifier(), false);
         let app = crate::app(state);
-        let token = FirebaseVerifier::test_token("dev-user", false);
+        let token = GoogleVerifier::test_token("dev-user", false);
         let response = app
             .oneshot(request(
                 "GET",
@@ -833,7 +833,7 @@ mod tests {
     async fn scoped_agent_memory_requires_review_and_explicit_cross_agent_grants() {
         let (app, state, _) = test_app().await;
         let owner = state
-            .ensure_firebase_user("axon-test-project", "owner-user")
+            .ensure_google_user("owner-user", "owner-user@example.com", None, None)
             .await
             .unwrap();
         let owner_agent_id = Uuid::new_v4();
@@ -855,7 +855,7 @@ mod tests {
                 },
             );
         }
-        let token = FirebaseVerifier::test_token("owner-user", false);
+        let token = GoogleVerifier::test_token("owner-user", false);
         let base = format!("/api/v1/workspaces/{}/agent-memories", owner.workspace.id);
 
         let proposed = app

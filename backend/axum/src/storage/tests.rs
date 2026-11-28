@@ -110,8 +110,8 @@ mod tests {
         let database_url = format!("sqlite://{}", database_path.display());
         let storage = SqliteStorage::connect(&database_url).await.unwrap();
         let (first, second) = tokio::join!(
-            storage.ensure_firebase_user("axon-project", "same-firebase-uid"),
-            storage.ensure_firebase_user("axon-project", "same-firebase-uid"),
+            storage.ensure_google_user("same-firebase-uid", "same-firebase-uid@example.com", None, None),
+            storage.ensure_google_user("same-firebase-uid", "same-firebase-uid@example.com", None, None),
         );
         let first = first.unwrap();
         let second = second.unwrap();
@@ -140,7 +140,7 @@ mod tests {
     async fn workspace_membership_requires_an_existing_workspace_entity() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let account = storage
-            .ensure_firebase_user("axon-project", "membership-integrity-user")
+            .ensure_google_user("membership-integrity-user", "membership-integrity-user@example.com", None, None)
             .await
             .unwrap();
         let missing_workspace_id = Uuid::new_v4();
@@ -272,11 +272,11 @@ mod tests {
     async fn personal_workspace_ids_are_unique_across_users() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let first = storage
-            .ensure_firebase_user("axon-project", "personal-workspace-owner-a")
+            .ensure_google_user("personal-workspace-owner-a", "personal-workspace-owner-a@example.com", None, None)
             .await
             .unwrap();
         let second = storage
-            .ensure_firebase_user("axon-project", "personal-workspace-owner-b")
+            .ensure_google_user("personal-workspace-owner-b", "personal-workspace-owner-b@example.com", None, None)
             .await
             .unwrap();
         assert_ne!(first.workspace.id, second.workspace.id);
