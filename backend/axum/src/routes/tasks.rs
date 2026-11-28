@@ -6,7 +6,7 @@ pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route(
             "/api/v1/workspaces/:workspace_id/tasks",
-            routing::get(handlers::tasks::list_tasks).routing::post(handlers::tasks::create_task),
+            routing::get(handlers::tasks::list_tasks).post(handlers::tasks::create_task),
         )
         .route(
             "/api/v1/tasks/:task_id/submit",
