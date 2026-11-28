@@ -6,7 +6,7 @@ pub(super) fn router() -> Router<AppState> {
     Router::new()
         .route(
             "/api/v1/workspaces/:workspace_id/chats",
-            routing::get(handlers::chats::list_chats).routing::post(handlers::chats::create_chat),
+            routing::get(handlers::chats::list_chats).post(handlers::chats::create_chat),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/chats/:chat_id",
