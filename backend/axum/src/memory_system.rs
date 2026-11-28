@@ -424,8 +424,6 @@ mod tests {
         assert!(lexical_relevance("portfolio risk model", "portfolio risk model design") > 0.7);
     }
 
-
-
     #[test]
     fn proposed_shared_memory_waits_for_human_verification() {
         let workspace = Uuid::new_v4();
