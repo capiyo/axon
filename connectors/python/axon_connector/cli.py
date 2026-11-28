@@ -8,7 +8,7 @@ import json
 import os
 import sys
 
-from .api import AxonApiClient
+from .api import AxonApiClient, AxonApiError
 from .models import AxonEnvelope
 from .providers.chatgpt import load_chatgpt_export
 from .providers.claude import load_claude_export
@@ -130,7 +130,7 @@ async def _run(args: argparse.Namespace) -> int:
             )
             print(f"Saved provider response to Axon artifact {saved['id']}.")
         return 0
-    except (OSError, ValueError, PermissionError, DeepSeekError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, PermissionError, AxonApiError, DeepSeekError, json.JSONDecodeError) as exc:
         print(f"axon-bridge: {exc}", file=sys.stderr)
         return 2
 
