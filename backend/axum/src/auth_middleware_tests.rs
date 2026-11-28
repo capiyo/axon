@@ -42,6 +42,8 @@ mod tests {
             Task {
                 id: task_id,
                 workspace_id: first.workspace.id,
+                created_by: first.user_id,
+                source_chat_id: None,
                 title: "Private task".into(),
                 objective: "Test resource isolation".into(),
                 assignee_agent_id: Uuid::new_v4(),
@@ -604,13 +606,9 @@ mod tests {
                 "/api/v1/workspaces/{workspace_id}/agents/{}/credentials",
                 Uuid::new_v4()
             ),
-            format!("/api/v1/tasks/{task_id}/submit"),
-            format!("/api/v1/tasks/{task_id}/transitions"),
         ];
         for path in paths {
-            let method = if path.contains("/submit")
-                || path.contains("/transitions")
-                || path.contains("/capability-polls")
+            let method = if path.contains("/capability-polls")
                 || path.contains("/supervisor-runs")
                 || path.contains("/messages")
                 || path.contains("/memory")
@@ -635,6 +633,53 @@ mod tests {
                 StatusCode::NOT_FOUND,
                 "cross-user access: {method} {path}"
             );
+        }
+
+        let task_create = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                &format!("/api/v1/workspaces/{workspace_id}/tasks"),
+                Some(other_user_token.clone()),
+                serde_json::json!({
+                    "title": "Unauthorized task",
+                    "objective": "Must be rejected",
+                    "assignee_agent_id": Uuid::new_v4()
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(task_create.status(), StatusCode::NOT_FOUND);
+
+        for (path, body) in [
+            (
+                format!("/api/v1/tasks/{task_id}/submit"),
+                serde_json::json!({
+                    "expected_version": 1,
+                    "title": "Unauthorized response",
+                    "content": "Must be rejected"
+                }),
+            ),
+            (
+                format!("/api/v1/tasks/{task_id}/transition"),
+                serde_json::json!({
+                    "expected_version": 1,
+                    "status": "acknowledged",
+                    "note": "Must be rejected"
+                }),
+            ),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(json_request(
+                    "POST",
+                    &path,
+                    Some(other_user_token.clone()),
+                    body,
+                ))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "cross-user task access: {path}");
         }
     }
 
