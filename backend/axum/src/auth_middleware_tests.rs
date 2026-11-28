@@ -329,7 +329,6 @@ mod tests {
             (
                 "POST",
                 format!("/api/v1/workspaces/{workspace_id}/memory/documents"),
-            format!("/api/v1/workspaces/{workspace_id}/agent-memories"),
             ),
             (
                 "GET",
