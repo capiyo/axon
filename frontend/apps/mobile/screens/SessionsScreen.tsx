@@ -20,8 +20,16 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { axonTheme } from "../../../packages/theme/src";
-import { auth } from "../firebase";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signOut } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+type GoogleUser = { uid: string; displayName: string | null; email: string | null; photoURL: string | null };
+let googleIdToken: string | null = null;
+function parseGoogleUser(token: string): GoogleUser {
+  const payload = token.split(".")[1]?.replace(/-/g, "+").replace(/_/g, "/");
+  if (!payload) throw new Error("Google returned an invalid identity token.");
+  const claims = JSON.parse(globalThis.atob(payload)) as { sub: string; name?: string; email?: string; picture?: string; exp: number };
+  if (!claims.sub || claims.exp * 1000 <= Date.now()) throw new Error("Google identity token has expired. Please sign in again.");
+  return { uid: claims.sub, displayName: claims.name ?? null, email: claims.email ?? null, photoURL: claims.picture ?? null };
+}
 import { useIdTokenAuthRequest } from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
 
@@ -33,7 +41,7 @@ WebBrowser.maybeCompleteAuthSession();
 const API_BASE_URL = process.env.EXPO_PUBLIC_AXON_API_URL ?? "http://127.0.0.1:8080";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = await auth?.currentUser?.getIdToken();
+  const token = googleIdToken;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init?.headers }
@@ -74,7 +82,7 @@ function ActionButton({ label, onPress, disabled = false, secondary = false }: {
   );
 }
 
-function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
+function WorkspaceApp({ user, onSignOut }: { user: GoogleUser; onSignOut: () => void }) {
   const [health, setHealth] = useState<Health | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selected, setSelected] = useState<Workspace | null>(null);
@@ -746,7 +754,7 @@ function WorkspaceApp({ user }: { user: import("firebase/auth").User }) {
                 {agents.map(agent => <Pressable key={agent.id} onPress={() => setAssignee(agent.id)} style={[styles.agentChoice,assignee===agent.id && styles.agentChoiceActive]}><Text style={styles.rowTitle}>{agent.display_name} · {agent.provider}</Text></Pressable>)}
                 <ActionButton label="Create handoff" onPress={createTask} disabled={!taskTitle.trim() || !taskObjective.trim() || !assignee || busy}/>
                 {tasks.map(task => <View key={task.id} style={styles.listRow}><Text style={styles.rowTitle}>{task.title}</Text><Text style={styles.rowMeta}>{task.status.replaceAll("_"," ")} · {task.transitions.length} events</Text>{["offered","acknowledged","in_progress","changes_requested"].includes(task.status) ? <ActionButton label="Run assigned agent" onPress={() => void executeTask(task)} disabled={busy}/> : null}{nextTaskStatus[task.status] ? <ActionButton label={`Advance to ${nextTaskStatus[task.status].replaceAll("_"," ")}`} onPress={() => advanceTask(task,nextTaskStatus[task.status])} disabled={busy} secondary/> : null}{task.status === "in_progress" ? <><TextInput value={responseDrafts[task.id] ?? ""} onChangeText={value => setResponseDrafts(current => ({...current,[task.id]:value}))} placeholder="Capture agent response…" style={[styles.input,styles.multiline]} multiline/><ActionButton label="Submit response" onPress={() => submitTaskResponse(task)} disabled={busy || !(responseDrafts[task.id] ?? "").trim()} secondary/></> : null}</View>)}
-                <ActionButton label="Sign out" onPress={() => { if (auth) void signOut(auth); }} secondary/>
+                <ActionButton label="Sign out" onPress={() => { onSignOut() }} secondary/>
               </View>
             </>
   );
@@ -1042,7 +1050,7 @@ const styles = StyleSheet.create({
 
 
 function AuthGate() {
-  const [user, setUser] = useState<import("firebase/auth").User | null>(null);
+  const [user, setUser] = useState<GoogleUser | null>(null);
   const [ready, setReady] = useState(false);
   const [authError, setAuthError] = useState("");
   const [working, setWorking] = useState(false);
@@ -1066,26 +1074,44 @@ function AuthGate() {
   });
 
   useEffect(() => {
-    if (!auth) { setReady(true); return; }
-    return onAuthStateChanged(auth, current => { setUser(current); setReady(true); });
+    let active = true;
+    void AsyncStorage.getItem("axon.google.id_token").then(saved => {
+      if (!active) return;
+      if (saved) {
+        try { googleIdToken = saved; setUser(parseGoogleUser(saved)); }
+        catch { googleIdToken = null; void AsyncStorage.removeItem("axon.google.id_token"); }
+      }
+      setReady(true);
+    }).catch(() => { if (active) setReady(true); });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
     if (response?.type !== "success") return;
     const idToken = response.params.id_token;
-    if (!auth || !idToken) { setAuthError("Google did not return a valid identity token. Please try again."); return; }
+    if (!idToken) { setAuthError("Google did not return a valid identity token. Please try again."); return; }
     setWorking(true);
     setAuthError("");
-    void signInWithCredential(auth, GoogleAuthProvider.credential(idToken))
-      .catch(cause => setAuthError(cause instanceof Error ? cause.message : "Google sign-in failed."))
-      .finally(() => setWorking(false));
+    try {
+      const nextUser = parseGoogleUser(idToken);
+      googleIdToken = idToken;
+      setUser(nextUser);
+      void AsyncStorage.setItem("axon.google.id_token", idToken);
+    } catch (cause) {
+      setAuthError(cause instanceof Error ? cause.message : "Google sign-in failed.");
+    } finally { setWorking(false); }
   }, [response]);
 
-  if (!ready) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><ActivityIndicator/><Text style={styles.muted}>Restoring your secure session…</Text></View></SafeAreaView>;
-  if (!auth) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><Text style={styles.authTitle}>Google Sign-In is not configured</Text><Text style={styles.description}>Configure the Axon identity project and Google OAuth client IDs, then restart the app.</Text></View></SafeAreaView>;
-  if (user) return <WorkspaceApp user={user}/>;
-  if (!googleAuthConfigured) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><Text style={styles.authTitle}>Google Sign-In needs setup</Text><Text style={styles.description}>Add the Google OAuth client ID for this platform to the mobile app environment, then restart Axon.</Text></View></SafeAreaView>;
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.authEyebrow}>YOUR WORK, IN ONE PLACE</Text><Text style={styles.authTitle}>Welcome to Axon</Text><Text style={styles.description}>Continue securely with your Google account. No separate Axon password required.</Text><ActionButton label={working ? "Connecting to Google…" : "Continue with Google"} onPress={()=>{setAuthError("");void promptAsync();}} disabled={working || !request}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}<Text style={styles.authFootnote}>By continuing, you agree to the Terms &amp; Conditions and Privacy Policy.</Text></ScrollView></SafeAreaView>;
-}
+  const signOutGoogle = () => {
+    googleIdToken = null;
+    setUser(null);
+    setAuthError("");
+    void AsyncStorage.removeItem("axon.google.id_token");
+  };
 
+  if (!ready) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><ActivityIndicator/><Text style={styles.muted}>Restoring your secure session…</Text></View></SafeAreaView>;
+  if (user) return <WorkspaceApp user={user} onSignOut={signOutGoogle}/>;
+  if (!googleAuthConfigured) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><Text style={styles.authTitle}>Google Sign-In needs setup</Text><Text style={styles.description}>Add the Google OAuth client ID for this platform to the mobile app environment, then restart Axon.</Text></View></SafeAreaView>;
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.authEyebrow}>YOUR WORK, IN ONE PLACE</Text><Text style={styles.authTitle}>Welcome to Axon</Text><Text style={styles.description}>Continue securely with your Google account. No separate Axon password required.</Text><ActionButton label={working ? "Connecting to Google…" : "Continue with Google"} onPress={()=>{setAuthError("");setWorking(true);void promptAsync().finally(()=>setWorking(false));}} disabled={working || !request}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}<Text style={styles.authFootnote}>By continuing, you agree to the Terms &amp; Conditions and Privacy Policy.</Text></ScrollView></SafeAreaView>;
+}
 export default function App() { return <AuthGate />; }
