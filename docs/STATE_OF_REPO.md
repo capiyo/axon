@@ -128,7 +128,11 @@
 
 ## Verification
 
-The historical Phase A CI run referenced in earlier repository notes belongs to the former `capiyo/Qapten-` repository and is not evidence for the current `capiyo/axon` branch. Current-branch Rust formatting, compilation, tests, Clippy, and MongoDB integration status must be taken from checks run against the current branch. They have not been executed from this editing environment.
+- Current master commit verified: `31487eefe520e4e9fada0219fb41a5c0751b25f5` (2026-11-28).
+- GitHub Actions run [46131876294](https://github.com/capiyo/axon/actions/runs/46131876294) completed successfully on this commit.
+- Passed jobs: Rust formatting/Clippy/tests, web typecheck/build, Python connector tests, mobile TypeScript check, and Tauri desktop build.
+- This CI run does **not** establish production readiness or MongoDB integration correctness. Live MongoDB failure/restart, backup/restore, deployment, real-provider inference, and device sign-in remain separate gates.
+- The GitHub repository default branch is still `main`; the authoritative implementation is `master`. The connected GitHub operations available during this audit cannot update repository-level default-branch settings. An owner must change it in Settings → General → Default branch.
 
 ## Architecture direction
 
