@@ -118,7 +118,7 @@ pub struct SupervisorRun {
     pub deterministic_checks: Vec<DeterministicCheck>,
     pub reviews: Vec<SupervisorReview>,
     pub decision: Option<SupervisionDecision>,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub assignment_decisions: Vec<AssignmentDecision>,
     #[serde(default)]
     pub assignment_level: Option<TaskLevel>,
@@ -687,6 +687,28 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn normal_run_serialization_never_exposes_model_assignment_details() {
+        let mut run =
+            SupervisorRun::new(Uuid::new_v4(), "Task".into(), "Objective".into()).unwrap();
+        run.assignment_decisions.push(AssignmentDecision {
+            id: Uuid::new_v4(),
+            run_id: run.id,
+            role: crate::model_registry::AssignmentRole::Worker,
+            slot: 0,
+            candidates_considered: vec![Uuid::new_v4()],
+            filters_applied: vec!["approved_only".into()],
+            chosen_model_id: Uuid::new_v4(),
+            reason: "internal model choice".into(),
+            estimated_cost_micros: 100,
+            created_at: Utc::now(),
+        });
+        let value = serde_json::to_value(run).unwrap();
+        assert!(value.get("assignment_decisions").is_none());
+        assert!(value.to_string().find("internal model choice").is_none());
+    }
+
+
     fn normal_level_uses_one_writer_one_worker_and_one_supervisor() {
         let mut run =
             SupervisorRun::new(Uuid::new_v4(), "Normal".into(), "Complete task".into()).unwrap();
