@@ -333,8 +333,18 @@ pub trait Storage: Send + Sync {
         actor_user_id: Uuid,
         target_user_id: Uuid,
     ) -> Result<bool, StorageError>;
-    async fn daily_model_spend(&self, user_id: Uuid, usage_date: &str) -> Result<u64, StorageError>;
-    async fn reserve_model_spend(&self, user_id: Uuid, usage_date: &str, amount_micros: u64, daily_limit_micros: u64) -> Result<bool, StorageError>;
+    async fn daily_model_spend(
+        &self,
+        user_id: Uuid,
+        usage_date: &str,
+    ) -> Result<u64, StorageError>;
+    async fn reserve_model_spend(
+        &self,
+        user_id: Uuid,
+        usage_date: &str,
+        amount_micros: u64,
+        daily_limit_micros: u64,
+    ) -> Result<bool, StorageError>;
 }
 
 #[derive(Clone)]
@@ -1404,37 +1414,88 @@ impl Storage for SqliteStorage {
         tx.commit().await?;
         Ok(workspace)
     }
-    async fn daily_model_spend(&self, user_id: Uuid, usage_date: &str) -> Result<u64, StorageError> {
-        let spent: Option<i64> = sqlx::query_scalar("SELECT spent_micros FROM model_daily_spend WHERE user_id = ? AND usage_date = ?")
-            .bind(user_id.to_string()).bind(usage_date).fetch_optional(&self.pool).await?;
+    async fn daily_model_spend(
+        &self,
+        user_id: Uuid,
+        usage_date: &str,
+    ) -> Result<u64, StorageError> {
+        let spent: Option<i64> = sqlx::query_scalar(
+            "SELECT spent_micros FROM model_daily_spend WHERE user_id = ? AND usage_date = ?",
+        )
+        .bind(user_id.to_string())
+        .bind(usage_date)
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(spent.unwrap_or(0).max(0) as u64)
     }
 
-    async fn reserve_model_spend(&self, user_id: Uuid, usage_date: &str, amount_micros: u64, daily_limit_micros: u64) -> Result<bool, StorageError> {
+    async fn reserve_model_spend(
+        &self,
+        user_id: Uuid,
+        usage_date: &str,
+        amount_micros: u64,
+        daily_limit_micros: u64,
+    ) -> Result<bool, StorageError> {
         let amount = i64::try_from(amount_micros).unwrap_or(i64::MAX);
         let limit = i64::try_from(daily_limit_micros).unwrap_or(i64::MAX);
         let mut tx = self.pool.begin().await?;
         let now = Utc::now().to_rfc3339();
-        sqlx::query("INSERT INTO model_daily_spend (user_id, usage_date, spent_micros, updated_at) VALUES (?, ?, 0, ?) ON CONFLICT(user_id, usage_date) DO NOTHING")
-            .bind(user_id.to_string()).bind(usage_date).bind(&now).execute(&mut *tx).await?;
-        let result = sqlx::query("UPDATE model_daily_spend SET spent_micros = spent_micros + ?, updated_at = ? WHERE user_id = ? AND usage_date = ? AND spent_micros + ? <= ?")
-            .bind(amount).bind(&now).bind(user_id.to_string()).bind(usage_date).bind(amount).bind(limit)
-            .execute(&mut *tx).await?;
+
+        sqlx::query(
+            "INSERT INTO model_daily_spend (user_id, usage_date, spent_micros, updated_at) \
+             VALUES (?, ?, 0, ?) ON CONFLICT(user_id, usage_date) DO NOTHING",
+        )
+        .bind(user_id.to_string())
+        .bind(usage_date)
+        .bind(&now)
+        .execute(&mut *tx)
+        .await?;
+
+        let result = sqlx::query(
+            "UPDATE model_daily_spend \
+             SET spent_micros = spent_micros + ?, updated_at = ? \
+             WHERE user_id = ? AND usage_date = ? AND spent_micros + ? <= ?",
+        )
+        .bind(amount)
+        .bind(&now)
+        .bind(user_id.to_string())
+        .bind(usage_date)
+        .bind(amount)
+        .bind(limit)
+        .execute(&mut *tx)
+        .await?;
+
         if result.rows_affected() == 1 {
             let event = AuditEvent::attributed(
-                format!("human:{user_id}"), None, "assignment_budget.reserved", "daily_model_budget",
+                format!("human:{user_id}"),
+                None,
+                "assignment_budget.reserved",
+                "daily_model_budget",
                 format!("{user_id}:{usage_date}"),
-                serde_json::json!({"reserved_micros": amount_micros, "daily_limit_micros": daily_limit_micros}),
+                serde_json::json!({
+                    "reserved_micros": amount_micros,
+                    "daily_limit_micros": daily_limit_micros
+                }),
             );
-            sqlx::query("INSERT INTO audit_events (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)")
-                .bind(event.event_id.to_string()).bind(event.actor).bind(event.event_type).bind(event.entity_type)
-                .bind(event.entity_id).bind(event.occurred_at.to_rfc3339()).bind(serde_json::to_string(&event.metadata)?)
-                .execute(&mut *tx).await?;
+            sqlx::query(
+                "INSERT INTO audit_events \
+                 (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) \
+                 VALUES (?, NULL, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(event.event_id.to_string())
+            .bind(event.actor)
+            .bind(event.event_type)
+            .bind(event.entity_type)
+            .bind(event.entity_id)
+            .bind(event.occurred_at.to_rfc3339())
+            .bind(serde_json::to_string(&event.metadata)?)
+            .execute(&mut *tx)
+            .await?;
         }
+
         tx.commit().await?;
         Ok(result.rows_affected() == 1)
     }
-
 }
 
 #[cfg(test)]
