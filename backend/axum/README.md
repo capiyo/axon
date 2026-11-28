@@ -42,7 +42,7 @@ JWKS keys are cached according to upstream cache headers. An unknown key ID trig
 
 The first successful authentication creates or resolves one internal Axon user and one personal workspace for the Firebase UID. Provider + subject is unique; user, workspace, membership and initial audit event are created transactionally. Workspace membership records are separate from provider identity so invitations can be added later.
 
-Axon does not expose a password or SMS sign-in endpoint. Web/mobile clients must sign in directly through Firebase Auth and send the resulting ID token to this API. For Kenya, phone sign-in is the preferred client flow; configure Firebase SMS quotas, abuse protections and client-side resend cooldowns. Google and email-link sign-in are intended fallbacks.
+Axon does not expose a password or SMS sign-in endpoint. Web/mobile clients must sign in directly through Firebase Auth and send the resulting ID token to this API. Google Sign-In is currently the only user-facing web/mobile authentication flow. Configure the Google provider, OAuth client IDs, authorized domains, and Android signing fingerprints in the dedicated Axon Firebase project; verify sign-in on real web and mobile clients before production. Do not document phone/SMS or email-link sign-in as available until those flows are implemented and tested.
 
 ## Public route
 
