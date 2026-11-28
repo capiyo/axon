@@ -54,7 +54,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(settings) => {
             capability_memory = Some(Arc::new(
                 MemoryRepository::connect(&settings.uri, &settings.database).await
-                    .map_err(|_| "MongoDB capability and imported-memory repository failed its connection check")?,
+                    .map_err(|_| {
+                        "MongoDB capability and imported-memory repository failed its connection check"
+                    })?,
             ));
             let repository = MongoMemoryDocumentRepository::connect_with_options(
                     &settings.uri,
