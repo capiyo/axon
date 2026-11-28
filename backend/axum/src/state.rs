@@ -179,7 +179,13 @@ impl AppState {
         match &self.storage {
             Some(storage) => {
                 storage
-                    .reserve_model_spend(user_id, workspace_id, usage_date, amount_micros, daily_limit_micros)
+                    .reserve_model_spend(
+                        user_id,
+                        workspace_id,
+                        usage_date,
+                        amount_micros,
+                        daily_limit_micros,
+                    )
                     .await
             }
             None => Ok(false),
