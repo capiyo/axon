@@ -856,7 +856,7 @@ function WorkspaceApp({ user, onSignOut }: { user: GoogleUser; onSignOut: () => 
           <Pressable style={styles.mobileMenuItem} onPress={() => { setActiveTab("explore"); setMobileChatOpen(false); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Explore agents</Text></Pressable>
           <Pressable style={styles.mobileMenuItem} onPress={() => { setProfileOpen(true); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>Profile & workspace settings</Text></Pressable>
           <Pressable style={styles.mobileMenuItem} onPress={() => { setSelected(null); setActiveTab("chats"); setMenuOpen(false); }}><Text style={styles.mobileMenuItemText}>All workspaces</Text></Pressable>
-          <Pressable style={styles.mobileMenuItem} onPress={() => { setMenuOpen(false); if (auth) void signOut(auth); }}><Text style={[styles.mobileMenuItemText, { color: "#F0A0A0" }]}>Sign out</Text></Pressable>
+          <Pressable style={styles.mobileMenuItem} onPress={() => { setMenuOpen(false); onSignOut(); }}><Text style={[styles.mobileMenuItemText, { color: "#F0A0A0" }]}>Sign out</Text></Pressable>
         </View> : null}
         {selected ? <HomeScreen activeTab={activeTab} unreadCount={chats.reduce((total, chat) => total + chat.unread_count, 0)} onTabChange={tab => { setActiveTab(tab); setMobileChatOpen(false); }} /> : null}
 
