@@ -3,7 +3,7 @@ use axon_api::{
     config::BackendConfig,
     explore::ExploreStore,
     firebase_auth::FirebaseVerifier,
-    memory::{MemoryRepository},
+    memory::MemoryRepository,
     memory_documents::{MemoryDocumentRepository, MongoMemoryDocumentRepository},
     memory_vector_provider::LexicalMemoryVectorProvider,
     model_discovery::run_discovery_scheduler,
