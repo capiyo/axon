@@ -12,14 +12,17 @@ pub(super) fn router() -> Router<AppState> {
         )
         .route(
             "/api/v1/workspaces",
-            routing::get(handlers::system::list_workspaces).post(handlers::system::create_workspace),
+            routing::get(handlers::system::list_workspaces)
+                .post(handlers::system::create_workspace),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/agents",
-            routing::get(handlers::system::list_agents).post(handlers::system::register_agent),
+            routing::get(handlers::system::list_agents)
+                .post(handlers::system::register_agent),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/artifacts",
-            routing::get(handlers::system::list_artifacts).post(handlers::system::create_artifact),
+            routing::get(handlers::system::list_artifacts)
+                .post(handlers::system::create_artifact),
         )
 }

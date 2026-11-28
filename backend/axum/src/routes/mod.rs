@@ -12,8 +12,15 @@ mod system;
 mod tasks;
 
 use crate::{auth_middleware, AppState};
-use axum::{http::{header, HeaderValue, Method}, middleware, Router};
-use tower_http::{cors::{AllowOrigin, CorsLayer}, limit::RequestBodyLimitLayer, trace::TraceLayer};
+use axum::{
+    http::{header, HeaderValue, Method},
+    middleware, Router,
+};
+use tower_http::{
+    cors::{AllowOrigin, CorsLayer},
+    limit::RequestBodyLimitLayer,
+    trace::TraceLayer,
+};
 
 pub fn app(state: AppState) -> Router {
     let allowed_origins = std::env::var("AXON_ALLOWED_ORIGINS")
