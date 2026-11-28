@@ -102,10 +102,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ))
     });
 
+    let agent_memory_store = MemoryStore::new(storage.sqlite_pool());
     let state = AppState::with_storage(storage.shared())
         .await?
         .with_explore_store(explore_store)
-        .with_agent_memory_store(Some(MemoryStore::new(storage.sqlite_pool())))
+        .with_agent_memory_store(Some(agent_memory_store))
         .with_memory_document_repository(memory_documents)
         .with_memory_repository(capability_memory)
         .with_memory_outbox(Some(memory_outbox))
