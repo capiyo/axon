@@ -2466,7 +2466,7 @@ mod epoch_document_tests {
         .execute(&outbox.pool)
         .await
         .unwrap();
-                assert!(coordinator
+        assert!(coordinator
             .publish_workspace_if_due_at(
                 &account.workspace.id.to_string(),
                 chrono::Utc::now() + chrono::Duration::hours(2),
