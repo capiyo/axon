@@ -14,7 +14,7 @@ pub(super) fn router() -> Router<AppState> {
         )
         .route(
             "/api/v1/workspaces/:workspace_id/memories",
-            routing::get(handlers::memory_imports::list_memories).routing::post(handlers::memory_imports::create_memory),
+            routing::get(handlers::memory_imports::list_memories).post(handlers::memory_imports::create_memory),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/memory/context",
