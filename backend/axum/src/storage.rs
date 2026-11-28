@@ -1486,9 +1486,10 @@ impl Storage for SqliteStorage {
             sqlx::query(
                 "INSERT INTO audit_events \
                  (event_id, workspace_id, actor, event_type, entity_type, entity_id, occurred_at, metadata_json) \
-                 VALUES (?, NULL, ?, ?, ?, ?, ?, ?)",
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(event.event_id.to_string())
+            .bind(event.workspace_id.map(|id| id.to_string()))
             .bind(event.actor)
             .bind(event.event_type)
             .bind(event.entity_type)
