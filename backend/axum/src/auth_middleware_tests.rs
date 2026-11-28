@@ -871,6 +871,4 @@ mod tests {
         let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(allocation["selected"].as_array().unwrap().is_empty());
     }
-
-
 }
