@@ -100,3 +100,18 @@ These are selective ports of branch behavior into the current master architectur
 - Ported the hosted-platform bind behavior from the social-workspace branch into the current `main.rs` without losing master’s worker lifecycle and graceful shutdown: `PORT` is honored unless `AXON_PORT` is explicitly set, and hosted runs bind `0.0.0.0` unless `AXON_HOST` is explicitly set. Documented the local-versus-hosted defaults in `backend/axum/README.md`.
 
 - Updated `connectors/python/README.md` to replace the obsolete Claude-only/local-only description with the implemented ChatGPT selection, authenticated Axon artifact import, optional DeepSeek response persistence, and the actual token/API security boundaries.
+
+
+## Further behavior-level reconciliation
+
+The social-workspace task execution branch contained one substantive capability that was not present in master despite the frontend already sending it: a task could reference its originating chat, but the backend Task/CreateTask model and executor did not preserve or consume that reference. This has now been ported into the current master model and task flow:
+
+- Added backward-compatible `created_by` and optional `source_chat_id` task metadata. Existing serialized task records remain deserializable.
+- Task creation validates that a supplied source chat belongs to the target workspace.
+- Explicit task execution now loads the source chat for the authenticated user and adds bounded approved memory, resume brief, and recent messages as clearly labelled reference data. The existing master execution lease, workspace authorization, task transition checks, QKV/Qoin retrieval, artifact isolation, provider limits, and audit persistence remain intact.
+- Added serde regression tests for legacy task records and optional source-chat input, and documented the linked-task context behavior.
+- Added a SQLite regression test proving a failed memory audit insert rolls back its append-only memory event in the same transaction.
+
+The earlier feature/memory-vector, capability-consensus, Qoin-vector, agent-runtime, desktop-shell, model-registry-route, and supervisor-run test files were checked against master. Several are byte-for-byte identical; the divergent memory, supervisor, registry, and vector implementations on master are newer and were retained rather than replaced with historical versions. The old Firebase-auth skeleton and older UI snapshots were likewise superseded by the current middleware and screen architecture.
+
+Migration reconciliation is by schema identity, not filename: the historical task-execution lease migration is present as master migration `0016_task_execution_leases.sql`; the model registry and agent memory migrations are present as `0018_model_registry.sql` and `0019_agent_memory.sql`. Do not reapply their historical lower-numbered filenames.
