@@ -747,7 +747,7 @@ mod tests {
         assert_eq!(owner_allocation.status(), StatusCode::OK);
         let body = to_bytes(owner_allocation.into_body(), usize::MAX).await.unwrap();
         let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert!(allocation["selected"].as_array().unwrap().is_empty());
+        assert_eq!(allocation["selected"].as_array().unwrap().len(), 1);
 
         let reviewed = app
             .clone()
