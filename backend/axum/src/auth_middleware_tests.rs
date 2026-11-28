@@ -679,7 +679,11 @@ mod tests {
                 ))
                 .await
                 .unwrap();
-            assert_eq!(response.status(), StatusCode::NOT_FOUND, "cross-user task access: {path}");
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "cross-user task access: {path}"
+            );
         }
     }
 
