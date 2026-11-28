@@ -28,6 +28,7 @@
 
 ### Phase A authentication and authorization
 - [x] Verified bearer-token authentication using RS256 and Google's Firebase Secure Token JWKS (Firebase is currently the token/session bridge for Google sign-in).
+- [x] Mobile Google AuthSession uses platform-specific OAuth client IDs, account selection, the native callback schemes, and the SDK-compatible Expo Crypto dependency for PKCE.
 - [x] Project-specific issuer and audience validation, expiry validation, and a 60-second clock-skew allowance.
 - [x] JWKS caching using the upstream cache lifetime, refresh on unknown key IDs for key rotation, and a short forced-refresh cooldown.
 - [x] Persistent `users` and `workspace_memberships` tables; the Google-authenticated Firebase UID maps to an internal Axon user ID.
