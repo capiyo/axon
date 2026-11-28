@@ -341,6 +341,7 @@ pub trait Storage: Send + Sync {
     async fn reserve_model_spend(
         &self,
         user_id: Uuid,
+        workspace_id: Uuid,
         usage_date: &str,
         amount_micros: u64,
         daily_limit_micros: u64,
@@ -1432,6 +1433,7 @@ impl Storage for SqliteStorage {
     async fn reserve_model_spend(
         &self,
         user_id: Uuid,
+        workspace_id: Uuid,
         usage_date: &str,
         amount_micros: u64,
         daily_limit_micros: u64,
@@ -1472,7 +1474,7 @@ impl Storage for SqliteStorage {
         if result.rows_affected() == 1 {
             let event = AuditEvent::attributed(
                 format!("human:{user_id}"),
-                None,
+                Some(workspace_id),
                 "assignment_budget.reserved",
                 "daily_model_budget",
                 format!("{user_id}:{usage_date}"),
@@ -1644,6 +1646,7 @@ mod tests {
     async fn daily_model_budget_reservations_are_persisted_and_enforced() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let user_id = Uuid::new_v4();
+        let workspace_id = Uuid::new_v4();
 
         assert_eq!(
             storage
@@ -1654,13 +1657,13 @@ mod tests {
         );
         assert!(
             storage
-                .reserve_model_spend(user_id, "2026-11-28", 60, 100)
+                .reserve_model_spend(user_id, workspace_id, "2026-11-28", 60, 100)
                 .await
                 .unwrap()
         );
         assert!(
             !storage
-                .reserve_model_spend(user_id, "2026-11-28", 50, 100)
+                .reserve_model_spend(user_id, workspace_id, "2026-11-28", 50, 100)
                 .await
                 .unwrap()
         );
@@ -1673,10 +1676,13 @@ mod tests {
         );
         assert!(
             !storage
-                .reserve_model_spend(user_id, "2026-11-28", u64::MAX, 100)
+                .reserve_model_spend(user_id, workspace_id, "2026-11-28", u64::MAX, 100)
                 .await
                 .unwrap()
         );
+        let audit = storage.list_audit_events(workspace_id).await.unwrap();
+        assert_eq!(audit.len(), 1);
+        assert_eq!(audit[0].event_type, "assignment_budget.reserved");
     }
 
     #[tokio::test]
