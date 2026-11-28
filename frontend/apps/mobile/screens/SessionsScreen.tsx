@@ -20,7 +20,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { axonTheme } from "../../../packages/theme/src";
 import { auth } from "../firebase";
-import { GoogleAuthProvider, onAuthStateChanged, signInWithCredential } from "firebase/auth";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signOut } from "firebase/auth";
 import { useIdTokenAuthRequest } from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
 
