@@ -43,3 +43,20 @@ GitHub's default branch setting must be changed from `main` to `master` in repos
 ## Operating rule
 
 Every new Axon change goes directly to `master`. Do not open feature branches or leave completed implementation work stranded outside `master`.
+
+
+## File-level reconciliation of historical branch-only paths
+
+A recursive Git tree comparison was performed for all 13 non-master branches against the current master tree. The only paths present on historical branch trees but absent by exact path on master were:
+
+| Historical path | Disposition on master |
+|---|---|
+| `backend/axum/migrations/0004_model_registry.sql` | Exact same Git blob is already present as `0018_model_registry.sql`. |
+| `backend/axum/migrations/0005_agent_memory.sql` | Exact same Git blob is already present as `0019_agent_memory.sql`. |
+| `backend/axum/migrations/0010_task_execution_leases.sql` | Exact same Git blob is already present as `0016_task_execution_leases.sql`. |
+| `backend/axum/migrations/0012_immutable_memory_document_epoch_items.sql` | Exact same Git blob is already present as `0017_immutable_memory_document_epoch_items.sql`. |
+| `backend/axum/migrations/0002_firebase_users_memberships.sql` | Superseded by the current `0002_users_and_memberships.sql` plus subsequent membership-integrity migrations; the old schema is not reintroduced. |
+| `backend/axum/src/auth.rs` | Superseded by the separated `firebase_auth.rs` and `auth_middleware.rs` implementation. |
+| `contracts/qep/v1/envelope.schema.json` | Renamed and updated as `contracts/axp/v1/envelope.schema.json`; the current schema identifies Axon and uses the current protocol namespace. |
+
+The remaining branch-tree paths already exist on master. Their blob hashes differ in many cases because master contains later revisions; historical versions were not copied over newer code. This is the safe content-level consolidation result: no unique executable source file remains absent from the master tree, and migration history is not duplicated.
