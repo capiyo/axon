@@ -1574,4 +1574,36 @@ mod tests {
         drop(storage);
         std::fs::remove_file(database_path).unwrap();
     }
+
+    #[tokio::test]
+    async fn daily_model_budget_reservations_are_persisted_and_enforced() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let user_id = Uuid::new_v4();
+        assert_eq!(storage.daily_model_spend(user_id, "2026-11-28").await.unwrap(), 0);
+        assert!(storage.reserve_model_spend(user_id, "2026-11-28", 60, 100).await.unwrap());
+        assert!(!storage.reserve_model_spend(user_id, "2026-11-28", 50, 100).await.unwrap());
+        assert_eq!(storage.daily_model_spend(user_id, "2026-11-28").await.unwrap(), 60);
+    }
+
+    #[tokio::test]
+    async fn supervisor_runs_round_trip_through_durable_entity_storage() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let workspace_id = Uuid::new_v4();
+        let run = SupervisorRun::new(workspace_id, "Persisted run".into(), "Verify durable state".into()).unwrap();
+        storage.apply(StorageMutation {
+            entity: StoredEntity::SupervisorRun(run.clone()),
+            related_entities: Vec::new(),
+            audit: AuditEvent::attributed(
+                "human:test".into(),
+                Some(workspace_id),
+                "supervisor_run.created",
+                "supervisor_run",
+                run.id.to_string(),
+                serde_json::json!({"title": run.title}),
+            ),
+        }).await.unwrap();
+        let stored = storage.list_entities(EntityKind::SupervisorRun, Some(workspace_id)).await.unwrap();
+        assert!(matches!(stored.as_slice(), [StoredEntity::SupervisorRun(item)] if item.id == run.id));
+    }
+
 }
