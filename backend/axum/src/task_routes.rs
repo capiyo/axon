@@ -172,6 +172,21 @@ pub async fn execute_task(
     Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path(task_id): Path<Uuid>,
 ) -> TaskResult<Json<TaskSubmission>> {
+    let workspace_id = state
+        .tasks
+        .read()
+        .await
+        .get(&task_id)
+        .map(|task| task.workspace_id)
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Task not found."))?;
+    if !state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .map_err(|_| storage_failure())?
+    {
+        return Err(error(StatusCode::NOT_FOUND, "Task not found."));
+    }
+
     let execution_token = Uuid::new_v4();
     let claimed = state
         .claim_task_execution(task_id, execution_token)
