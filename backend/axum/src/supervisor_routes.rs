@@ -892,6 +892,7 @@ mod vector_policy_tests {
     fn production_and_credential_tasks_are_high_risk() {
         assert!(task_risk_score("Deploy", "Deploy to production") >= 0.80);
         assert!(task_risk_score("Auth", "Rotate the API credential") >= 0.80);
+        assert!(task_risk_score("Shell", "Execute command on production host") >= 0.80);
         assert!(task_risk_score("Notes", "Summarize this paragraph") < 0.80);
     }
 
