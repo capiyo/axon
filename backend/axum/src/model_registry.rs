@@ -12,8 +12,6 @@ use std::{
 use thiserror::Error;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-
 include!("model_registry/types.rs");
 include!("model_registry/assignment.rs");
 include!("model_registry/persistence.rs");
