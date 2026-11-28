@@ -30,6 +30,7 @@ mod routes;
 mod state;
 pub mod storage;
 pub mod supervisor;
+mod supervisor_routes;
 pub mod supervisor_roles;
 mod task_routes;
 pub mod vector_decision;
@@ -85,6 +86,34 @@ pub fn app(state: AppState) -> Router {
         .route("/api/v1/admin/flags", get(model_registry_routes::list_flags))
         .route("/api/v1/admin/flags/:flag_id/clear", post(model_registry_routes::clear_flag))
         .route("/api/v1/admin/assignments", get(model_registry_routes::list_assignments))
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs",
+            get(supervisor_routes::list_runs).post(supervisor_routes::create_run),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id",
+            get(supervisor_routes::get_run),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id/checklists",
+            post(supervisor_routes::submit_checklist),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id/workers",
+            post(supervisor_routes::submit_worker_result),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id/checks",
+            post(supervisor_routes::record_checks),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id/reviews",
+            post(supervisor_routes::submit_review),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/supervisor-runs/:run_id/repair",
+            post(supervisor_routes::start_repair),
+        )
         .route("/api/v1/explore/agents", get(explore::list_agents))
         .route("/api/v1/explore/agents/:listing_id", get(explore::get_agent))
         .route("/api/v1/workspaces/:workspace_id/agents/:agent_id/publish", post(explore::publish_agent).delete(explore::unpublish_agent))
