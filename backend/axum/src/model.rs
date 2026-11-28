@@ -210,4 +210,41 @@ mod agent_ownership_tests {
         let legacy: Agent = serde_json::from_value(serialized).unwrap();
         assert_eq!(legacy.created_by_user_id, None);
     }
+
+    #[test]
+    fn legacy_tasks_deserialize_without_creator_or_source_chat() {
+        let legacy = serde_json::json!({
+            "id": Uuid::new_v4(),
+            "workspace_id": Uuid::new_v4(),
+            "title": "Legacy task",
+            "objective": "Continue existing work",
+            "assignee_agent_id": Uuid::new_v4(),
+            "context_artifact_ids": [],
+            "response_artifact_id": null,
+            "status": "offered",
+            "version": 1,
+            "created_at": Utc::now(),
+            "updated_at": Utc::now(),
+            "transitions": []
+        });
+
+        let task: Task = serde_json::from_value(legacy).unwrap();
+        assert_eq!(task.created_by, Uuid::nil());
+        assert_eq!(task.source_chat_id, None);
+    }
+
+    #[test]
+    fn create_task_accepts_an_optional_source_chat() {
+        let chat_id = Uuid::new_v4();
+        let input: CreateTask = serde_json::from_value(serde_json::json!({
+            "title": "Continue this conversation",
+            "objective": "Use approved memory and recent context",
+            "assignee_agent_id": Uuid::new_v4(),
+            "source_chat_id": chat_id
+        }))
+        .unwrap();
+
+        assert_eq!(input.source_chat_id, Some(chat_id));
+        assert!(input.context_artifact_ids.is_empty());
+    }
 }
