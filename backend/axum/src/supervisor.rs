@@ -687,7 +687,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn normal_run_serialization_never_exposes_model_assignment_details() {
         let mut run =
             SupervisorRun::new(Uuid::new_v4(), "Task".into(), "Objective".into()).unwrap();
@@ -708,6 +707,7 @@ mod tests {
         assert!(value.to_string().find("internal model choice").is_none());
     }
 
+    #[test]
     fn normal_level_uses_one_writer_one_worker_and_one_supervisor() {
         let mut run =
             SupervisorRun::new(Uuid::new_v4(), "Normal".into(), "Complete task".into()).unwrap();
