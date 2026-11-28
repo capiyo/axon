@@ -1,4 +1,5 @@
 mod agent_credential_routes;
+mod agent_memory_routes;
 pub mod agent_runtime;
 pub mod ai_provider;
 pub mod audit;
@@ -17,6 +18,8 @@ pub mod memory_architecture;
 pub mod memory;
 mod memory_document_routes;
 pub mod memory_documents;
+pub mod memory_store;
+pub mod memory_system;
 pub mod memory_intelligence;
 pub mod memory_outbox;
 mod memory_routes;
@@ -179,6 +182,26 @@ pub fn app(state: AppState) -> Router {
         .route(
             "/api/v1/workspaces/:workspace_id/chats/:chat_id/memory/:entry_id/:action",
             post(chat_memory_routes::mutate_memory_entry),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/agent-memories",
+            post(agent_memory_routes::propose),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/agent-memories/allocate",
+            post(agent_memory_routes::allocate),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/agent-memories/:memory_id/review",
+            post(agent_memory_routes::review),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/agent-memories/:memory_id/share",
+            post(agent_memory_routes::share),
+        )
+        .route(
+            "/api/v1/workspaces/:workspace_id/agent-memories/:memory_id/share/:agent_id",
+            delete(agent_memory_routes::revoke),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/memory/documents",
