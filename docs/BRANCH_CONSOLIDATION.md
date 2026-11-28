@@ -96,3 +96,5 @@ The divergent supervisor-engine and production-validation code was reviewed at b
 - Made resume briefs consistently emit empty-state values for Decisions, Open tasks, and Next / constraints, preserving the current master implementation's workspace-aware cache transaction and approved-memory filtering. Added regression assertions for the empty-state headings.
 
 These are selective ports of branch behavior into the current master architecture; no historical branch snapshot was copied over the newer implementation.
+
+- Ported the hosted-platform bind behavior from the social-workspace branch into the current `main.rs` without losing master’s worker lifecycle and graceful shutdown: `PORT` is honored unless `AXON_PORT` is explicitly set, and hosted runs bind `0.0.0.0` unless `AXON_HOST` is explicitly set. Documented the local-versus-hosted defaults in `backend/axum/README.md`.
