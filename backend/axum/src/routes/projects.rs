@@ -14,7 +14,7 @@ pub(super) fn router() -> Router<AppState> {
         )
         .route(
             "/api/v1/workspaces/:workspace_id/projects",
-            routing::get(handlers::projects::list_projects).routing::post(handlers::projects::create_project),
+            routing::get(handlers::projects::list_projects).post(handlers::projects::create_project),
         )
         .route(
             "/api/v1/workspaces/:workspace_id/projects/:project_id/members",
