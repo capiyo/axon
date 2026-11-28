@@ -49,7 +49,12 @@ pub async fn create_task(
     Path(workspace_id): Path<Uuid>,
     Json(input): Json<CreateTask>,
 ) -> TaskResult<(StatusCode, Json<Task>)> {
-    if !state.workspaces.read().await.contains_key(&workspace_id) {
+    if !state.workspaces.read().await.contains_key(&workspace_id)
+        || !state
+            .is_workspace_member(user.user_id, workspace_id)
+            .await
+            .map_err(|_| storage_failure())?
+    {
         return Err(error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
 
@@ -148,9 +153,15 @@ pub async fn create_task(
 
 pub async fn list_tasks(
     State(state): State<AppState>,
+    Extension(user): Extension<Arc<AuthenticatedUser>>,
     Path(workspace_id): Path<Uuid>,
 ) -> TaskResult<Json<Vec<Task>>> {
-    if !state.workspaces.read().await.contains_key(&workspace_id) {
+    if !state.workspaces.read().await.contains_key(&workspace_id)
+        || !state
+            .is_workspace_member(user.user_id, workspace_id)
+            .await
+            .map_err(|_| storage_failure())?
+    {
         return Err(error(StatusCode::NOT_FOUND, "Workspace not found."));
     }
 
@@ -586,6 +597,21 @@ pub async fn submit_task(
         ));
     }
 
+    let workspace_id = state
+        .tasks
+        .read()
+        .await
+        .get(&task_id)
+        .map(|task| task.workspace_id)
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Task not found."))?;
+    if !state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .map_err(|_| storage_failure())?
+    {
+        return Err(error(StatusCode::NOT_FOUND, "Task not found."));
+    }
+
     let mut tasks = state.tasks.write().await;
     let Some(mut task) = tasks.get(&task_id).cloned() else {
         return Err(error(StatusCode::NOT_FOUND, "Task not found."));
@@ -667,6 +693,21 @@ pub async fn transition_task(
             StatusCode::BAD_REQUEST,
             "A transition note of 1–2000 characters is required.",
         ));
+    }
+
+    let workspace_id = state
+        .tasks
+        .read()
+        .await
+        .get(&task_id)
+        .map(|task| task.workspace_id)
+        .ok_or_else(|| error(StatusCode::NOT_FOUND, "Task not found."))?;
+    if !state
+        .is_workspace_member(user.user_id, workspace_id)
+        .await
+        .map_err(|_| storage_failure())?
+    {
+        return Err(error(StatusCode::NOT_FOUND, "Task not found."));
     }
 
     let mut tasks = state.tasks.write().await;
