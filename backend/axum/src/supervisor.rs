@@ -708,7 +708,6 @@ mod tests {
         assert!(value.to_string().find("internal model choice").is_none());
     }
 
-
     fn normal_level_uses_one_writer_one_worker_and_one_supervisor() {
         let mut run =
             SupervisorRun::new(Uuid::new_v4(), "Normal".into(), "Complete task".into()).unwrap();
