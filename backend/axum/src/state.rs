@@ -217,11 +217,11 @@ impl AppState {
         } else {
             {
                 let mut claims = self.execution_claims.lock().await;
-                if claims.contains_key(&task_id) {
-                    Ok(false)
-                } else {
-                    claims.insert(task_id, owner_token);
+                if let std::collections::hash_map::Entry::Vacant(entry) = claims.entry(task_id) {
+                    entry.insert(owner_token);
                     Ok(true)
+                } else {
+                    Ok(false)
                 }
             }
         }
