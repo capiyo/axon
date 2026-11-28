@@ -30,7 +30,8 @@ The first proving ground is collaboration between assistants (for example, Claud
 - **Rust / Axum:** orchestration API, identity and authorization boundaries, workspace and task lifecycle, agent registry, context exchange, decision records, audit events.
 - **C++ / Drogon:** high-throughput edge and integration services where profiling demonstrates a need. It must not duplicate orchestration policy.
 - **Zig:** small, isolated performance-critical components only when a measured requirement justifies them.
-- **MongoDB:** initial document/event persistence; schema and consistency boundaries are documented before implementation.
+- **SQLite:** authoritative relational state, identity, authorization, lifecycle, audit events, and transactional outbox.
+- **MongoDB:** immutable versioned memory documents and selected document-oriented repositories, coordinated through SQLite metadata and an outbox.
 - **React (web) and React Native (mobile):** workspace, agent activity, handoffs, context review, permissions, and audit visibility.
 - **Shared TypeScript packages:** UI primitives and API contracts where sharing is practical. Backend protocol definitions remain language-neutral and versioned.
 
@@ -91,7 +92,7 @@ Components are introduced in dependency order. A directory is not a promise that
 
 ## Current status
 
-The repository is at its architecture and foundation stage. See [STATE_OF_REPO.md](docs/STATE_OF_REPO.md) and [ROADMAP.md](docs/ROADMAP.md) for verified implementation status and sequencing.
+Axon has an implemented Rust/Axum backend, authenticated workspace and chat flows, persistent memory foundations, supervisor orchestration, web/mobile clients, and a Tauri desktop shell. Production provider, database-operations, deployment, and device-integration gates remain. See [STATE_OF_REPO.md](docs/STATE_OF_REPO.md) and [ROADMAP.md](docs/ROADMAP.md) for verified implementation status and sequencing.
 
 ## Development status
 
