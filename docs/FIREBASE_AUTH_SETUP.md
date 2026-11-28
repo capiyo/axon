@@ -43,7 +43,7 @@ EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID=
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=
 ```
 
-Register OAuth 2.0 client IDs for the web, Android (`co.axon.mobile` plus its signing certificate SHA-1), and iOS (`co.axon.mobile`) applications. The mobile app uses Expo AuthSession to obtain a Google ID token and exchanges it for a Firebase session credential.
+Register OAuth 2.0 client IDs for the web, Android (`co.axon.mobile` plus its signing certificate SHA-1), and iOS (`co.axon.mobile`) applications. The mobile app uses Expo AuthSession with `expo-crypto` (PKCE) to obtain a Google ID token and exchanges it for a Firebase session credential. The registered app URL schemes include both `axon` and `co.axon.mobile`; the latter matches Expo AuthSession's native OAuth callback (`co.axon.mobile:/oauthredirect`). Configure the matching native OAuth client IDs and signing fingerprints before building a release. If the active platform's client ID is missing, the app displays a setup message rather than attempting a broken sign-in.
 
 For an Android emulator, use `http://10.0.2.2:8080`. For a physical device, use a reachable HTTPS API endpoint or the documented USB reverse setup. Expo public variables are embedded in the client bundle and must never contain private keys.
 
@@ -59,7 +59,7 @@ AXON_ENABLE_SIMULATOR=false
 
 The API verifies Firebase ID tokens against Google's Secure Token JWKS and checks issuer, audience, signature, and expiry. It provisions an internal user, personal workspace, owner membership, and audit event transactionally on first authenticated request.
 
-Only `GET /health` is public. Every registered `/api/v1` route requires `Authorization: Bearer <Firebase ID token>`. Workspace and task identifiers are checked against the authenticated user's memberships; cross-user access returns 404.
+Only `GET /health` and `GET /ready` are public. Every registered `/api/v1` route requires `Authorization: Bearer <Firebase ID token>`. Workspace and task identifiers are checked against the authenticated user's memberships; cross-user access returns 404.
 
 ## Current provider scope
 
