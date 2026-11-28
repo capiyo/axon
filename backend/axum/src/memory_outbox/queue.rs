@@ -321,6 +321,4 @@ impl MemoryOutbox {
         Ok(())
     }
 
-    /// Approves a proposed document version in the authoritative SQLite
-    /// metadata and appends an audit event in the same transaction.
 }
