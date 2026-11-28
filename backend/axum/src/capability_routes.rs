@@ -40,7 +40,12 @@ async fn require_member(
     let member = state
         .is_workspace_member(user.user_id, workspace_id)
         .await
-        .map_err(|_| api_error(StatusCode::INTERNAL_SERVER_ERROR, "Workspace access could not be checked."))?;
+        .map_err(|_| {
+            api_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Workspace access could not be checked.",
+            )
+        })?;
     if member {
         Ok(())
     } else {
