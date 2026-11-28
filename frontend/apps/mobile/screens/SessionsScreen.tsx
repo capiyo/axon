@@ -20,9 +20,14 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { axonTheme } from "../../../packages/theme/src";
 import { auth } from "../firebase";
+import { GoogleAuthProvider, onAuthStateChanged, signInWithCredential } from "firebase/auth";
+import { useIdTokenAuthRequest } from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
 
 import type { Agent, Artifact, Health, Task, Workspace, Chat, ChatDetail, ChatMessage, ProjectMemoryEntry, QoinVectorSnapshot, HandoverContext, ProgressiveMemoryContext, QoinMemoryIndexReceipt, QoinChatMessageIndexReceipt, ExploreAgent, ExploreComment, ModerationReport, Notification, NotificationPage } from "../../../packages/contracts/src";
 
+
+WebBrowser.maybeCompleteAuthSession();
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_AXON_API_URL ?? "http://127.0.0.1:8080";
 
@@ -1038,62 +1043,34 @@ const styles = StyleSheet.create({
 function AuthGate() {
   const [user, setUser] = useState<import("firebase/auth").User | null>(null);
   const [ready, setReady] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [createAccount, setCreateAccount] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [notice, setNotice] = useState("");
   const [working, setWorking] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [request, response, promptAsync] = useIdTokenAuthRequest({
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID
+  });
 
   useEffect(() => {
     if (!auth) { setReady(true); return; }
     return onAuthStateChanged(auth, current => { setUser(current); setReady(true); });
   }, []);
 
-  async function submit() {
-    if (!auth) return;
-    if (createAccount && !termsAccepted) { setAuthError("Please agree to the Terms & Conditions and Privacy Policy to create your account."); return; }
-    setWorking(true); setAuthError(""); setNotice("");
-    try {
-      if (createAccount) {
-        const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-        await sendEmailVerification(credential.user);
-        setNotice("Your account is ready. Verify your email address before entering Axon.");
-      } else {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
-      }
-    } catch (cause) {
-      setAuthError(cause instanceof Error ? cause.message : "Authentication failed.");
-    } finally { setWorking(false); }
-  }
-
-  async function resendVerification() {
-    const currentUser = auth?.currentUser;
-    if (!currentUser) return;
-    setWorking(true); setAuthError(""); setNotice("");
-    try { await sendEmailVerification(currentUser); setNotice("Verification email sent. Check your inbox and spam folder."); }
-    catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not send verification email."); }
-    finally { setWorking(false); }
-  }
-
-  async function checkVerification() {
-    const currentUser = auth?.currentUser;
-    if (!currentUser) return;
-    setWorking(true); setAuthError("");
-    try { await reload(currentUser); setUser(currentUser); if (!currentUser.emailVerified) setAuthError("Your email is not verified yet. Open the link in the email we sent."); }
-    catch (cause) { setAuthError(cause instanceof Error ? cause.message : "Could not refresh account status."); }
-    finally { setWorking(false); }
-  }
+  useEffect(() => {
+    if (response?.type !== "success") return;
+    const idToken = response.params.id_token;
+    if (!auth || !idToken) { setAuthError("Google did not return a valid identity token. Please try again."); return; }
+    setWorking(true);
+    setAuthError("");
+    void signInWithCredential(auth, GoogleAuthProvider.credential(idToken))
+      .catch(cause => setAuthError(cause instanceof Error ? cause.message : "Google sign-in failed."))
+      .finally(() => setWorking(false));
+  }, [response]);
 
   if (!ready) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><ActivityIndicator/><Text style={styles.muted}>Restoring your secure session…</Text></View></SafeAreaView>;
-  if (!auth) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><Text style={styles.authTitle}>Connect your Firebase project</Text><Text style={styles.description}>Set the EXPO_PUBLIC_FIREBASE_* variables and restart the app.</Text></View></SafeAreaView>;
-  if (user && user.emailVerified) return <WorkspaceApp user={user}/>;
-  if (user) return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.authEyebrow}>ONE MORE STEP</Text><Text style={styles.authTitle}>Verify your email</Text><Text style={styles.description}>We sent a verification link to {user.email}. Verify your address to secure your Axon account.</Text>{notice ? <Text style={styles.authNotice}>{notice}</Text> : null}{authError ? <Text style={styles.errorText}>{authError}</Text> : null}<ActionButton label={working ? "Checking…" : "I’ve verified my email"} onPress={()=>void checkVerification()} disabled={working}/><ActionButton label="Resend verification email" onPress={()=>void resendVerification()} disabled={working} secondary/><Text onPress={()=>{if (auth) void signOut(auth);setNotice("");}} style={styles.authLink}>Use another account</Text></ScrollView></SafeAreaView>;
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.authEyebrow}>YOUR WORK, IN ONE PLACE</Text><Text style={styles.authTitle}>{createAccount ? "Create your account" : "Welcome back"}</Text><Text style={styles.description}>{createAccount ? "Create a secure account to bring your agents and work together." : "Sign in to continue where your agents left off."}</Text><Text style={styles.authLabel}>EMAIL ADDRESS</Text><TextInput value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor="#82998A" keyboardType="email-address" autoCapitalize="none" autoComplete="email" style={styles.authInput}/><Text style={styles.authLabel}>PASSWORD</Text><View style={styles.authPasswordWrap}><TextInput value={password} onChangeText={setPassword} placeholder="At least 6 characters" placeholderTextColor="#82998A" secureTextEntry={!showPassword} autoCapitalize="none" autoComplete={createAccount ? "new-password" : "password"} style={styles.authPasswordInput}/><Text onPress={()=>setShowPassword(value=>!value)} style={styles.authShowPassword}>{showPassword ? "Hide" : "Show"}</Text></View>{createAccount ? <Pressable onPress={() => {setTermsAccepted(value => !value);setAuthError("");}} accessibilityRole="checkbox" accessibilityState={{checked:termsAccepted}} style={{flexDirection:"row",alignItems:"center",alignSelf:"flex-start",gap:11,marginTop:8,marginBottom:10,paddingVertical:7,paddingRight:8}}><View style={{width:22,height:22,borderRadius:11,borderWidth:2,borderColor:termsAccepted ? "#8bd6a0" : "#70bd87",backgroundColor:termsAccepted ? "#173d29" : "transparent",alignItems:"center",justifyContent:"center"}}>{termsAccepted ? <View style={{width:9,height:9,borderRadius:5,backgroundColor:"#8bd6a0"}}/> : null}</View><Text style={{color:"#E7F6EB",fontSize:12,lineHeight:18,flexShrink:1}}>I agree to the <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Terms &amp; Conditions</Text> and <Text style={{color:"#9bd9aa",fontWeight:"700"}}>Privacy Policy</Text>.</Text></Pressable> : null}<ActionButton label={working ? "Please wait…" : createAccount ? "Create account" : "Continue with email"} onPress={()=>void submit()} disabled={working || !email.trim() || password.length<6 || (createAccount && !termsAccepted)}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}{notice ? <Text style={styles.authNotice}>{notice}</Text> : null}{!createAccount ? <Text onPress={()=>{if(!auth||!email.trim()) {setAuthError("Enter your email address first.");return;}setWorking(true);setAuthError("");setNotice("");void sendPasswordResetEmail(auth,email.trim()).then(()=>setNotice("Password reset link sent. Check your inbox.")).catch(cause=>setAuthError(cause instanceof Error ? cause.message : "Could not send password reset email.")).finally(()=>setWorking(false));}} style={styles.authForgot}>Forgot password?</Text> : null}<View style={styles.authDivider}><View style={styles.authDividerLine}/><Text style={styles.authDividerText}>{createAccount ? "ALREADY HAVE AN ACCOUNT?" : "NEW TO AXON?"}</Text><View style={styles.authDividerLine}/></View><Text onPress={()=>{setCreateAccount(value=>!value);setAuthError("");setNotice("");}} style={styles.authLink}>{createAccount ? "Sign in instead" : "Create an account"}</Text><Text style={styles.authFootnote}>Secure access powered by Firebase Authentication.</Text></ScrollView></SafeAreaView>;
+  if (!auth) return <SafeAreaView style={styles.safe}><View style={styles.authPage}><Text style={styles.authTitle}>Google Sign-In is not configured</Text><Text style={styles.description}>Configure the Axon identity project and Google OAuth client IDs, then restart the app.</Text></View></SafeAreaView>;
+  if (user) return <WorkspaceApp user={user}/>;
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.authPage} keyboardShouldPersistTaps="handled"><View style={styles.authBrand}><View style={styles.logo}><Text style={styles.logoText}>A</Text></View><Text style={styles.brand}>AXON</Text></View><Text style={styles.authEyebrow}>YOUR WORK, IN ONE PLACE</Text><Text style={styles.authTitle}>Welcome to Axon</Text><Text style={styles.description}>Continue securely with your Google account. No separate Axon password required.</Text><ActionButton label={working ? "Connecting to Google…" : "Continue with Google"} onPress={()=>{setAuthError("");void promptAsync();}} disabled={working || !request}/>{authError ? <Text style={styles.errorText}>{authError}</Text> : null}<Text style={styles.authFootnote}>By continuing, you agree to the Terms &amp; Conditions and Privacy Policy.</Text></ScrollView></SafeAreaView>;
 }
-
-import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, sendEmailVerification, reload } from "firebase/auth";
 
 export default function App() { return <AuthGate />; }
