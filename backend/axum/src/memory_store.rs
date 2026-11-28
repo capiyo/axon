@@ -490,7 +490,6 @@ mod tests {
         ));
     }
 
-
     #[tokio::test]
     async fn expired_memory_is_purged_before_it_can_be_allocated() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
