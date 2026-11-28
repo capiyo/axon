@@ -5,6 +5,7 @@ use axon_api::{
     firebase_auth::FirebaseVerifier,
     memory_documents::{MemoryDocumentRepository, MongoMemoryDocumentRepository},
     memory_vector_provider::LexicalMemoryVectorProvider,
+    model_discovery::run_discovery_scheduler,
     qoin_vectors::QoinVectorClient,
     storage::SqliteStorage,
     AppState,
@@ -36,6 +37,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = BackendConfig::from_env()?;
     let storage = SqliteStorage::connect(&config.database_url).await?;
     let explore_store = Arc::new(ExploreStore::new(storage.sqlite_pool()));
+    // Model catalog discovery runs independently from request handling and
+    // persists candidates as unapproved records for explicit admin review.
+    let discovery_storage = storage.clone().shared();
+    let discovery_worker = tokio::spawn(run_discovery_scheduler(discovery_storage));
     let memory_epochs = storage
         .memory_epoch_coordinator()
         .with_qoin_scoring_version(config.qoin_memory_scoring.effective_version());
@@ -114,6 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await;
 
     let _ = shutdown_tx.send(true);
+    discovery_worker.abort();
     // Both workers leave unclaimed work durable in SQLite. Bound shutdown
     // waiting so a stalled provider cannot prevent process termination.
     if let Some(worker) = outbox_worker {
