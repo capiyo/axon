@@ -7,6 +7,6 @@ pub(super) fn router() -> Router<AppState> {
         .route(
             "/api/v1/sim/devices/:device_id/telemetry",
             routing::get(handlers::robotics::list_simulated_telemetry)
-                .routing::post(handlers::robotics::ingest_simulated_telemetry),
+                .post(handlers::robotics::ingest_simulated_telemetry),
         )
 }
