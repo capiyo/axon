@@ -583,8 +583,14 @@ mod tests {
             format!("/api/v1/workspaces/{workspace_id}/audit"),
             format!("/api/v1/workspaces/{workspace_id}/chats"),
             format!("/api/v1/workspaces/{workspace_id}/chats/{}", chat.id),
-            format!("/api/v1/workspaces/{workspace_id}/chats/{}/messages", chat.id),
-            format!("/api/v1/workspaces/{workspace_id}/chats/{}/archive", chat.id),
+            format!(
+                "/api/v1/workspaces/{workspace_id}/chats/{}/messages",
+                chat.id
+            ),
+            format!(
+                "/api/v1/workspaces/{workspace_id}/chats/{}/archive",
+                chat.id
+            ),
             format!("/api/v1/workspaces/{workspace_id}/chats/{}/memory", chat.id),
             format!("/api/v1/workspaces/{workspace_id}/agents"),
             format!("/api/v1/workspaces/{workspace_id}/artifacts"),
@@ -700,10 +706,7 @@ mod tests {
             );
         }
         let token = FirebaseVerifier::test_token("owner-user", false);
-        let base = format!(
-            "/api/v1/workspaces/{}/agent-memories",
-            owner.workspace.id
-        );
+        let base = format!("/api/v1/workspaces/{}/agent-memories", owner.workspace.id);
 
         let proposed = app
             .clone()
@@ -744,7 +747,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(owner_allocation.status(), StatusCode::OK);
-        let body = to_bytes(owner_allocation.into_body(), usize::MAX).await.unwrap();
+        let body = to_bytes(owner_allocation.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(allocation["selected"].as_array().unwrap().len(), 1);
 
@@ -775,7 +780,9 @@ mod tests {
             ))
             .await
             .unwrap();
-        let body = to_bytes(owner_allocation.into_body(), usize::MAX).await.unwrap();
+        let body = to_bytes(owner_allocation.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(allocation["selected"].as_array().unwrap().len(), 1);
 
@@ -794,7 +801,9 @@ mod tests {
             ))
             .await
             .unwrap();
-        let body = to_bytes(recipient_allocation.into_body(), usize::MAX).await.unwrap();
+        let body = to_bytes(recipient_allocation.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(allocation["selected"].as_array().unwrap().is_empty());
 
@@ -825,7 +834,9 @@ mod tests {
             ))
             .await
             .unwrap();
-        let body = to_bytes(recipient_allocation.into_body(), usize::MAX).await.unwrap();
+        let body = to_bytes(recipient_allocation.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(allocation["selected"].as_array().unwrap().len(), 1);
 
@@ -854,7 +865,9 @@ mod tests {
             ))
             .await
             .unwrap();
-        let body = to_bytes(recipient_allocation.into_body(), usize::MAX).await.unwrap();
+        let body = to_bytes(recipient_allocation.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let allocation: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(allocation["selected"].as_array().unwrap().is_empty());
     }
