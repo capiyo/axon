@@ -1708,6 +1708,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn task_execution_lease_is_exclusive_and_owner_scoped() {
+        let storage = SqliteStorage::connect_in_memory().await.unwrap();
+        let task_id = Uuid::new_v4();
+        let first_owner = Uuid::new_v4();
+        let second_owner = Uuid::new_v4();
+
+        assert!(
+            storage
+                .claim_task_execution(task_id, first_owner, 60)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !storage
+                .claim_task_execution(task_id, second_owner, 60)
+                .await
+                .unwrap()
+        );
+
+        storage
+            .release_task_execution(task_id, second_owner)
+            .await
+            .unwrap();
+        assert!(
+            !storage
+                .claim_task_execution(task_id, second_owner, 60)
+                .await
+                .unwrap()
+        );
+
+        storage
+            .release_task_execution(task_id, first_owner)
+            .await
+            .unwrap();
+        assert!(
+            storage
+                .claim_task_execution(task_id, second_owner, 60)
+                .await
+                .unwrap()
+        );
+    }
+
+    #[tokio::test]
     async fn daily_model_budget_reservations_are_persisted_and_enforced() {
         let storage = SqliteStorage::connect_in_memory().await.unwrap();
         let user_id = Uuid::new_v4();
