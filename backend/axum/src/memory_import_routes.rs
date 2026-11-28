@@ -53,7 +53,7 @@ pub async fn import_conversation(
     Json(input): Json<ImportConversationRequest>,
 ) -> ApiResult<(StatusCode, Json<crate::memory::ConversationImport>)> {
     require_member(&state, &user, workspace_id).await?;
-    if input.provider.trim().is_empty()
+    if !["chatgpt", "claude"].contains(&input.provider.trim().to_ascii_lowercase().as_str())
         || input.provider.len() > 32
         || input.conversation_id.trim().is_empty()
         || input.conversation_id.len() > 200

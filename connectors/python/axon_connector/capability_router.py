@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+from uuid import UUID
 
 from .api import AxonApiClient
 from .memory import fetch_active_memory_context
@@ -184,6 +185,10 @@ async def run_majority_route(
         not math.isfinite(max_cost_per_1k_tokens) or max_cost_per_1k_tokens < 0
     ):
         raise ValueError("Maximum model cost must be a finite non-negative number.")
+    try:
+        workspace_id = str(UUID(workspace_id))
+    except (ValueError, AttributeError):
+        raise ValueError("Workspace ID must be a valid UUID.") from None
     if not firebase_id_token or not firebase_id_token.strip():
         raise ValueError("Capability routing requires AXON_FIREBASE_ID_TOKEN.")
     api_client = AxonApiClient(api_url, firebase_id_token)
