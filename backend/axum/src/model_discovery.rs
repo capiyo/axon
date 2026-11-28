@@ -14,8 +14,6 @@ use std::{
 use thiserror::Error;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-
 include!("model_discovery/catalog.rs");
 include!("model_discovery/refresh.rs");
 include!("model_discovery/scheduler.rs");
