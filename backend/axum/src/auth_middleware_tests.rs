@@ -538,6 +538,13 @@ mod tests {
             format!("/api/v1/workspaces/{workspace_id}/tasks"),
             format!("/api/v1/workspaces/{workspace_id}/capability-polls"),
             format!("/api/v1/workspaces/{workspace_id}/supervisor-runs"),
+            format!("/api/v1/workspaces/{workspace_id}/memory/documents"),
+            format!("/api/v1/workspaces/{workspace_id}/projects"),
+            format!("/api/v1/workspaces/{workspace_id}/members"),
+            format!(
+                "/api/v1/workspaces/{workspace_id}/agents/{}/credentials",
+                Uuid::new_v4()
+            ),
             format!("/api/v1/tasks/{task_id}/submit"),
             format!("/api/v1/tasks/{task_id}/transitions"),
         ];
@@ -548,9 +555,12 @@ mod tests {
                 || path.contains("/supervisor-runs")
                 || path.contains("/messages")
                 || path.contains("/memory")
+                || path.ends_with("/members")
+                || path.contains("/credentials")
+                || path.contains("/projects/")
             {
                 "POST"
-            } else if path.ends_with("/archive") {
+            } else if path.ends_with("/archive") || path.ends_with("/projects") {
                 "PATCH"
             } else {
                 "GET"
